@@ -232,7 +232,7 @@ fm_busy_sources_for_harness() {  # <harness>
     opencode*) adapter=opencode-plugin ;;
     gemini*) adapter=gemini-hook ;;
     devin) adapter=devin-hook ;;
-    pi|pi-signed) adapter=pi-ext ;;
+    pig|pi|pi-signed) adapter=pi-ext ;;
     omp) adapter=omp-ext ;;
     kimi*)
       fm_busy_kimi_verified || { printf ''; return 0; }
@@ -1002,7 +1002,7 @@ fm_busy_gemini_launch_prompt_tail() {
 fm_busy_launch_prompt_parked() {  # <harness>
   case "${1:-}" in
     claude*) fm_busy_claude_launch_prompt_tail ;;
-    pi | pi-signed | omp) fm_busy_pi_launch_prompt_tail ;;
+    pig | pi | pi-signed | omp) fm_busy_pi_launch_prompt_tail ;;
     gemini) fm_busy_gemini_launch_prompt_tail ;;
     *) return 1 ;;
   esac

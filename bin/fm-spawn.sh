@@ -1957,6 +1957,33 @@ agy_model_validate() {  # <agy-bin> <model>
   return 1
 }
 
+# PiG's Pi-compatible `--list-models` emits `<provider> <model>` rows, with a
+# header. Only a reachable listing that names the provider can prove a requested
+# model unsupported; an unknown provider or unavailable listing may be supplied
+# by an extension and therefore remains unvalidated rather than being guessed.
+pig_model_validate() { # <pig-bin> <provider/model>
+  local bin=$1 model=$2 provider model_id listing rc=0 bound=${FM_PIG_MODELS_TIMEOUT:-15}
+  case "$bound" in ''|*[!0-9]*|0*) bound=15 ;; esac
+  [ -n "$model" ] && [ "$model" != default ] || return 0
+  case "$model" in */*) ;; *) return 0 ;; esac
+  provider=${model%%/*}
+  model_id=${model#*/}
+  listing=$(fm_run_timed "$bound" "$bin" --list-models "$provider" 2>/dev/null < /dev/null) || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "$listing" ]; then
+    echo "notice: PiG model listing is unreachable (exit $rc); launching with --model '$model' unvalidated" >&2
+    return 0
+  fi
+  if ! printf '%s\n' "$listing" | awk -v p="$provider" '$1 == p { found=1 } END { exit !found }'; then
+    echo "notice: PiG provider '$provider' is not in 'pig --list-models' (extension-registered providers may be absent); launching '$model' unvalidated" >&2
+    return 0
+  fi
+  if printf '%s\n' "$listing" | awk -v p="$provider" -v m="$model_id" '$1 == p && $2 == m { found=1 } END { exit !found }'; then
+    return 0
+  fi
+  echo "error: PiG model '$model' is not listed by 'pig --list-models' although provider '$provider' is; choose a listed <provider>/<id> or omit --model" >&2
+  return 1
+}
+
 # The verified launch command per adapter. The knowledge half of each adapter
 # (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
 launch_template() {
@@ -2049,6 +2076,9 @@ launch_template() {
     fi
     ;;
   opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}__EFFORTFLAG__}'\'' opencode __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  pig)
+    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u FM_OMP_HARNESS -u GROK_AGENT -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS FM_PIG_HARNESS=pig __PIGBIN__ __PIGTUIMODE____PIGRESUME__ __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+    ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
@@ -2285,7 +2315,7 @@ esac
 # docs/supervision-protocols/ carries no agy wake protocol (agy 1.2.0).
 # devin has none either: only its worker lifecycle hooks are verified, and
 # docs/supervision-protocols/ carries no devin wake protocol (devin 3000.11.1).
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ] || [ "$HARNESS" = devin ]; }; then
+if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = pig ]; }; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
@@ -2300,6 +2330,21 @@ if [ "$KIND" = secondmate ] && [ "$HARNESS" = rovo ]; then
 fi
 
 case "$HARNESS" in
+pig)
+  PIG_BIN=$(resolve_pi_executable pig) || {
+    echo "error: pig executable not found on PATH; install PiG or select a different verified harness" >&2
+    exit 1
+  }
+  PIG_TUI_MODE=
+  if pi_supports_tui_mode "$PIG_BIN"; then
+    PIG_TUI_MODE='--tui-mode regular'
+  fi
+  LAUNCH=${LAUNCH//__PIGBIN__/$(shell_quote "$PIG_BIN")}
+  LAUNCH=${LAUNCH//__PIGTUIMODE__/$PIG_TUI_MODE}
+  if [ -n "$MODEL" ] && [ "$MODEL" != default ]; then
+    pig_model_validate "$PIG_BIN" "$MODEL" || exit 1
+  fi
+  ;;
 devin)
   DEVIN_BIN=$(command -v devin) || {
     echo "error: devin executable not found on PATH" >&2
@@ -2580,7 +2625,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-  claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin)
+  claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin)
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
   esac
@@ -2623,9 +2668,10 @@ effort_flag_for_harness() {
     low | medium | high) printf -- '--effort %s ' "$(shell_quote "$effort")" ;;
     esac
     ;;
-  pi | pi-signed)
-    # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
-    # its --thinking flag.
+  pi | pi-signed | pig)
+    # PiG 0.4 is a distinct binary and state root, but retains Pi's model and
+    # reasoning options; keep its identity separate while using the shared CLI
+    # flag vocabulary verified against the installed binary.
     case "$effort" in
     ultra)
       "$SCRIPT_DIR/fm-harness.sh" validate-native-effort "$harness" "$model" "$effort" || return 1
@@ -4459,7 +4505,7 @@ if [ "$KIND" != secondmate ]; then
     ;;
   esac
   case "$HARNESS" in
-  claude* | opencode* | pi | pi-signed | omp)
+  claude* | opencode* | pi | pi-signed | pig | omp)
     BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
       echo "error: failed to arm the busy-state contract for $ID" >&2
       exit 1
@@ -4601,10 +4647,9 @@ export const FmBusyState = async () => {
 EOF
     exclude_path '.opencode/plugins/fm-busy-state.js'
     ;;
-  pi | pi-signed)
-    # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
-    # loaded from inside the project (verified live), but an explicit -e path
-    # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
+  pig | pi | pi-signed)
+    # Written OUTSIDE the worktree so the Pi-compatible -e extension path avoids
+    # project trust prompts and never trusts project-local extension code.
     cat >"$STATE/$ID.pi-ext.ts" <<EOF
 // Firstmate semantic busy-state events + turn-end notification; written by
 // fm-spawn under the contract owned by bin/fm-busy-lib.sh.
@@ -5062,6 +5107,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RESUME_ARGS=$(relaunch_resume_args "$HARNESS" "$BACKEND" "$T") || RESUME_ARGS=
 fi
 LAUNCH=${LAUNCH//__PIRESUME__/$RESUME_ARGS}
+LAUNCH=${LAUNCH//__PIGRESUME__/$RESUME_ARGS}
 LAUNCH=${LAUNCH//__CLAUDEPERMFLAG__/$CLAUDE_PERM_FLAG}
 if [ "$KEEP_AI_TRAILERS" = 1 ]; then
   LAUNCH=${LAUNCH//__CLAUDEATTRIBUTION__/}

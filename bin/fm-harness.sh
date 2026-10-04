@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|pig|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -112,6 +112,10 @@ harness_marker() {
   # additionally clears foreign markers at rovo's launch boundary as defense in depth.
   [ "${ATLASSIAN_AGENT_TYPE:-}" = "rovo" ] && { echo rovo; return; }
   [ "${ROVODEV_CLI:-}" = "1" ] && { echo rovo; return; }
+  if [ "${FM_PIG_HARNESS:-}" = pig ] && ancestry_names_pig; then
+    echo pig
+    return
+  fi
   # omp (Oh My Pi) publishes NO harness-identity marker of its own: verified on
   # omp 18.1.11 that PI_CODING_AGENT is absent from the binary and that the
   # default profile sets neither PI_CODING_AGENT_DIR nor OMP_PROFILE in the
@@ -153,6 +157,17 @@ harness_marker() {
   # to a marker without verifying it reaches children AND that it cannot survive
   # in a multiplexer's stored environment.
   return 0
+}
+
+ancestry_names_pig() {
+  local pid=$$ comm
+  for _ in 1 2 3 4 5 6 7 8; do
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+    [ "$(basename -- "$comm")" = pig ] && return 0
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    [ -n "$pid" ] && [ "$pid" -gt 1 ] || return 1
+  done
+  return 1
 }
 
 # True when an exact `omp` process sits within eight parents of this one. The
@@ -215,11 +230,11 @@ harness_process_verdict() {  # <pid>
       # prefix rather than any exact name. Deliberately anchored, never *muse*, so
       # unrelated commands (musescore, amuse) cannot be misread as this harness.
     muse|muse-bin-*) echo "comm muse"; return ;;
+    pig) echo "comm pig"; return ;;
     # Both Pi identities share this launcher name. Ancestry can only prove the
     # FAMILY; only the launch-boundary marker selects the signed identity, which
     # is why detect_own keeps a marker that agrees on the family.
-    pi-signed) echo "comm pi"; return ;;
-    pi) echo "comm pi"; return ;;
+    pi|pi-signed) echo "comm pi"; return ;;
     # omp is a Bun-compiled single binary whose process name is exactly `omp`
     # (verified, omp 18.1.11: `ps -o comm=` reports omp from both its `!`
     # bash path and the model's bash tool). Anchored, never *omp*, so ompd,
@@ -397,7 +412,7 @@ supervision_primary_pin() {
   local pin=${FM_SUPERVISION_PRIMARY_HARNESS:-}
   [ "${FM_SUPERVISION_ACTOR:-}" = branch ] && [ -n "$pin" ] || return 0
   case "$pin" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin)
+    claude|codex|opencode|pi|pi-signed|pig|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin)
       printf '%s\n' "$pin"
       ;;
     *)

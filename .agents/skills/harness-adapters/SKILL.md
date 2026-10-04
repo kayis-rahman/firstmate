@@ -88,6 +88,7 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "opencode": "references/harness/opencode.md",
     "pi": "references/harness/pi.md",
     "pi-signed": "references/harness/pi.md",
+    "pig": "references/harness/pig.md",
     "grok": "references/harness/grok.md",
     "kimi": "references/harness/kimi.md",
     "cursor": "references/harness/cursor.md",

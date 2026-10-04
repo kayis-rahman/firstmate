@@ -113,7 +113,7 @@ fm_tmux_composer_identity() {  # <target>
         [ -n "$comm" ] || continue
         [ "$pgid" = "$tpgid" ] || continue
         case "${comm##*/}" in
-          pi|pi-signed|pi-launcher|Pi) found=1 ;;
+          pi|pi-signed|pig|pi-launcher|Pi) found=1 ;;
         esac
       done <<EOF
 $(LC_ALL=C ps -t "${tty#/dev/}" -o pid=,pgid=,tpgid=,comm= 2>/dev/null)
@@ -123,7 +123,7 @@ EOF
   if [ "$found" -ne 1 ]; then
     comm=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || comm=
     case "${comm##*/}" in
-      pi|pi-signed|pi-launcher) found=1 ;;
+      pi|pi-signed|pig|pi-launcher) found=1 ;;
     esac
   fi
   [ "$found" -eq 1 ] || return 1

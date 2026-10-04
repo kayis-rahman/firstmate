@@ -64,7 +64,7 @@ fm_control_verb_allowed() {  # <verb>
 # section 4's verified-adapter list; an unverified adapter is refused rather
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harnesses() {
-  printf '%s\n' claude codex opencode pi pi-signed grok kimi cursor gemini muse rovo omp agy devin
+  printf '%s\n' claude codex opencode pi pi-signed pig grok kimi cursor gemini muse rovo omp agy devin
 }
 
 fm_control_harness_supported() {  # <harness>
@@ -88,6 +88,7 @@ fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
+    pig) printf 'pig' ;;
     omp) printf 'omp' ;;
     agy) printf 'agy' ;;
     devin) printf 'devin' ;;
@@ -114,7 +115,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
-    muse|gemini|rovo|agy|devin) [ "$kind" != secondmate ] || return 1 ;;
+    pig|muse|gemini|rovo|agy|devin) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }
@@ -131,7 +132,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # through Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    claude|codex|opencode|pi|pi-signed|omp|kimi|cursor|gemini|muse|rovo|agy|devin) printf 'Escape' ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|kimi|cursor|gemini|muse|rovo|agy|devin) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -142,7 +143,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode|devin) printf '2' ;;
-    claude|codex|pi|pi-signed|omp|grok|kimi|cursor|gemini|muse|rovo|agy) printf '1' ;;
+    claude|codex|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|muse|rovo|agy) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -161,7 +162,7 @@ fm_control_interrupt_repeat() {  # <harness>
 fm_control_interrupt_arm_signal() {  # <harness>
   case "${1-}" in
     devin) printf '%s' 'esc again to interrupt' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|muse|rovo|agy) ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|muse|rovo|agy) ;;
     *) return 1 ;;
   esac
 }
@@ -172,7 +173,7 @@ fm_control_interrupt_arm_signal() {  # <harness>
 fm_control_interrupt_press_gap() {  # <harness>
   case "${1-}" in
     devin) printf '0.5' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|muse|rovo|agy) printf '0.2' ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|muse|rovo|agy) printf '0.2' ;;
     *) return 1 ;;
   esac
 }
@@ -185,7 +186,7 @@ fm_control_interrupt_press_gap() {  # <harness>
 fm_control_interrupt_hazard_signal() {  # <harness>
   case "${1-}" in
     devin) printf '%s' 'Revert to step:|↵ revert' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|muse|rovo|agy) ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|muse|rovo|agy) ;;
     *) return 1 ;;
   esac
 }
@@ -206,7 +207,7 @@ fm_control_interrupt_hazard_signal() {  # <harness>
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
     muse) printf 'C-u' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy|devin) ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|rovo|agy|devin) ;;
     *) return 1 ;;
   esac
 }
@@ -221,7 +222,7 @@ fm_control_interrupt_ack_source() {  # <harness>
     # rovo's TUI prints "Agent cancelled" on Escape, but for parity with
     # claude/cursor this stays 'none': the ack is a rendered string, not a
     # recorded state source, and rovo has no busy wiring to confirm against.
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy|devin) printf 'none' ;;
+    claude|codex|opencode|pi|pi-signed|pig|omp|grok|kimi|cursor|gemini|rovo|agy|devin) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -230,7 +231,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
     claude|opencode|grok|kimi|cursor|muse|rovo) printf '/exit' ;;
-    codex|pi|pi-signed|omp|gemini|agy|devin) printf '/quit' ;;
+    codex|pi|pi-signed|pig|omp|gemini|agy|devin) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
@@ -264,10 +265,8 @@ fm_control_exit_command() {  # <harness>
 # Prints the flag name only; the caller quotes and appends the reference, since
 # shell quoting belongs to the owner of the launch line (bin/fm-spawn.sh).
 fm_control_relaunch_resume_flag() {  # <harness> <registered-agent>
-  case "${1-}" in
-    pi|pi-signed)
-      [ "${2-}" = pi ] && printf -- '--session'
-      ;;
+  case "${1-}:${2-}" in
+    pi:pi|pi-signed:pi|pig:pig) printf -- '--session' ;;
   esac
   return 0
 }
@@ -378,7 +377,7 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   case "$harness" in
     claude) printf '%s\n' "$wt/.claude/settings.local.json" ;;
     opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
-    pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
+    pi|pi-signed|pig) printf '%s\n' "$state/$id.pi-ext.ts" ;;
     omp) printf '%s\n' "$state/$id.omp-ext.ts" ;;
     grok)
       printf '%s\n' "$wt/.fm-grok-turnend"
