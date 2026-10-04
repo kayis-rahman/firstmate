@@ -110,6 +110,22 @@ test_refuses_unsafe_names() {
   pass "fm-herdr-lab: names fail closed and require the lab prefix"
 }
 
+test_prepare_then_provision_uses_existing_tripwire() {
+  local name="fm-lab-prepared-$$" tripwire_before
+  run_with_fake fm_herdr_lab_prepare "$name" || fail "prepare failed"
+  tripwire_before=$(cat "$TRIPWIRES/$name.fleet-state.json")
+  run_with_fake fm_herdr_lab_prepare "$name" || fail "repeated prepare did not safely reuse the matching tripwire"
+  [ "$(cat "$TRIPWIRES/$name.fleet-state.json")" = "$tripwire_before" ] \
+    || fail "repeated prepare overwrote the existing default-session tripwire"
+  run_with_fake fm_herdr_lab_provision "$name" || fail "provision rejected the tripwire prepare just wrote"
+  [ "$(cat "$TRIPWIRES/$name.fleet-state.json")" = "$tripwire_before" ] \
+    || fail "provision changed the prepared default-session tripwire"
+  [ "$(cat "$FAKE_STATE/$name")" = running ] || fail "prepared lab session did not start"
+  run_with_fake fm_herdr_lab_teardown "$name" || fail "teardown of prepared lab session failed"
+  assert_absent "$TRIPWIRES/$name.fleet-state.json" "prepared lab teardown left its tripwire behind"
+  pass "fm-herdr-lab: prepare followed by provision preserves the ownership tripwire"
+}
+
 test_provision_run_and_guarded_teardown() {
   local name='' line_count status=0 stop_line delete_line
   name="fm-lab-behavior-$$"
@@ -535,6 +551,7 @@ test_viewer_launcher_refuses_unsafe_arguments() {
 }
 
 test_refuses_unsafe_names
+test_prepare_then_provision_uses_existing_tripwire
 test_provision_run_and_guarded_teardown
 test_run_scopes_session_before_double_dash
 test_missing_tripwire_blocks_destruction
