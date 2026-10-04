@@ -2669,9 +2669,9 @@ effort_flag_for_harness() {
     esac
     ;;
   pi | pi-signed | pig)
-    # PiG 0.4 is a distinct binary and state root, but retains Pi's model and
-    # reasoning options; keep its identity separate while using the shared CLI
-    # flag vocabulary verified against the installed binary.
+    # PiG's Firstmate adapter is EXPERIMENTAL; CLI-level model and reasoning
+    # options were checked, but live lifecycle and fleet behavior remain unverified.
+    # Keep its identity separate while using the shared CLI flag vocabulary.
     case "$effort" in
     ultra)
       "$SCRIPT_DIR/fm-harness.sh" validate-native-effort "$harness" "$model" "$effort" || return 1

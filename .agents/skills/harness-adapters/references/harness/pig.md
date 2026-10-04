@@ -14,9 +14,10 @@ Firstmate's `FM_PIG_HARNESS=pig` launch marker is accepted only with matching Pi
 | Extension compatibility | PiG's Node subprocess runtime accepts a Pi-compatible TypeScript default export. This confirms loading and registration only; each Firstmate extension's behavior still needs live verification. |
 | TUI | `--tui-mode regular` is supported. Escape cancels the active dialog or model turn; Ctrl+C clears the editor, and a second Ctrl+C exits. |
 
-PiG 0.4.0+1.0.0 is under Firstmate integration verification.
-Do not infer Pi parity for semantic busy state, cancellation acknowledgement, composer detection, durable steering, relaunch, or primary supervision from CLI compatibility or extension registration.
-See `../../../docs/supervision-protocols/` for the individually verified primary protocols; no PiG protocol is established until its live lifecycle checks pass.
+PiG 0.4.0+1.0.0 has an EXPERIMENTAL Firstmate adapter.
+Repository checks cover distinct harness detection, launch construction, trust setup, and CLI model/effort handling; these checks do not establish live integration behavior.
+Interactive/fleet lifecycle parity, busy/settled reporting, durable steering, interrupt, recovery, and primary supervision remain unverified.
+Do not gate PiG dispatch or recovery based on this experimental status, because existing fleet workers use PiG.
 
 PiG's own documentation is the authority for its installed CLI, model catalog, trust behavior, and extension API.
-The distinct native PiG extension port is separate work; Firstmate's Pi-compatible Node extension path is compatibility behavior and must be tested on the exact installed PiG release.
+The distinct native PiG extension port and Calm behavior parity are separate work; Firstmate's Pi-compatible Node extension path is compatibility behavior and has not been validated for Calm parity.
