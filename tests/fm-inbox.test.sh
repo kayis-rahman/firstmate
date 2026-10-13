@@ -494,6 +494,29 @@ assert_equals "True" "$(printf '%s' "$held" | json_get can_receive)" \
   "a held lock with a healthy wake consumer can receive work"
 kill_holder
 trap fm_test_cleanup EXIT
+
+for family in pig codex; do
+  home=$(make_home "ready-holder-$family")
+  perl -e '$0=shift; sleep 60' "$family" &
+  holder_pid=$!
+  sleep 0.2
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  touch "$home/state/.last-watcher-beat"
+  watch_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.pi/extensions/fm-primary-pi-watch.ts"' _ "$ROOT")
+  turnend_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.pi/extensions/fm-primary-turnend-guard.ts"' _ "$ROOT")
+  printf '%s\n%s\ngeneration=1 phase=active\n' "$watch_version" "$holder_pid" > "$home/state/.pi-watch-extension-loaded"
+  printf '%s\n%s\n' "$turnend_version" "$holder_pid" > "$home/state/.pi-turnend-extension-loaded"
+  held=$(run_inbox "$home" ready) || fail "ready should succeed for a $family holder"
+  if [ "$family" = pig ]; then
+    assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" \
+      "a pig-named lock holder with loaded Pi extensions resolves the extension supervision model"
+  else
+    assert_equals "no-watcher" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
+      "a persistent-model holder gets no credit for Pi extension markers"
+  fi
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+done
 pass "readiness says unknown (or not-receivable) instead of inferring liveness from a lock"
 
 # --- invalid input ----------------------------------------------------------
