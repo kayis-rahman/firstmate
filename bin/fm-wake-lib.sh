@@ -270,9 +270,10 @@ fm_pi_extension_version() {
 
 # fm_pi_extension_loaded <marker> <expected-version> <session-lock> [active]
 # True when <marker> records <expected-version> and names either the session
-# process in <session-lock> or, for the tracked Pi extensions only, a live
-# subprocess descending from it. The subprocess case is needed by PiG's isolated
-# Node extension runtime. The Pi watcher marker additionally carries a generation phase. Requiring `active`
+# process in <session-lock> or, for a PiG primary (FM_PIG_HARNESS=pig) only, a
+# live subprocess descending from it. The subprocess case is needed by PiG's
+# isolated Node extension runtime; pi, pi-signed and omp require the exact lock
+# owner. The Pi watcher marker additionally carries a generation phase. Requiring `active`
 # rejects the handoff marker a retiring generation leaves behind, so a running
 # primary whose replacement did not load the watcher extension can never vouch
 # for an unheld watcher lock with stale load evidence.
@@ -298,6 +299,7 @@ fm_pi_extension_loaded() {
   [ -n "$marker_pid" ] || return 1
   [ "$marker_version" = "$expected_version" ] || return 1
   if [ "$marker_pid" != "$lock_pid" ]; then
+    [ "${FM_PIG_HARNESS:-}" = pig ] || return 1
     case "${marker##*/}" in
       .pi-watch-extension-loaded|.pi-turnend-extension-loaded)
         fm_process_is_descendant_of "$marker_pid" "$lock_pid" || return 1

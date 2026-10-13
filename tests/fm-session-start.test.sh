@@ -2955,6 +2955,11 @@ EOF
   write_pi_loaded_markers "$home" "$root" "$child"
   write_omp_loaded_markers "$home" "$root" "$child"
   . "$ROOT/bin/fm-wake-lib.sh"
+  ! fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a non-PiG primary accepted a descendant extension marker"
+  ! FM_PIG_HARNESS=pi fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a non-pig FM_PIG_HARNESS value accepted a descendant extension marker"
+  export FM_PIG_HARNESS=pig
   fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a live Pi extension subprocess descending from the lock-owning primary was not accepted"
   ! fm_omp_extension_owns_supervision "$home/state" "$root" \
@@ -2963,7 +2968,8 @@ EOF
   wait "$child" 2>/dev/null || true
   ! fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a dead extension subprocess still vouched for primary supervision"
-  pass "Pi extension markers accept live subprocess descendants without relaxing OMP's exact-process proof"
+  unset FM_PIG_HARNESS
+  pass "PiG extension markers accept live subprocess descendants without relaxing OMP's exact-process proof"
 }
 
 test_omp_diagnostic_accepts_prelock_loaded_marker() {
