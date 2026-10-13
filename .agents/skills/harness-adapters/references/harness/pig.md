@@ -10,7 +10,7 @@ The installed-runtime check on 2026-10-13 used PiG 0.4.1, upstream Pi 1.0.3, Go 
 | Binary | `pig`, resolved from `PATH`. |
 | Scope | Primary only. `../../../bin/fm-harness.sh crew` refuses an absent or `default` worker choice under PiG; an explicit verified worker adapter remains selectable. |
 | Identity | PiG publishes no Firstmate identity marker. Set `FM_PIG_HARNESS=pig` when starting PiG; `../../../bin/fm-harness.sh` trusts it only when the exact `pig` executable is in the process ancestry. |
-| Session lock | The session lock names the PiG process. PiG's isolated Node extension process is accepted only when the tracked Pi extension marker names a live descendant of that process. OMP's exact-process proof is unchanged. |
+| Session lock | The session lock names the PiG process. PiG's isolated Node extension process is accepted only when `FM_PIG_HARNESS=pig` is set, the lock owner is an exact `pig` process, and the tracked Pi extension marker names a live descendant of it; pi and pi-signed still require the exact lock owner. OMP's exact-process proof is unchanged. |
 | Model | `--model openai-codex/gpt-5.5` produced a live response on the installed runtime. `gpt-5.3-codex-spark` is rejected by PiG with the Codex-with-ChatGPT-account unsupported-model diagnostic. |
 | Thinking | `--thinking minimal` is accepted. PiG documents `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; only `minimal` was exercised in the Firstmate integration check. |
 | Primary extensions | Pass `-e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts` from the Firstmate repository. The Go commands are separate from these supervision extensions. |
