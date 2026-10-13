@@ -475,14 +475,12 @@ resolve_crew() {
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
   if [ -z "$crew" ] || [ "$crew" = default ]; then
     crew=$(detect_own) || return
-    if [ "$crew" = pig ]; then
-      echo "error: PiG is verified as a primary-only harness; set config/crew-harness to a verified worker harness before dispatch" >&2
-      return 2
-    fi
-    printf '%s\n' "$crew"
-  else
-    printf '%s\n' "$crew"
   fi
+  if [ "$crew" = pig ]; then
+    echo "error: PiG is verified as a primary-only harness; set config/crew-harness to a verified worker harness before dispatch" >&2
+    return 2
+  fi
+  printf '%s\n' "$crew"
 }
 
 # Print the first non-empty, non-comment line of config/secondmate-harness
@@ -527,8 +525,12 @@ secondmate_field() {
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
-  if [ -z "$sm" ] || [ "$sm" = default ]; then sm=$(resolve_crew) || exit; fi
-  echo "$sm"
+  if [ -z "$sm" ] || [ "$sm" = default ]; then sm=$(resolve_crew) || return; fi
+  if [ "$sm" = pig ]; then
+    echo "error: PiG is verified as a primary-only harness; set config/secondmate-harness to a verified secondmate harness before dispatch" >&2
+    return 2
+  fi
+  printf '%s\n' "$sm"
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or

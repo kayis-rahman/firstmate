@@ -1997,7 +1997,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-  '' | claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin)
+  '' | claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin)
     ARG3=${POS[1]:-}
     ;;
   *' '*)
@@ -2408,32 +2408,41 @@ case "$ARG3" in
   # active. Resolving here on every spawn is what makes the split DURABLE - a
   # respawn (recovery, /updatefirstmate, restart) re-resolves, so
   # config/secondmate-harness keeps governing secondmate launches across restarts.
-  # The launch_template lookup below is the unverified-adapter guard for both
-  # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate) || exit 1
     harness_src='config/secondmate-harness (falling back to config/crew-harness)'
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
       echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
       exit 1
     fi
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew) || exit 1
     harness_src='config/crew-harness'
   fi
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
   ;;
-*)
-  HARNESS=$ARG3
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
-  ;;
+*) HARNESS=$ARG3 ;;
 esac
+
+case "$KIND:$HARNESS" in
+  ship:pig|scout:pig|secondmate:pig)
+    echo "error: PiG is verified as a primary-only harness and cannot be dispatched for ship, scout, or secondmate work; select a separately verified harness" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$RAW_LAUNCH" -eq 0 ]; then
+  if [ -z "$ARG3" ]; then
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  else
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  fi
+fi
 
 # muse, gemini, agy, and devin are verified as CREWMATE/SCOUT adapters only. A secondmate is
 # a firstmate instance, so it needs a primary supervision protocol.

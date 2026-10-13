@@ -245,6 +245,15 @@ test_pig_primary_marker_requires_real_ancestry() {
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew); printf "%s" "$r"' _ "$HARNESS")
   [ "$got" = pi ] || fail "an explicit verified worker harness must resolve under PiG, got '$got'"
 
+  printf 'pig\n' > "$home/config/crew-harness"
+  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
+  assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG crew selection must refuse"
+  assert_contains "$got" "rc=2" "an explicit PiG crew selection must return refusal status"
+  printf 'pig\n' > "$home/config/secondmate-harness"
+  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" secondmate 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
+  assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG secondmate selection must refuse"
+  assert_contains "$got" "rc=2" "an explicit PiG secondmate selection must return refusal status"
+
   . "$ROOT/bin/fm-session-lock-lib.sh"
   fm_harness_process_matches pig '' || fail "the primary session lock must accept the exact PiG executable"
   ! fm_harness_process_matches piglet '' || fail "the primary session lock must not accept a piglet decoy"

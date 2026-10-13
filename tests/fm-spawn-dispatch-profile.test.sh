@@ -488,6 +488,50 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
+test_pig_primary_only_dispatch_refuses_every_worker_route() {
+  local kind route rec id out status sm
+  local -a invocation
+  for kind in ship scout secondmate; do
+    for route in explicit positional raw config; do
+      id="pig-${kind}-${route}-z31"
+      rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
+      read_case_record "$rec"
+      invocation=()
+      if [ "$kind" = secondmate ]; then
+        sm="$CASE_DIR/secondmate-home"
+        make_seeded_secondmate_home "$sm" "$id"
+        invocation=("$id" "$sm" --secondmate)
+        if [ "$route" = config ]; then
+          printf 'pig\n' > "$HOME_DIR/config/secondmate-harness"
+        fi
+      else
+        invocation=("$id" "$PROJ_DIR")
+        if [ "$kind" = scout ]; then invocation+=(--scout); fi
+        if [ "$route" = config ]; then
+          printf 'pig\n' > "$HOME_DIR/config/crew-harness"
+        fi
+      fi
+
+      case "$route" in
+        explicit) invocation+=(--harness pig) ;;
+        positional) invocation+=(pig) ;;
+        raw) invocation+=('pig --print refused') ;;
+      esac
+
+      if [ "$kind" = ship ]; then
+        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      else
+        out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      fi
+      status=$?
+      expect_code 1 "$status" "$kind $route PiG selection must refuse"
+      assert_contains "$out" "PiG is verified as a primary-only harness" "$kind $route refusal must identify PiG's dispatch boundary"
+      [ ! -s "$LAUNCH_LOG" ] || fail "$kind $route PiG selection delivered a launch command: $(cat "$LAUNCH_LOG")"
+    done
+  done
+  pass "PiG is refused for ship, scout, and secondmate harness selections and raw launches"
+}
+
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {
   local rec id out status launch body
   id=chained-raw-z15
@@ -2205,6 +2249,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
+test_pig_primary_only_dispatch_refuses_every_worker_route
 test_chained_raw_launch_strips_ai_trailer_in_every_step
 test_claude_threads_model_and_effort
 test_codex_threads_model_and_effort
