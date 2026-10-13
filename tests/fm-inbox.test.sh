@@ -517,7 +517,60 @@ for family in pig codex; do
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 done
-pass "readiness says unknown (or not-receivable) instead of inferring liveness from a lock"
+
+for family in pig pi pi-signed omp; do
+  home=$(make_home "ready-descendant-$family")
+  marker_pid_file="$home/marker-pid"
+  perl -e '
+    $0 = shift;
+    my $pidfile = shift;
+    my $child = fork();
+    die "fork failed" unless defined $child;
+    if ($child == 0) {
+      $0 = "node-extension";
+      open my $fh, ">", $pidfile or die $!;
+      print {$fh} $$;
+      close $fh;
+      sleep 60;
+      exit 0;
+    }
+    sleep 60;
+  ' "$family" "$marker_pid_file" &
+  holder_pid=$!
+  for _ in $(seq 1 50); do
+    [ -s "$marker_pid_file" ] && break
+    sleep 0.1
+  done
+  [ -s "$marker_pid_file" ] || fail "$family lock holder did not publish a live extension child"
+  marker_pid=$(cat "$marker_pid_file")
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  touch "$home/state/.last-watcher-beat"
+  if [ "$family" = omp ]; then
+    watch_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.omp/extensions/fm-primary-omp-watch.ts"' _ "$ROOT")
+    turnend_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.omp/extensions/fm-primary-turnend-guard.ts"' _ "$ROOT")
+    printf '%s\n%s\n' "$watch_version" "$marker_pid" > "$home/state/.omp-watch-extension-loaded"
+    printf '%s\n%s\n' "$turnend_version" "$marker_pid" > "$home/state/.omp-turnend-extension-loaded"
+  else
+    watch_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.pi/extensions/fm-primary-pi-watch.ts"' _ "$ROOT")
+    turnend_version=$(bash -c '. "$1/bin/fm-wake-lib.sh"; fm_pi_extension_version "$1/.pi/extensions/fm-primary-turnend-guard.ts"' _ "$ROOT")
+    printf '%s\n%s\ngeneration=1 phase=active\n' "$watch_version" "$marker_pid" > "$home/state/.pi-watch-extension-loaded"
+    printf '%s\n%s\n' "$turnend_version" "$marker_pid" > "$home/state/.pi-turnend-extension-loaded"
+  fi
+  held=$(env -u FM_PIG_HARNESS -u FM_SUPERVISION_MODEL \
+    FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_CONFIG_OVERRIDE="$home/config" "$INBOX_BIN" ready) \
+    || fail "ready failed for a descendant-marked $family holder"
+  if [ "$family" = pig ]; then
+    assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" \
+      "an observer without FM_PIG_HARNESS accepts live PiG extension descendants of the inspected lock owner"
+  else
+    assert_equals "no-watcher" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
+      "$family extension markers from a descendant do not satisfy exact-owner proof"
+  fi
+  kill "$marker_pid" "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+done
+pass "readiness requires live PiG-owned descendants and preserves strict Pi and OMP ownership"
 
 # --- invalid input ----------------------------------------------------------
 

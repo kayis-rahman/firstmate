@@ -117,7 +117,7 @@ harness_marker() {
   # process appears in this process's ancestry. This preserves the same
   # marker-versus-structure rule as omp while letting a Pig session started
   # beneath another harness keep its own identity.
-  if [ "${FM_PIG_HARNESS:-}" = pig ] && ancestry_names_pig; then
+  if [ "${FM_PIG_HARNESS:-}" = pig ] && ancestry_has_exact_name pig; then
     echo pig
     return
   fi
@@ -133,7 +133,7 @@ harness_marker() {
   # as omp, while the same variable leaking from an omp secondmate into that
   # home's claude worker (whose ancestry holds no omp) changes nothing. The
   # anchored ancestry arm below covers a plain hand-started `omp` by itself.
-  if [ "${FM_OMP_HARNESS:-}" = omp ] && ancestry_names_omp; then
+  if [ "${FM_OMP_HARNESS:-}" = omp ] && ancestry_has_exact_name omp; then
     echo omp
     return
   fi
@@ -164,28 +164,12 @@ harness_marker() {
   return 0
 }
 
-# True when an exact `pig` process sits within eight parents of this one. The
-# marker precedence above requires this structural evidence before trusting
-# FM_PIG_HARNESS.
-ancestry_names_pig() {
-  local pid=$$ comm
+# True when an exact process name sits within eight parents of this one.
+ancestry_has_exact_name() {  # <name>
+  local expected=$1 pid=$$ comm
   for _ in 1 2 3 4 5 6 7 8; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-    [ "$(basename -- "$comm")" = pig ] && return 0
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ -n "$pid" ] && [ "$pid" -gt 1 ] || return 1
-  done
-  return 1
-}
-
-# True when an exact `omp` process sits within eight parents of this one. The
-# same anchored match as the ancestry walk below, kept separate so the marker
-# precedence above can demand real process evidence before trusting FM_OMP_HARNESS.
-ancestry_names_omp() {
-  local pid=$$ comm
-  for _ in 1 2 3 4 5 6 7 8; do
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-    [ "$(basename -- "$comm")" = omp ] && return 0
+    [ "$(basename -- "$comm")" = "$expected" ] && return 0
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || return 1
   done

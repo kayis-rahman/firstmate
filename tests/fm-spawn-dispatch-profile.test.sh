@@ -489,10 +489,10 @@ test_active_dispatch_profile_allows_raw_launch_command() {
 }
 
 test_pig_primary_only_dispatch_refuses_every_worker_route() {
-  local kind route rec id out status sm
+  local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
-    for route in explicit positional raw config; do
+    for route in explicit positional raw env command config; do
       id="pig-${kind}-${route}-z31"
       rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
       read_case_record "$rec"
@@ -516,6 +516,8 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         explicit) invocation+=(--harness pig) ;;
         positional) invocation+=(pig) ;;
         raw) invocation+=('pig --print refused') ;;
+        env) invocation+=('env -u FM_PIG_HARNESS FM_PIG_HARNESS=pig pig --print refused') ;;
+        command) invocation+=('command pig --print refused') ;;
       esac
 
       if [ "$kind" = ship ]; then
@@ -529,7 +531,18 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
       [ ! -s "$LAUNCH_LOG" ] || fail "$kind $route PiG selection delivered a launch command: $(cat "$LAUNCH_LOG")"
     done
   done
-  pass "PiG is refused for ship, scout, and secondmate harness selections and raw launches"
+
+  id=pig-wrapper-verified-z31
+  rec=$(make_spawn_case pig-wrapper-verified claude "$id")
+  read_case_record "$rec"
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" 'env codex --version')
+  status=$?
+  expect_code 0 "$status" "an env-wrapped verified Codex raw launch should proceed"
+  assert_contains "$out" "spawned $id harness=codex" "the wrapped verified harness was not resolved"
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" 'env codex --version' "the accepted raw command was not preserved"
+  pass "PiG dispatch is refused across worker kinds while verified wrapped harnesses proceed"
 }
 
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {

@@ -65,8 +65,10 @@ make_named_shells() {  # <dir> -> echoes <bindir>
 # --- 1. Detection --------------------------------------------------------------
 
 test_detection_anchored_name_and_marker_precedence() {
-  local bin out
+  local bin out blindbin
   bin=$(make_named_shells "$TMP_ROOT/named")
+  blindbin=$(fm_fakebin "$TMP_ROOT/blind-ancestry")
+  fm_fake_blind_ancestry "$blindbin"
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
   out=$(env -u CLAUDECODE -u FM_OMP_HARNESS -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
     "$bin/omp" -c '"$1"; :' _ "$HARNESS")
@@ -84,8 +86,8 @@ test_detection_anchored_name_and_marker_precedence() {
   [ "$out" = omp ] || fail "FM_OMP_HARNESS under an omp ancestor must outrank an inherited CLAUDECODE, got '$out'"
   # ...and is inert when it leaks into a worker with no omp ancestor.
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS CLAUDECODE=1 FM_OMP_HARNESS=omp \
-    bash -c '"$1"; :' _ "$HARNESS")
+  out=$(PATH="$blindbin:$PATH" env -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+    CLAUDECODE=1 FM_OMP_HARNESS=omp bash -c '"$1"; :' _ "$HARNESS")
   [ "$out" = claude ] || fail "a leaked FM_OMP_HARNESS without an omp ancestor must not relabel a claude worker, got '$out'"
   pass "fm-harness: omp detects by its anchored name; the marker is a precedence override that needs real omp ancestry"
 }

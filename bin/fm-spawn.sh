@@ -2393,12 +2393,27 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
+  raw_skip_next=0
   for word in $LAUNCH; do
-    case "$word" in [A-Za-z_]*=*) continue ;; *)
-      HARNESS=$(basename "$word")
-      break
-      ;;
+    if [ "$raw_skip_next" -eq 1 ]; then
+      raw_skip_next=0
+      continue
+    fi
+    case "$word" in
+      [A-Za-z_]*=*) continue ;;
+      -u|--unset|-C|--chdir) raw_skip_next=1; continue ;;
+      -S|--split-string) continue ;;
     esac
+    word=${word#\"}
+    word=${word#\'}
+    word=${word%\"}
+    word=${word%\'}
+    case "$(basename -- "$word")" in
+      env|command|--) continue ;;
+      -*) continue ;;
+    esac
+    HARNESS=$(basename -- "$word")
+    break
   done
   ;;
 '')
