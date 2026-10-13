@@ -122,7 +122,6 @@ harness_marker() {
     return
   fi
   # omp (Oh My Pi) publishes NO harness-identity marker of its own: verified on
-
   # omp 18.1.11 that PI_CODING_AGENT is absent from the binary and that the
   # default profile sets neither PI_CODING_AGENT_DIR nor OMP_PROFILE in the
   # process environment. FM_OMP_HARNESS=omp is therefore a Firstmate-OWNED
@@ -180,7 +179,6 @@ ancestry_names_pig() {
 }
 
 # True when an exact `omp` process sits within eight parents of this one. The
-
 # same anchored match as the ancestry walk below, kept separate so the marker
 # precedence above can demand real process evidence before trusting FM_OMP_HARNESS.
 ancestry_names_omp() {

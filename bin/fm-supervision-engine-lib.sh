@@ -66,18 +66,19 @@ fm_supervision_host_primary() {
 
 # fm_supervision_host_enabled <config-dir> [<primary-harness>]: 0 iff this home
 # runs the supervision host. A present supervision-host-off opts out on every
-# primary. Claude runs the host by default; Cursor, Codex, Grok, omp, and
-# OpenCode require the supervision-host file. Pi, pi-signed, and PiG always use
-# their in-process Pi extension branch, and unsupported primaries cannot opt in.
+# primary; otherwise a supervision-host file opts in, and with neither file a
+# Claude primary runs the host at its default engine and every other primary
+# does not. Pi, pi-signed, and PiG never run the host: their in-process Pi
+# branch owns that path. The primary is detected (fm_supervision_host_primary)
+# only when the caller did not name one.
 fm_supervision_host_enabled() {
-  local primary=${2:-}
+  local primary
   [ ! -e "$1/supervision-host-off" ] && [ ! -L "$1/supervision-host-off" ] || return 1
+  primary=${2-}
   [ -n "$primary" ] || primary=$(fm_supervision_host_primary)
-  case "$primary" in
-    claude) return 0 ;;
-    cursor|codex|grok|omp|opencode) [ -f "$1/supervision-host" ] ;;
-    *) return 1 ;;
-  esac
+  case "$primary" in pi|pi-signed|pig) return 1 ;; esac
+  [ ! -f "$1/supervision-host" ] || return 0
+  [ "$primary" = claude ]
 }
 
 fm_supervision_engine_verified() {  # <engine>
