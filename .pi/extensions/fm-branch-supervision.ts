@@ -986,7 +986,10 @@ export default function (pi: ExtensionAPI) {
       if (!recorded || !sameOutcome(recorded, row)) return false;
       matching = true;
     }
-    if (matching) return true;
+    if (matching) {
+      attentionSound.outcome(row.verdict, row.silent, String(row.seq));
+      return true;
+    }
     const record: VisibleOutcomeRecord = { version: 1, ...row };
     try {
       pi.appendEntry(VISIBLE_OUTCOME_ENTRY_TYPE, record);

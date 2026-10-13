@@ -383,10 +383,10 @@ An authorization addressed to main (for example "you may merge when green") does
 
 ## Captain-attention sound
 
-Pi plays a short local sound when an unsilenced captain outcome is first presented, when a needs-decision or blocked wake reaches main, or when the watcher reports a failure.
-Routine and silent outcomes do not play it.
-The event key deduplicates repeats in the current extension instance, and clearing an unresolved key allows a later occurrence to alert again.
-Playback uses the committed `assets/captain-attention.wav` through detached `afplay` on macOS; unsupported platforms and playback errors are harmless no-ops.
+Pi plays the short local "Airy rise" sound from `assets/captain-attention.wav` when an unsilenced captain outcome is first presented, when a needs-decision or blocked wake reaches main, or when the watcher reports a failure.
+An unacknowledged captain outcome repeats every 30 seconds until main acknowledges its sequence; acknowledgement clears the repeat timer and deduplication key.
+Actionable-blocker and watcher-failure alerts remain one-shot, and routine or silent outcomes do not play the sound.
+Playback uses detached `afplay` on macOS; unsupported platforms and playback errors are harmless no-ops.
 Set `FM_CAPTAIN_ATTENTION_SOUND=0` or `FM_CAPTAIN_ATTENTION_SOUND=off` to disable playback.
 The focused policy and playback-seam regression is `tests/fm-captain-attention-sound.test.sh`.
 
