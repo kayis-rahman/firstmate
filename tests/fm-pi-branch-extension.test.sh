@@ -15,6 +15,7 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-pi-branch-extension)
 EXT="$ROOT/.pi/extensions/fm-branch-supervision.ts"
 export NODE_NO_WARNINGS=1
+export FM_CAPTAIN_ATTENTION_SOUND=0
 # The Pi release whose stock renderer stopped supplying an implicit reset at
 # multiline boundaries, which is the contract this file's renderer cases
 # compare against.
@@ -59,7 +60,9 @@ install_pi_branch_extension_fixture() {
   cp "$ROOT/.pi/extensions/lib/fm-branch-model-picker.ts" "$repo/.pi/extensions/lib/fm-branch-model-picker.ts"
   cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$repo/.pi/extensions/lib/fm-calm-visibility.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  mkdir -p "$repo/bin"
+  cp "$ROOT/.pi/extensions/lib/fm-captain-attention-sound.ts" "$repo/.pi/extensions/lib/fm-captain-attention-sound.ts"
+  mkdir -p "$repo/assets" "$repo/bin"
+  cp "$ROOT/assets/captain-attention.wav" "$repo/assets/captain-attention.wav"
   cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
   chmod +x "$repo/bin/fm-operational-input.sh"
   cat > "$repo/node_modules/@earendil-works/pi-coding-agent/package.json" <<'JSON'

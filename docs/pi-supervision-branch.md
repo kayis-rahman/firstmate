@@ -19,6 +19,7 @@ This document stays the owner and the contract.
 | How a captain-facing event whose wake was lost still surfaces | [Lost-wake outcome backstop](#lost-wake-outcome-backstop) |
 | What the branch sees of the captain's conversation | [How the branch knows what the captain said](#how-the-branch-knows-what-the-captain-said) |
 | How outcomes are classified, shown, and acknowledged | [Two-stage noise filter](#two-stage-noise-filter) |
+| When Pi plays the captain-attention sound | [Captain-attention sound](#captain-attention-sound) |
 | How fleet-wide heartbeat reviews are routed | [Heartbeat routing](#heartbeat-routing) |
 | Prompt caching and the branch model | [Cost model and the byte-stable prefix](#cost-model-and-the-byte-stable-prefix) |
 | What changes while the captain is away | [Postures](#postures) |
@@ -379,6 +380,15 @@ The cursor keeps advancing incrementally from there.
 
 The branch prompt frames mirrored text as context for judgment, never as instructions addressed to the branch.
 An authorization addressed to main (for example "you may merge when green") does not relax the branch's role limits.
+
+## Captain-attention sound
+
+Pi plays a short local sound when an unsilenced captain outcome is first presented, when a needs-decision or blocked wake reaches main, or when the watcher reports a failure.
+Routine and silent outcomes do not play it.
+The event key deduplicates repeats in the current extension instance, and clearing an unresolved key allows a later occurrence to alert again.
+Playback uses the committed `assets/captain-attention.wav` through detached `afplay` on macOS; unsupported platforms and playback errors are harmless no-ops.
+Set `FM_CAPTAIN_ATTENTION_SOUND=0` or `FM_CAPTAIN_ATTENTION_SOUND=off` to disable playback.
+The focused policy and playback-seam regression is `tests/fm-captain-attention-sound.test.sh`.
 
 ## Two-stage noise filter
 

@@ -104,6 +104,7 @@ import { Box, Container, fuzzyFilter, Input, SelectList, Text } from "@earendil-
 import { Type } from "typebox";
 import { registerFirstmateTool } from "./lib/fm-native-contract.ts";
 import { runCommandAsync } from "./lib/fm-async-exec.ts";
+import { createCaptainAttentionSound } from "./lib/fm-captain-attention-sound.ts";
 import {
   type CalmPresentationState,
   calmTranscriptClassIsVisible,
@@ -165,6 +166,7 @@ const MIRROR_MESSAGE_CAP = 4000;
 const MERGE_NOTE_BOAT = "⛵";
 const VISIBLE_OUTCOME_ANCHOR = "⚓";
 const VISIBLE_OUTCOME_ENTRY_TYPE = "fm-branch-visible-outcome";
+const attentionSound = createCaptainAttentionSound();
 // The processing half of the captain-outcome contract. The visible entry
 // above is the DISPLAY: crash-safe and exact-once. This hidden, typed request
 // is the PROCESSING: it opens the one turn in which main acts on the outcome,
@@ -991,6 +993,7 @@ export default function (pi: ExtensionAPI) {
     } catch {
       return false;
     }
+    attentionSound.outcome(row.verdict, row.silent, String(row.seq));
     return currentMainSession.getEntries().some((entry) => {
       if (entry.type !== "custom" || entry.customType !== VISIBLE_OUTCOME_ENTRY_TYPE) return false;
       const recorded = parseVisibleOutcomeRecord(entry.data);
@@ -2394,6 +2397,9 @@ ${context.command}
             details: undefined,
             isError: true,
           };
+        }
+        for (const seq of (processing?.sequences ?? "").split(",")) {
+          if (Number(seq) <= through) attentionSound.clear("captain-outcome", seq);
         }
         const remaining = await readUnprocessedOutcomes(acknowledgedGeneration);
         if (acknowledgedGeneration === generation && activeProcessing && through >= activeProcessing.request.through) {
