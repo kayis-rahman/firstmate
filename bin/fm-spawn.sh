@@ -1840,6 +1840,7 @@ PROJ=
 ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
+RAW_SHELL_C=0
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2415,6 +2416,13 @@ case "$ARG3" in
     HARNESS=$(basename -- "$word")
     break
   done
+  case "$HARNESS" in
+    bash|sh|dash|zsh|ksh)
+      for word in $LAUNCH; do
+        case "$word" in -*c*) RAW_SHELL_C=1; break ;; esac
+      done
+      ;;
+  esac
   ;;
 '')
   # No explicit harness: resolve from config. A secondmate AGENT launches on the
@@ -2437,6 +2445,11 @@ case "$ARG3" in
   ;;
 *) HARNESS=$ARG3 ;;
 esac
+
+if [ "$RAW_LAUNCH" -eq 1 ] && [ "$RAW_SHELL_C" -eq 1 ]; then
+  echo "error: PiG is verified as a primary-only harness; raw shell -c launches cannot be safely classified for worker dispatch. Select a direct harness or raw executable" >&2
+  exit 1
+fi
 
 case "$KIND:$HARNESS" in
   ship:pig|scout:pig|secondmate:pig)
