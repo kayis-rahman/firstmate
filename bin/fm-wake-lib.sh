@@ -281,10 +281,16 @@ fm_process_is_descendant_of() {  # <process-pid> <ancestor-pid>
   return 1
 }
 
+fm_process_is_pig() {  # <pid>
+  local comm
+  comm=$(ps -o comm= -p "$1" 2>/dev/null) || return 1
+  [ "$(basename -- "$comm")" = pig ]
+}
+
 # fm_pi_extension_loaded <marker> <expected-version> <session-lock> [active]
 # True when <marker> records <expected-version> and names either the session
-# process in <session-lock> or, for a PiG primary (FM_PIG_HARNESS=pig) only, a
-# live subprocess descending from it. The subprocess case is needed by PiG's
+# process in <session-lock> or, for a PiG primary (FM_PIG_HARNESS=pig with an
+# exact live pig lock owner) only, a live subprocess descending from it. The subprocess case is needed by PiG's
 # isolated Node extension runtime; pi, pi-signed and omp require the exact lock
 # owner. The Pi watcher marker additionally carries a generation phase. Requiring `active`
 # rejects the handoff marker a retiring generation leaves behind, so a running
@@ -299,7 +305,7 @@ fm_pi_extension_loaded() {
   [ -n "$marker_pid" ] || return 1
   [ "$marker_version" = "$expected_version" ] || return 1
   if [ "$marker_pid" != "$lock_pid" ]; then
-    [ "${FM_PIG_HARNESS:-}" = pig ] || return 1
+    [ "${FM_PIG_HARNESS:-}" = pig ] && fm_process_is_pig "$lock_pid" || return 1
     case "${marker##*/}" in
       .pi-watch-extension-loaded|.pi-turnend-extension-loaded)
         fm_process_is_descendant_of "$marker_pid" "$lock_pid" || return 1

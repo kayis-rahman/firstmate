@@ -2941,7 +2941,7 @@ EOF
 }
 
 test_pi_supervision_accepts_live_extension_subprocess_marker() {
-  local rec root home fakebin child
+  local rec root home fakebin child pig_pid bindir i
   rec=$(new_world pi-extension-subprocess-marker)
   IFS='|' read -r root home fakebin <<EOF
 $rec
@@ -2949,27 +2949,40 @@ EOF
   install_pi_turnend_extension_fixture "$root"
   install_pi_watch_extension_fixture "$root"
   install_omp_extension_fixtures "$root"
-  printf '%s\n' "$$" > "$home/state/.lock"
-  sleep 30 &
-  child=$!
+  bindir="$home/pig-bin"
+  mkdir -p "$bindir"
+  ln -s "$(command -v bash)" "$bindir/pig"
+  "$bindir/pig" -c 'sleep 30 & echo $! > "$1"; wait' _ "$home/child.pid" &
+  pig_pid=$!
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    [ -s "$home/child.pid" ] && break
+    sleep 0.1
+  done
+  child=$(cat "$home/child.pid")
   write_pi_loaded_markers "$home" "$root" "$child"
   write_omp_loaded_markers "$home" "$root" "$child"
   . "$ROOT/bin/fm-wake-lib.sh"
+
+  printf '%s\n' "$pig_pid" > "$home/state/.lock"
   ! fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a non-PiG primary accepted a descendant extension marker"
   ! FM_PIG_HARNESS=pi fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a non-pig FM_PIG_HARNESS value accepted a descendant extension marker"
-  export FM_PIG_HARNESS=pig
-  fm_pi_extension_owns_supervision "$home/state" "$root" \
-    || fail "a live Pi extension subprocess descending from the lock-owning primary was not accepted"
-  ! fm_omp_extension_owns_supervision "$home/state" "$root" \
+  printf '%s\n' "$$" > "$home/state/.lock"
+  ! FM_PIG_HARNESS=pig fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a leaked FM_PIG_HARNESS without a pig lock owner accepted a descendant marker"
+  printf '%s\n' "$pig_pid" > "$home/state/.lock"
+  FM_PIG_HARNESS=pig fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a live extension subprocess of the pig lock owner was not accepted"
+  ! FM_PIG_HARNESS=pig fm_omp_extension_owns_supervision "$home/state" "$root" \
     || fail "a subprocess marker relaxed the strict OMP extension proof"
   kill "$child" 2>/dev/null || true
   wait "$child" 2>/dev/null || true
-  ! fm_pi_extension_owns_supervision "$home/state" "$root" \
+  ! FM_PIG_HARNESS=pig fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a dead extension subprocess still vouched for primary supervision"
-  unset FM_PIG_HARNESS
-  pass "PiG extension markers accept live subprocess descendants without relaxing OMP's exact-process proof"
+  kill "$pig_pid" 2>/dev/null || true
+  wait "$pig_pid" 2>/dev/null || true
+  pass "PiG extension markers accept live subprocess descendants of a pig lock owner only"
 }
 
 test_omp_diagnostic_accepts_prelock_loaded_marker() {
