@@ -240,7 +240,7 @@ fm_supervision_model() {
   harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
   case "$harness" in
     claude|cursor) printf 'autoarm\n' ;;
-    pi|pi-signed|omp) printf 'extension\n' ;;
+    pi|pi-signed|pig|omp) printf 'extension\n' ;;
     *) printf 'persistent\n' ;;
   esac
 }
@@ -269,12 +269,26 @@ fm_pi_extension_version() {
 }
 
 # fm_pi_extension_loaded <marker> <expected-version> <session-lock> [active]
-# True when <marker> records <expected-version> and names the session process in
-# <session-lock>, i.e. the session holding this home loaded exactly this build.
-# The Pi watcher marker additionally carries its generation phase. Requiring
-# `active` rejects the handoff marker a retiring generation leaves behind, so a
-# running Pi process whose replacement did not load the watcher extension can
-# never vouch for an unheld watcher lock with stale load evidence.
+# True when <marker> records <expected-version> and names either the session
+# process in <session-lock> or, for the tracked Pi extensions only, a live
+# subprocess descending from it. The subprocess case is needed by PiG's isolated
+# Node extension runtime. The Pi watcher marker additionally carries a generation phase. Requiring `active`
+# rejects the handoff marker a retiring generation leaves behind, so a running
+# primary whose replacement did not load the watcher extension can never vouch
+# for an unheld watcher lock with stale load evidence.
+fm_process_is_descendant_of() {  # <process-pid> <ancestor-pid>
+  local pid=$1 ancestor=$2 parent hops=0
+  fm_pid_alive "$pid" && fm_pid_alive "$ancestor" || return 1
+  while [ "$hops" -lt 8 ]; do
+    [ "$pid" = "$ancestor" ] && return 0
+    parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$parent" in ''|*[!0-9]*|1) return 1 ;; esac
+    pid=$parent
+    hops=$((hops + 1))
+  done
+  return 1
+}
+
 fm_pi_extension_loaded() {
   local marker=$1 expected_version=$2 lock=$3 required_phase=${4:-} marker_version marker_pid lock_pid owner
   [ -f "$marker" ] && [ -f "$lock" ] && [ -n "$expected_version" ] || return 1
@@ -282,7 +296,15 @@ fm_pi_extension_loaded() {
   marker_pid=$(sed -n '2p' "$marker")
   lock_pid=$(sed -n '1p' "$lock")
   [ -n "$marker_pid" ] || return 1
-  [ "$marker_version" = "$expected_version" ] && [ "$marker_pid" = "$lock_pid" ] || return 1
+  [ "$marker_version" = "$expected_version" ] || return 1
+  if [ "$marker_pid" != "$lock_pid" ]; then
+    case "${marker##*/}" in
+      .pi-watch-extension-loaded|.pi-turnend-extension-loaded)
+        fm_process_is_descendant_of "$marker_pid" "$lock_pid" || return 1
+        ;;
+      *) return 1 ;;
+    esac
+  fi
   [ -z "$required_phase" ] && return 0
   owner=$(sed -n '3p' "$marker")
   case "$owner" in
@@ -297,9 +319,9 @@ fm_pi_extension_loaded() {
 }
 
 # fm_pi_extension_owns_supervision <state> <root>
-# True when a LIVE Pi session owns supervision continuity for this home: both
-# primary extensions are loaded at their current on-disk builds by the process
-# recorded in this home's session lock, and that process is still alive.
+# True when a LIVE Pi-compatible primary owns supervision continuity for this
+# home: both primary extensions are loaded at their current on-disk builds by
+# the lock-owning process (or its isolated PiG extension subprocesses).
 # Requiring the turn-end guard extension too is deliberate - it is the structural
 # backstop that catches a cycle the watch extension failed to restore, so a home
 # missing it has no benign hand-off to tolerate.
@@ -661,11 +683,11 @@ FM_WAKE_APPEND_RECOVERY_PUBLISHED_TOKEN=
 # docs/watcher-continuity.md owns the recovery-episode contract, including the
 # once-per-generation announcement rule for unacknowledged downtime.
 fm_recovery_marker_read() {
-  local marker=$1 line extra
+  local marker=$1 line
   FM_RECOVERY_MARKER_TOKEN=
   [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
   # Exactly one newline byte: the first line is terminated and no second is.
-  { IFS= read -r line && ! IFS= read -r extra; } < "$marker" || return 1
+  { IFS= read -r line && ! IFS= read -r; } < "$marker" || return 1
   case "$line" in
     pending:handling:*|pending:downtime:*|announced:handling:*|announced:downtime:*|acked:handling:*|acked:downtime:*) ;;
     *) return 1 ;;
@@ -2379,14 +2401,14 @@ fm_wake_grant_rows_valid() {  # <rows-file>
 # not a match, so uncertainty reads as "no live owner".
 fm_wake_branch_owner_matches() {  # <owner-file> [<pid>] [<generation>]
   local file=$1 expected_pid=${2:-} expected_generation=${3:-}
-  local version pid identity generation current extra
+  local version pid identity generation current
   [ -f "$file" ] && [ ! -L "$file" ] || return 1
   exec 8< "$file" || return 1
   IFS= read -r version <&8 || { exec 8<&-; return 1; }
   IFS= read -r pid <&8 || { exec 8<&-; return 1; }
   IFS= read -r identity <&8 || { exec 8<&-; return 1; }
   IFS= read -r generation <&8 || { exec 8<&-; return 1; }
-  if IFS= read -r extra <&8; then exec 8<&-; return 1; fi
+  if IFS= read -r <&8; then exec 8<&-; return 1; fi
   exec 8<&-
   [ "$version" = fm-branch-eligible-owner-v1 ] || return 1
   case "$pid" in ''|*[!0-9]*|1) return 1 ;; esac

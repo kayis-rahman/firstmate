@@ -2940,6 +2940,32 @@ EOF
   pass "session start emits the omp block and reports omp extension load state"
 }
 
+test_pi_supervision_accepts_live_extension_subprocess_marker() {
+  local rec root home fakebin child
+  rec=$(new_world pi-extension-subprocess-marker)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  install_pi_turnend_extension_fixture "$root"
+  install_pi_watch_extension_fixture "$root"
+  install_omp_extension_fixtures "$root"
+  printf '%s\n' "$$" > "$home/state/.lock"
+  sleep 30 &
+  child=$!
+  write_pi_loaded_markers "$home" "$root" "$child"
+  write_omp_loaded_markers "$home" "$root" "$child"
+  . "$ROOT/bin/fm-wake-lib.sh"
+  fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a live Pi extension subprocess descending from the lock-owning primary was not accepted"
+  ! fm_omp_extension_owns_supervision "$home/state" "$root" \
+    || fail "a subprocess marker relaxed the strict OMP extension proof"
+  kill "$child" 2>/dev/null || true
+  wait "$child" 2>/dev/null || true
+  ! fm_pi_extension_owns_supervision "$home/state" "$root" \
+    || fail "a dead extension subprocess still vouched for primary supervision"
+  pass "Pi extension markers accept live subprocess descendants without relaxing OMP's exact-process proof"
+}
+
 test_omp_diagnostic_accepts_prelock_loaded_marker() {
   local rec root home fakebin out holder_pid
   rec=$(new_world omp-prelock-loaded-marker)
@@ -3065,6 +3091,7 @@ test_pi_diagnostic_rejects_handoff_generation_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
 test_omp_supervision_block_and_diagnostic
 test_omp_diagnostic_accepts_prelock_loaded_marker
+test_pi_supervision_accepts_live_extension_subprocess_marker
 test_pi_diagnostic_rejects_missing_turnend_guard_marker
 test_pi_diagnostic_rejects_previous_session_loaded_marker
 test_runtime_bound_truncates_loudly_and_exits_zero

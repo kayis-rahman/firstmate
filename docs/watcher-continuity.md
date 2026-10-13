@@ -19,22 +19,22 @@ In this document, an arm is one run of `bin/fm-watch-arm.sh`, which starts a wat
 
 ## Ownership
 
-On Pi, omp, OpenCode, Cursor, and Claude primaries, one component owns re-arming the watcher.
+On Pi, pi-signed, PiG, omp, OpenCode, Cursor, and Claude primaries, one component owns re-arming the watcher.
 Codex and Grok keep their own protocols; see [Manual recovery and other harnesses](#manual-recovery-and-other-harnesses).
 
 | Harness | Re-arm owner |
 | --- | --- |
-| Pi | `.pi/extensions/fm-primary-pi-watch.ts` |
+| Pi, pi-signed, and PiG | `.pi/extensions/fm-primary-pi-watch.ts` |
 | omp | `.omp/extensions/fm-primary-omp-watch.ts` |
 | OpenCode | `.opencode/plugins/fm-primary-watch-arm.js` |
 | Cursor | `.cursor/hooks.json` `stop` hook (`bin/fm-turnend-guard-cursor.sh`) |
 | Claude | `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) |
 
-On a non-Pi primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host).
+On a host-eligible primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host). PiG uses the shared Pi extension path; its Go command handoffs are verified over RPC, but its full live supervision lifecycle remains unverified.
 
-### Pi, omp, and OpenCode adapters
+### Pi-compatible, omp, and OpenCode adapters
 
-Pi's `.pi/extensions/fm-primary-pi-watch.ts`, omp's `.omp/extensions/fm-primary-omp-watch.ts`, and OpenCode's `.opencode/plugins/fm-primary-watch-arm.js` own continuous re-arm after an actionable child close.
+The Pi/PiG `.pi/extensions/fm-primary-pi-watch.ts`, omp's `.omp/extensions/fm-primary-omp-watch.ts`, and OpenCode's `.opencode/plugins/fm-primary-watch-arm.js` own continuous re-arm after an actionable child close.
 Each adapter:
 
 - Starts the next arm before delivering the wake prompt.
@@ -120,7 +120,7 @@ The Claude turn-end guard owns that notice commit contract, the monotonic failur
 
 ### Supervision host
 
-On a non-Pi primary, a home that runs the supervision host runs `bin/fm-supervision-host.sh` in place of the arm its re-arm owner would start.
+On a host-eligible primary, a home that runs the supervision host runs `bin/fm-supervision-host.sh` in place of the arm its re-arm owner would start.
 The host owns successive watcher cycles through the same arm.
 [supervision-host.md](supervision-host.md#failure-direction) owns the hand-back's downtime restoration, including when the successor already exited; the arm's recovery and acknowledgement contracts below still apply.
 
@@ -128,9 +128,9 @@ The host owns successive watcher cycles through the same arm.
 
 This section covers what each re-arm owner does between an actionable close and the wake reaching the model.
 
-### Pi, omp, and OpenCode successor start
+### Pi-compatible, omp, and OpenCode successor start
 
-After an actionable Pi, omp, or OpenCode child close, the adapter:
+After an actionable Pi, PiG, omp, or OpenCode child close, the adapter:
 
 1. Waits for the predecessor process to close.
 2. Starts and verifies one singleton successor.
