@@ -492,7 +492,7 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
-    for route in explicit positional raw env command nohup bash-c config; do
+    for route in explicit positional raw env command nohup bash-c bash-c-compound bash-c-env config; do
       id="pig-${kind}-${route}-z31"
       rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
       read_case_record "$rec"
@@ -520,6 +520,8 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         command) invocation+=('command pig --print refused') ;;
         nohup) invocation+=('nohup pig --print refused') ;;
         bash-c) invocation+=("bash -c 'pig --print refused'") ;;
+        bash-c-compound) invocation+=("bash -c 'true; pig --print refused'") ;;
+        bash-c-env) invocation+=("bash -c 'env pig --print refused'") ;;
       esac
 
       if [ "$kind" = ship ]; then

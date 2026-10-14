@@ -2442,25 +2442,50 @@ esac
 if [ "$RAW_LAUNCH" -eq 1 ]; then
   case "$HARNESS" in
     bash|sh|dash|zsh|ksh)
-      saw_shell=0
+      shell_seen=0
       command_after_c=0
+      payload_words=()
       for word in $LAUNCH; do
         if [ "$command_after_c" -eq 1 ]; then
-          word=${word#\"}
-          word=${word#\'}
-          word=${word%\"}
-          word=${word%\'}
-          [ "$(basename -- "$word")" = pig ] && RAW_NESTED_PIG=1
-          break
+          payload_words+=("$word")
+          continue
         fi
-        if [ "$saw_shell" -eq 1 ] && [ "$word" = -c ]; then
+        if [ "$shell_seen" -eq 1 ] && [ "$word" = -c ]; then
           command_after_c=1
           continue
         fi
         case "$(basename -- "$word")" in
-          bash|sh|dash|zsh|ksh) saw_shell=1 ;;
+          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
         esac
       done
+      if [ "$command_after_c" -eq 1 ]; then
+        payload=$(printf '%s ' "${payload_words[@]}" | tr ';|&()' '\n')
+        while IFS= read -r segment; do
+          command_start=1
+          skip_next=0
+          for word in $segment; do
+            [ "$skip_next" -eq 0 ] || { skip_next=0; continue; }
+            word=${word#\"}
+            word=${word#\'}
+            word=${word%\"}
+            word=${word%\'}
+            case "$word" in
+              ''|\#*) continue ;;
+              [A-Za-z_]*=*) continue ;;
+            esac
+            [ "$command_start" -eq 1 ] || continue
+            case "$(basename -- "$word")" in
+              env|command|nohup|--) continue ;;
+              -u|--unset|-C|--chdir|--argv0) skip_next=1; continue ;;
+              -*) continue ;;
+            esac
+            [ "$(basename -- "$word")" = pig ] && RAW_NESTED_PIG=1
+            command_start=0
+          done
+        done <<EOF
+$payload
+EOF
+      fi
       ;;
   esac
 fi
