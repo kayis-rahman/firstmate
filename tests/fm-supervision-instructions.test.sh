@@ -287,22 +287,25 @@ test_grok_command_sources_effective_config() {
 }
 
 test_pig_reuses_the_pi_compatibility_extensions_without_advertising_worker_support() {
-  local home out turnend watch
+  local home out turnend watch branch
   home="$TMP_ROOT/pig-home"
   turnend="$ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
   watch="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+  branch="$ROOT/.pi/extensions/fm-branch-supervision.ts"
   mkdir -p "$home/state" "$home/config"
   out=$(FM_HOME="$home" "$RENDER" --harness pig)
   assert_contains "$out" "primary harness: pig" "PiG heading missing"
   assert_contains "$out" "Mode: PiG primary with Pi-compatible extension background wake." "PiG mode missing"
-  assert_contains "$out" "Confirm PiG loaded both extensions" "PiG did not require both supervision extensions"
-  assert_contains "$out" "The Go command extension does not replace these supervision extensions" "PiG snippet incorrectly treats Go commands as watcher support"
-  assert_contains "$out" "-e $turnend -e $watch" "PiG snippet did not render both required extension paths"
+  assert_contains "$out" "Confirm PiG loaded the configured extensions" "PiG did not require its configured extensions"
+  assert_contains "$out" "The Go command extension does not replace the Pi supervision extensions" "PiG snippet incorrectly treats Go commands as watcher support"
+  assert_contains "$out" "-e $turnend -e $watch -e $branch" "PiG snippet omitted a required extension path"
+  assert_contains "$out" "Configuring these extensions does not verify watcher restoration" "PiG extension configuration was presented as lifecycle verification"
   assert_contains "$out" "PiG requires explicit" "PiG snippet omitted explicit extension loading"
   assert_contains "$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')" "Pi-compatible extension already owns watcher continuity" "PiG ordinary wake did not preserve extension-owned continuity"
   out=$(FM_HOME="$home" "$RENDER" --harness pig --repair-line)
   assert_contains "$out" "Pi-compatible tool fm_watch_arm_pi" "PiG repair line did not name the compatible watcher tool"
-  assert_contains "$out" "restart PiG with -e $turnend -e $watch" "PiG repair line omitted explicit extension flags"
+  assert_contains "$out" "restart PiG with -e $turnend -e $watch -e $branch" "PiG repair line omitted explicit extension flags"
+  assert_contains "$out" "Configuring them does not verify watcher restoration" "PiG repair instruction overstated lifecycle evidence"
   assert_not_contains "$out" "Supervision host: on" "PiG incorrectly received the external supervision host"
   pass "PiG renders the shared Pi-compatible supervision protocol with explicit extension loading"
 }

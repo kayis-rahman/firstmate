@@ -13,13 +13,13 @@ The installed-runtime check on 2026-10-13 used PiG 0.4.1, upstream Pi 1.0.3, Go 
 | Session lock | The session lock names the PiG process. PiG's isolated Node extension process is accepted when the lock owner is an exact live `pig` process and the tracked Pi extension marker names a live descendant of it; this does not require `FM_PIG_HARNESS` in the inspecting process. Pi and pi-signed still require the exact lock owner. OMP's exact-process proof is unchanged. |
 | Model | `--model openai-codex/gpt-5.5` produced a live response on the installed runtime. `gpt-5.3-codex-spark` is rejected by PiG with the Codex-with-ChatGPT-account unsupported-model diagnostic. |
 | Thinking | `--thinking minimal` is accepted. PiG documents `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; only `minimal` was exercised in the Firstmate integration check. |
-| Primary extensions | Pass `-e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts` from the Firstmate repository. The Go commands are separate from these supervision extensions. |
+| Primary extensions | Pass `-e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts -e .pi/extensions/fm-branch-supervision.ts` from the Firstmate repository. Configuring these extensions does not verify watcher restoration, wake delivery, lifecycle recovery, background-wake coverage, or direct TUI behavior. The Go commands are separate from these supervision extensions. |
 | Go commands | `.pig/extensions/fm-firstmate` auto-registers `/ahoy` and `/bearings`. Install validation succeeds, and an installed PiG 0.4.1 RPC-mode run confirmed both callbacks hand a synthesized user message to their loaded skills and settle a model turn. The direct TUI invocation and a full Bearings data read were not part of that check. |
 | Exit and interrupt | Not yet verified for Firstmate lifecycle control. Do not infer Pi's key behavior. |
 
 ## Primary integration
 
-PiG uses the shared Pi supervision protocol in `../../../docs/supervision-protocols/pi.md` and the tracked `.pi/extensions/` watcher and turn-end guard.
+PiG uses the shared Pi supervision protocol in `../../../docs/supervision-protocols/pi.md` and the tracked `.pi/extensions/` watcher, turn-end guard, and branch-supervision extension.
 Both supervision extensions loaded in an installed PiG TUI run on 2026-10-13, but that check did not prove watcher continuity, a live wake, or turn-end recovery.
 Full unattended primary support remains unverified until those supervision lifecycle paths are exercised end to end.
 

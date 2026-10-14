@@ -2814,6 +2814,24 @@ EOF
   pass "session start emits exactly one detected harness block and reports Pi extension load state"
 }
 
+test_pig_session_start_configures_branch_supervision_without_claiming_lifecycle_verification() {
+  local rec root home fakebin out
+  rec=$(new_world pig-branch-extension-config)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" pig
+
+  out=$(FM_FAKE_HARNESS=pig run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "PIG_WATCH_EXTENSION: not loaded" "PiG extension diagnostic missing"
+  assert_contains "$out" "-e $root/.pi/extensions/fm-primary-turnend-guard.ts -e $root/.pi/extensions/fm-primary-pi-watch.ts -e $root/.pi/extensions/fm-branch-supervision.ts" \
+    "PiG session-start recovery omitted a supervision extension"
+  assert_contains "$out" "loading does not verify watcher restoration, wake delivery, lifecycle recovery, or direct TUI behavior" \
+    "PiG session-start treated extension configuration as lifecycle proof"
+  pass "PiG session-start configures branch supervision without claiming lifecycle verification"
+}
+
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization() {
   local rec root home fakebin out
   rec=$(new_world pi-signed-supervision-block)
@@ -3105,6 +3123,7 @@ test_quiet_record_digest_holds_nothing_for_a_return
 test_next_step_afk_legacy_empty_flag_defaults_away
 test_supervision_block_exactly_one_and_pi_diagnostic
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization
+test_pig_session_start_configures_branch_supervision_without_claiming_lifecycle_verification
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_rejects_handoff_generation_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker

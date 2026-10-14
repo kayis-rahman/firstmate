@@ -128,8 +128,11 @@ Start `omp` with this checkout as its working directory: it auto-discovers the t
 ```sh
 FM_PIG_HARNESS=pig pig --approve \
   -e .pi/extensions/fm-primary-turnend-guard.ts \
-  -e .pi/extensions/fm-primary-pi-watch.ts
+  -e .pi/extensions/fm-primary-pi-watch.ts \
+  -e .pi/extensions/fm-branch-supervision.ts
 ```
+
+Loading these extensions configures the Pi supervision path but does not verify watcher restoration, wake delivery, lifecycle recovery, background-wake coverage, or direct TUI behavior.
 
 The Go extension auto-registers `/ahoy` and `/bearings` from `.pig/extensions/fm-firstmate`. Install-time registration and RPC-mode callbacks that hand off to the loaded skills are verified; direct TUI invocation and the complete watcher lifecycle are not yet verified.
 

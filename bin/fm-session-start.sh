@@ -821,6 +821,7 @@ X_MODE_PRESENT=0
 if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIMARY_HARNESS" = pig ]; then
   PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
   PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+  PI_BRANCH_EXT="$FM_ROOT/.pi/extensions/fm-branch-supervision.ts"
   PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
   PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
   PI_LOCK="$STATE/.lock"
@@ -831,7 +832,7 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIM
   if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" active \
     || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
     if [ "$PRIMARY_HARNESS" = pig ]; then
-      printf 'PIG_WATCH_EXTENSION: not loaded - restart PiG with project approval and -e %s -e %s so turn-end guard and background wake coverage are active; the Go extension commands do not replace these supervision extensions\n' "$PI_TURNEND_EXT" "$PI_EXT"
+      printf 'PIG_WATCH_EXTENSION: not loaded - restart PiG with project approval and -e %s -e %s -e %s so turn-end guard, background wake coverage, and branch supervision are configured; loading does not verify watcher restoration, wake delivery, lifecycle recovery, or direct TUI behavior\n' "$PI_TURNEND_EXT" "$PI_EXT" "$PI_BRANCH_EXT"
     else
       printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
     fi
