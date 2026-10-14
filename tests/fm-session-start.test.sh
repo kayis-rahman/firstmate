@@ -2983,17 +2983,16 @@ EOF
   write_omp_loaded_markers "$home" "$root" "$child"
   . "$ROOT/bin/fm-wake-lib.sh"
 
-  printf '%s\n' "$pig_pid" > "$home/state/.lock"
+  printf '%s\n' "$$" > "$home/state/.lock"
   ! fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a non-PiG primary accepted a descendant extension marker"
   ! FM_PIG_HARNESS=pi fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a non-pig FM_PIG_HARNESS value accepted a descendant extension marker"
-  printf '%s\n' "$$" > "$home/state/.lock"
   ! FM_PIG_HARNESS=pig fm_pi_extension_owns_supervision "$home/state" "$root" \
     || fail "a leaked FM_PIG_HARNESS without a pig lock owner accepted a descendant marker"
   printf '%s\n' "$pig_pid" > "$home/state/.lock"
-  FM_PIG_HARNESS=pig fm_pi_extension_owns_supervision "$home/state" "$root" \
-    || fail "a live extension subprocess of the pig lock owner was not accepted"
+  ! fm_pi_extension_owns_supervision "$home/state" "$root" \
+    && fail "a live extension subprocess of the pig lock owner was not accepted without observer harness state"
   ! FM_PIG_HARNESS=pig fm_omp_extension_owns_supervision "$home/state" "$root" \
     || fail "a subprocess marker relaxed the strict OMP extension proof"
   kill "$child" 2>/dev/null || true
