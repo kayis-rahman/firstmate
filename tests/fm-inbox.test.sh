@@ -508,8 +508,16 @@ for family in pig codex; do
   printf '%s\n%s\n' "$turnend_version" "$holder_pid" > "$home/state/.pi-turnend-extension-loaded"
   held=$(run_inbox "$home" ready) || fail "ready should succeed for a $family holder"
   if [ "$family" = pig ]; then
-    assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" \
-      "a pig-named lock holder with loaded Pi extensions resolves the extension supervision model"
+    assert_equals "unknown" "$(printf '%s' "$held" | json_get wake_consumer state)" \
+      "PiG extension markers do not establish supervision health"
+    assert_equals "supervision-unverified" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
+      "PiG readiness reports its unverified lifecycle explicitly"
+    assert_equals "unknown" "$(printf '%s' "$held" | json_get can_receive)" \
+      "PiG markers cannot claim the home can receive work"
+    forced=$(FM_SUPERVISION_MODEL=extension run_inbox "$home" ready) \
+      || fail "ready should succeed when an extension model override is set for PiG"
+    assert_equals "unknown" "$(printf '%s' "$forced" | json_get wake_consumer state)" \
+      "an extension-model override cannot convert a PiG lock into a healthy verdict"
   else
     assert_equals "no-watcher" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
       "a persistent-model holder gets no credit for Pi extension markers"
@@ -561,8 +569,12 @@ for family in pig pi pi-signed omp; do
     FM_CONFIG_OVERRIDE="$home/config" "$INBOX_BIN" ready) \
     || fail "ready failed for a descendant-marked $family holder"
   if [ "$family" = pig ]; then
-    assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" \
-      "an observer without FM_PIG_HARNESS accepts live PiG extension descendants of the inspected lock owner"
+    assert_equals "unknown" "$(printf '%s' "$held" | json_get wake_consumer state)" \
+      "PiG descendant markers do not claim an unverified lifecycle is healthy"
+    assert_equals "supervision-unverified" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
+      "PiG descendant markers are reported as unverified"
+    assert_equals "unknown" "$(printf '%s' "$held" | json_get can_receive)" \
+      "PiG descendant markers cannot claim the home can receive work"
   else
     assert_equals "no-watcher" "$(printf '%s' "$held" | json_get wake_consumer reason)" \
       "$family extension markers from a descendant do not satisfy exact-owner proof"
