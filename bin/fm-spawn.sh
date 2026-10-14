@@ -1840,7 +1840,7 @@ PROJ=
 ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
-RAW_NESTED_PIG=0
+RAW_SHELL_C=0
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2447,86 +2447,30 @@ raw_shell_has_c_flag() {  # <shell-option>
   esac
 }
 
-raw_shell_payload_has_pig() {  # <command-payload>
-  local payload=$1 segment word name command_start skip_next index nested_payload
-  local -a words
-  payload=$(printf '%s' "$payload" | tr ';|&()' '\n')
-  while IFS= read -r segment; do
-    read -r -a words <<< "$segment"
-    command_start=1
-    skip_next=0
-    index=0
-    while [ "$index" -lt "${#words[@]}" ]; do
-      word=${words[$index]}
-      index=$((index + 1))
-      [ "$skip_next" -eq 0 ] || { skip_next=0; continue; }
-      word=${word#\"}
-      word=${word#\'}
-      word=${word%\"}
-      word=${word%\'}
-      case "$word" in
-        ''|\#*) continue ;;
-        [A-Za-z_]*=*) continue ;;
-      esac
-      [ "$command_start" -eq 1 ] || continue
-      name=$(basename -- "$word")
-      case "$name" in
-        env|command|nohup|--) continue ;;
-        -u|--unset|-C|--chdir|--argv0) skip_next=1; continue ;;
-        -*) continue ;;
-      esac
-      case "$name" in
-        bash|sh|dash|zsh|ksh)
-          while [ "$index" -lt "${#words[@]}" ]; do
-            word=${words[$index]}
-            index=$((index + 1))
-            if raw_shell_has_c_flag "$word"; then
-              nested_payload=${words[*]:$index}
-              raw_shell_payload_has_pig "$nested_payload" && return 0
-              break
-            fi
-          done
-          command_start=0
-          ;;
-        pig) return 0 ;;
-        *) command_start=0 ;;
-      esac
-    done
-  done <<EOF
-$payload
-EOF
-  return 1
-}
-
 if [ "$RAW_LAUNCH" -eq 1 ]; then
   case "$HARNESS" in
     bash|sh|dash|zsh|ksh)
       shell_seen=0
-      command_after_c=0
-      payload_words=()
       for word in $LAUNCH; do
-        if [ "$command_after_c" -eq 1 ]; then
-          payload_words+=("$word")
-          continue
-        fi
         if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
-          command_after_c=1
-          continue
+          RAW_SHELL_C=1
+          break
         fi
         case "$(basename -- "$word")" in
           bash|sh|dash|zsh|ksh) shell_seen=1 ;;
         esac
       done
-      if [ "$command_after_c" -eq 1 ]; then
-        raw_shell_payload_has_pig "${payload_words[*]}" && RAW_NESTED_PIG=1
-      fi
       ;;
   esac
 fi
 
-case "$KIND:$HARNESS:$RAW_NESTED_PIG" in
-  ship:pig:*|scout:pig:*|secondmate:pig:*|ship:*:1|scout:*:1|secondmate:*:1)
+case "$KIND:$HARNESS:$RAW_SHELL_C" in
+  ship:pig:*|scout:pig:*|secondmate:pig:*)
     echo "error: PiG is verified as a primary-only harness and cannot be dispatched for ship, scout, or secondmate work; select a separately verified harness" >&2
+    exit 1
+    ;;
+  ship:*:1|scout:*:1|secondmate:*:1)
+    echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
     exit 1
     ;;
 esac

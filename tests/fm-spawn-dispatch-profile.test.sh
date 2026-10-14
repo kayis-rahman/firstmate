@@ -532,8 +532,11 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
       fi
       status=$?
-      expect_code 1 "$status" "$kind $route PiG selection must refuse"
-      assert_contains "$out" "PiG is verified as a primary-only harness" "$kind $route refusal must identify PiG's dispatch boundary"
+      expect_code 1 "$status" "$kind $route shell/PiG selection must refuse"
+      case "$route" in
+        bash-*) assert_contains "$out" "raw shell -c launches cannot be safely classified" "$kind $route refusal must identify the raw-shell boundary" ;;
+        *) assert_contains "$out" "PiG is verified as a primary-only harness" "$kind $route refusal must identify PiG's dispatch boundary" ;;
+      esac
       [ ! -s "$LAUNCH_LOG" ] || fail "$kind $route PiG selection delivered a launch command: $(cat "$LAUNCH_LOG")"
     done
   done
@@ -549,37 +552,14 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" 'env codex --version' "the accepted raw command was not preserved"
   for kind in ship scout secondmate; do
-    id="pig-shell-verified-${kind}-z31"
-    rec=$(make_spawn_case "pig-shell-verified-${kind}" claude "$id")
+    id="shell-c-blocked-${kind}-z31"
+    rec=$(make_spawn_case "shell-c-blocked-${kind}" claude "$id")
     read_case_record "$rec"
     if [ "$kind" = secondmate ]; then
-      sm="$CASE_DIR/secondmate-shell-home"
+      sm="$CASE_DIR/secondmate-shell-blocked-home"
       make_seeded_secondmate_home "$sm" "$id"
       out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
         "$id" "$sm" --secondmate "bash -c 'codex --version'")
-    else
-      invocation=("$id" "$PROJ_DIR")
-      [ "$kind" != scout ] || invocation+=(--scout)
-      invocation+=("bash -c 'codex --version'")
-      if [ "$kind" = ship ]; then
-        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
-      else
-        out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
-      fi
-    fi
-    status=$?
-    expect_code 0 "$status" "$kind non-PiG bash -c launch should proceed"
-    assert_contains "$out" "spawned $id harness=bash" "$kind shell raw launch was unexpectedly rejected"
-    assert_contains "$(cat "$LAUNCH_LOG")" "bash -c 'codex --version'" "$kind shell command was not preserved"
-
-    id="pig-shell-login-verified-${kind}-z31"
-    rec=$(make_spawn_case "pig-shell-login-verified-${kind}" claude "$id")
-    read_case_record "$rec"
-    if [ "$kind" = secondmate ]; then
-      sm="$CASE_DIR/secondmate-shell-login-home"
-      make_seeded_secondmate_home "$sm" "$id"
-      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$sm" --secondmate "bash -lc 'codex --version'")
     else
       invocation=("$id" "$PROJ_DIR")
       [ "$kind" != scout ] || invocation+=(--scout)
@@ -591,11 +571,11 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
       fi
     fi
     status=$?
-    expect_code 0 "$status" "$kind non-PiG bash -lc launch should proceed"
-    assert_contains "$out" "spawned $id harness=bash" "$kind combined shell flag launch was rejected"
-    assert_contains "$(cat "$LAUNCH_LOG")" "bash -lc 'codex --version'" "$kind combined shell command was not preserved"
+    expect_code 1 "$status" "$kind raw shell launch should be refused"
+    assert_contains "$out" "raw shell -c launches cannot be safely classified" "$kind shell refusal missing"
+    [ ! -s "$LAUNCH_LOG" ] || fail "$kind raw shell launch reached the launcher"
   done
-  pass "PiG wrapper dispatch is refused while non-PiG shell launches proceed across worker modes"
+  pass "PiG and raw shell dispatch are refused while verified harness dispatch remains available"
 }
 
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {
