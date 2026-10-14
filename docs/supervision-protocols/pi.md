@@ -1,11 +1,9 @@
 {pi,pi-signed} Mode: Pi extension background wake.
-{pig} Mode: PiG primary with Pi-compatible extension background wake.
 
 When this session owns supervision, in either posture:
 1. Drain first with `bin/fm-wake-drain.sh`.
    After handling all emitted wakes and reconciling open decisions and unread status lines, run the exact `--ack-through` command printed as `WAKE_ACK_REQUIRED`; until then the work remains durable for idempotent re-handling after interruption.
 {pi,pi-signed} 2. Confirm the Pi primary auto-loaded both project extensions (plain `pi` or `pi-signed`, after approving project trust once per clone); if not, restart the selected executable with `-e __FM_PI_TURNEND_EXT__ -e __FM_PI_EXT__` as a trust-free fallback.
-{pig} 2. Confirm PiG loaded the configured extensions; if not, restart PiG with project approval and `-e __FM_PI_TURNEND_EXT__ -e __FM_PI_EXT__ -e __FM_PI_BRANCH_EXT__`. Configuring these extensions does not verify watcher restoration, wake delivery, lifecycle recovery, background-wake coverage, or direct TUI behavior. The Go command extension does not replace the Pi supervision extensions.
 3. Initial process cycle only: make the one required `fm_watch_arm_pi` call; if startup already owned the fleet lock, this is an ownership-based no-op.
    Use `/fm-watch-arm-pi` only as a human-entered fallback.
    Never run `bin/fm-watch-arm.sh` through the host's bash tool because that foreground arm can wedge the agent and bypasses extension-owned cleanup.
@@ -18,7 +16,6 @@ When this session owns supervision, in either posture:
 9. An unexpected child close enters bounded exponential retry, and an exhausted retry or lost session lock is surfaced as a watcher failure instead of disappearing.
 {pi,pi-signed} 10. Missing, failed, or unhealthy cycle only: if a later notification explicitly reports one of those repair conditions, drain queued wakes, inspect the failure text, call `fm_watch_arm_pi`, and restart the selected executable with both extensions loaded if needed.
    A redundant call while the extension owns an arm child or scheduled retry is an ownership-based `watcher: unchanged` no-op, not an independent health claim.
-{pig} 10. Missing, failed, or unhealthy cycle only: if a later notification explicitly reports one of those repair conditions, use the configured PiG recovery path with the watcher, turn-end guard, and branch-supervision extensions named above; configuring them does not verify lifecycle behavior.
 11. Never use shell `&` for watcher supervision.
    The arm mechanism above is extension-owned, not a model tool call, but a manual recovery probe that backgrounds, pipes, or bundles the arm is denied automatically by the PreToolUse seatbelt (`bin/fm-arm-pretool-check.sh`, wired into the turn-end guard extension at `__FM_PI_TURNEND_EXT__`).
 
@@ -42,4 +39,3 @@ Read the durable outcome store with the fm_branch_outcomes tool when the captain
 The turn-end guard extension lives at `__FM_PI_TURNEND_EXT__`.
 The watcher extension lives at `__FM_PI_EXT__`.
 {pi,pi-signed} Both are tracked, project-local `.pi/extensions/*.ts` files that Pi auto-discovers once the project is trusted; `bin/fm-session-start.sh` reports when the running Pi session has not loaded both required extensions.
-{pig} These tracked, project-local `.pi/extensions/*.ts` files include the watcher, turn-end guard, and branch-supervision extension; PiG requires explicit `-e` paths, which `bin/fm-session-start.sh` names when the running PiG session has not loaded the watcher and turn-end guard.

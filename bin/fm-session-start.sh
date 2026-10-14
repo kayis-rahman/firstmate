@@ -832,7 +832,7 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIM
   if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" active \
     || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
     if [ "$PRIMARY_HARNESS" = pig ]; then
-      printf 'PIG_WATCH_EXTENSION: not loaded - restart PiG with project approval and -e %s -e %s -e %s so turn-end guard, background wake coverage, and branch supervision are configured; loading does not verify watcher restoration, wake delivery, lifecycle recovery, or direct TUI behavior\n' "$PI_TURNEND_EXT" "$PI_EXT" "$PI_BRANCH_EXT"
+      printf 'PIG_WATCH_EXTENSION: not loaded - restart PiG with project approval and -e %s -e %s -e %s to configure the Pi supervision extensions. Only /ahoy and /bearings registration and skill handoff are verified; watcher restoration, wake delivery, background-wake coverage, lifecycle recovery, and direct TUI behavior are unverified.\n' "$PI_TURNEND_EXT" "$PI_EXT" "$PI_BRANCH_EXT"
     else
       printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
     fi

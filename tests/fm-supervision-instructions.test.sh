@@ -287,25 +287,28 @@ test_grok_command_sources_effective_config() {
 }
 
 test_pig_reuses_the_pi_compatibility_extensions_without_advertising_worker_support() {
-  local home out turnend watch branch
+  local home out
   home="$TMP_ROOT/pig-home"
-  turnend="$ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
-  watch="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-  branch="$ROOT/.pi/extensions/fm-branch-supervision.ts"
   mkdir -p "$home/state" "$home/config"
   out=$(FM_HOME="$home" "$RENDER" --harness pig)
   assert_contains "$out" "primary harness: pig" "PiG heading missing"
-  assert_contains "$out" "Mode: PiG primary with Pi-compatible extension background wake." "PiG mode missing"
-  assert_contains "$out" "Confirm PiG loaded the configured extensions" "PiG did not require its configured extensions"
-  assert_contains "$out" "The Go command extension does not replace the Pi supervision extensions" "PiG snippet incorrectly treats Go commands as watcher support"
-  assert_contains "$out" "-e $turnend -e $watch -e $branch" "PiG snippet omitted a required extension path"
+  assert_contains "$out" "Mode: PiG primary adapter; supervision lifecycle is unverified." "PiG mode missing"
+  assert_contains "$out" "Verified support is limited to registration of" "PiG protocol overstated verified support"
+  assert_contains "$out" "-e .pi/extensions/fm-primary-turnend-guard.ts" "PiG snippet omitted the turn-end extension path"
+  assert_contains "$out" "-e .pi/extensions/fm-primary-pi-watch.ts" "PiG snippet omitted the watcher extension path"
+  assert_contains "$out" "-e .pi/extensions/fm-branch-supervision.ts" "PiG snippet omitted branch supervision"
   assert_contains "$out" "Configuring these extensions does not verify watcher restoration" "PiG extension configuration was presented as lifecycle verification"
   assert_contains "$out" "PiG requires explicit" "PiG snippet omitted explicit extension loading"
-  assert_contains "$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')" "Pi-compatible extension already owns watcher continuity" "PiG ordinary wake did not preserve extension-owned continuity"
+  assert_contains "$out" "/ahoy and /bearings" "PiG snippet omitted verified commands"
+  assert_contains "$out" "skill handoff" "PiG snippet omitted the verified skill handoff"
+  assert_contains "$out" "Direct TUI invocation is unverified" "PiG snippet overstated direct TUI support"
+  assert_not_contains "$out" "fm_watch_arm_pi" "PiG snippet prescribed an unverified watcher arm"
+  assert_not_contains "$out" "owns every later successor" "PiG snippet claimed unverified successor ownership"
+  assert_contains "$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')" "wake delivery and watcher continuity are unverified" "PiG ordinary wake overstated lifecycle support"
   out=$(FM_HOME="$home" "$RENDER" --harness pig --repair-line)
-  assert_contains "$out" "Pi-compatible tool fm_watch_arm_pi" "PiG repair line did not name the compatible watcher tool"
-  assert_contains "$out" "restart PiG with -e $turnend -e $watch -e $branch" "PiG repair line omitted explicit extension flags"
-  assert_contains "$out" "Configuring them does not verify watcher restoration" "PiG repair instruction overstated lifecycle evidence"
+  assert_contains "$out" "PiG watcher restoration, wake delivery, background-wake coverage, and lifecycle recovery are unverified" "PiG recovery instruction overstated lifecycle support"
+  assert_not_contains "$out" "fm_watch_arm_pi" "PiG recovery instruction prescribed an unverified watcher arm"
+  assert_contains "$out" "Only /ahoy and /bearings registration and skill handoff are verified" "PiG repair instruction overstated verified support"
   assert_not_contains "$out" "Supervision host: on" "PiG incorrectly received the external supervision host"
   pass "PiG renders the shared Pi-compatible supervision protocol with explicit extension loading"
 }

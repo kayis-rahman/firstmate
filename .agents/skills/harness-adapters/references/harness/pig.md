@@ -19,7 +19,7 @@ The installed-runtime check on 2026-10-13 used PiG 0.4.1, upstream Pi 1.0.3, Go 
 
 ## Primary integration
 
-PiG uses the shared Pi supervision protocol in `../../../docs/supervision-protocols/pi.md` and the tracked `.pi/extensions/` watcher, turn-end guard, and branch-supervision extension.
+PiG's configured Pi supervision path is described in `../../../docs/supervision-protocols/pig.md` and uses the tracked `.pi/extensions/` watcher, turn-end guard, and branch-supervision extension.
 Both supervision extensions loaded in an installed PiG TUI run on 2026-10-13, but that check did not prove watcher continuity, a live wake, or turn-end recovery.
 Full unattended primary support remains unverified until those supervision lifecycle paths are exercised end to end.
 

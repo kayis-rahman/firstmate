@@ -2827,7 +2827,9 @@ EOF
   assert_contains "$out" "PIG_WATCH_EXTENSION: not loaded" "PiG extension diagnostic missing"
   assert_contains "$out" "-e $root/.pi/extensions/fm-primary-turnend-guard.ts -e $root/.pi/extensions/fm-primary-pi-watch.ts -e $root/.pi/extensions/fm-branch-supervision.ts" \
     "PiG session-start recovery omitted a supervision extension"
-  assert_contains "$out" "loading does not verify watcher restoration, wake delivery, lifecycle recovery, or direct TUI behavior" \
+  assert_contains "$out" "Only /ahoy and /bearings registration and skill handoff are verified" \
+    "PiG session-start overstated verified support"
+  assert_contains "$out" "watcher restoration, wake delivery, background-wake coverage, lifecycle recovery, and direct TUI behavior are unverified" \
     "PiG session-start treated extension configuration as lifecycle proof"
   pass "PiG session-start configures branch supervision without claiming lifecycle verification"
 }
