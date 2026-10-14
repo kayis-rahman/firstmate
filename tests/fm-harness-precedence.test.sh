@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # Child-bash snippets intentionally preserve runtime positional expansion.
 # Behavior tests for bin/fm-harness.sh's marker-vs-ancestry precedence boundary,
 # and for the supervision protocol session start selects from it.
 #

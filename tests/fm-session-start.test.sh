@@ -2972,6 +2972,7 @@ EOF
   bindir="$home/pig-bin"
   mkdir -p "$bindir"
   ln -s "$(command -v bash)" "$bindir/pig"
+  # shellcheck disable=SC2016 # Child bash creates the PID file using its positional parameter.
   "$bindir/pig" -c 'sleep 30 & echo $! > "$1"; wait' _ "$home/child.pid" &
   pig_pid=$!
   for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do

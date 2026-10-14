@@ -492,6 +492,7 @@ assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" 
   "lock-holder ancestry plus a fresh beacon is a healthy wake consumer"
 assert_equals "True" "$(printf '%s' "$held" | json_get can_receive)" \
   "a held lock with a healthy wake consumer can receive work"
+# shellcheck disable=SC2016 # Perl program must retain child-side quoting.
 inspected_from_pig=$(env FM_SUPERVISION_MODEL=autoarm FM_HOME="$home" \
   FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
   FM_CONFIG_OVERRIDE="$home/config" perl -e '
@@ -594,6 +595,7 @@ for family in pig pi pi-signed omp; do
   kill "$marker_pid" "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 done
+# shellcheck disable=SC2016 # Perl and child-shell programs intentionally use literal quotes.
 model_from_pig=$(env FM_SUPERVISION_MODEL=extension perl -e '
   $0 = "pig";
   my $child = fork();
