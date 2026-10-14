@@ -492,7 +492,7 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
-    for route in explicit positional raw env command config; do
+    for route in explicit positional raw env command nohup config; do
       id="pig-${kind}-${route}-z31"
       rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
       read_case_record "$rec"
@@ -518,6 +518,7 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         raw) invocation+=('pig --print refused') ;;
         env) invocation+=('env -u FM_PIG_HARNESS FM_PIG_HARNESS=pig pig --print refused') ;;
         command) invocation+=('command pig --print refused') ;;
+        nohup) invocation+=('nohup pig --print refused') ;;
       esac
 
       if [ "$kind" = ship ]; then
@@ -542,16 +543,31 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   assert_contains "$out" "spawned $id harness=codex" "the wrapped verified harness was not resolved"
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" 'env codex --version' "the accepted raw command was not preserved"
-  id=pig-wrapper-shell-verified-z31
-  rec=$(make_spawn_case pig-wrapper-shell-verified claude "$id")
-  read_case_record "$rec"
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "bash -c 'codex --version'")
-  status=$?
-  expect_code 0 "$status" "a non-PiG bash -c raw launch should proceed"
-  assert_contains "$out" "spawned $id harness=bash" "the shell raw launch was unexpectedly rejected"
-  assert_contains "$(cat "$LAUNCH_LOG")" "bash -c 'codex --version'" "the shell raw command was not preserved"
-  pass "PiG direct dispatch is refused while separately selected raw commands proceed"
+  for kind in ship scout secondmate; do
+    id="pig-shell-verified-${kind}-z31"
+    rec=$(make_spawn_case "pig-shell-verified-${kind}" claude "$id")
+    read_case_record "$rec"
+    if [ "$kind" = secondmate ]; then
+      sm="$CASE_DIR/secondmate-shell-home"
+      make_seeded_secondmate_home "$sm" "$id"
+      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$sm" --secondmate "bash -c 'codex --version'")
+    else
+      invocation=("$id" "$PROJ_DIR")
+      [ "$kind" != scout ] || invocation+=(--scout)
+      invocation+=("bash -c 'codex --version'")
+      if [ "$kind" = ship ]; then
+        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      else
+        out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      fi
+    fi
+    status=$?
+    expect_code 0 "$status" "$kind non-PiG bash -c launch should proceed"
+    assert_contains "$out" "spawned $id harness=bash" "$kind shell raw launch was unexpectedly rejected"
+    assert_contains "$(cat "$LAUNCH_LOG")" "bash -c 'codex --version'" "$kind shell command was not preserved"
+  done
+  pass "PiG wrapper dispatch is refused while non-PiG shell launches proceed across worker modes"
 }
 
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {

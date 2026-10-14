@@ -2409,7 +2409,7 @@ case "$ARG3" in
     word=${word%\"}
     word=${word%\'}
     case "$(basename -- "$word")" in
-      env|command|--) continue ;;
+      env|command|nohup|--) continue ;;
       -*) continue ;;
     esac
     HARNESS=$(basename -- "$word")
