@@ -3,12 +3,12 @@
 The supervision host runs the supervision branch's contract beside a host-eligible primary that does not use the Pi-compatible in-process extension branch.
 This doc explains how it does that and which script owns each part, for maintainers changing the host, its engine, or a primary's arm owner.
 
-On Pi and pi-signed the branch is a second conversation inside the captain's own process; PiG uses the same branch through its Pi-compatible extension runtime ([pi-supervision-branch.md](pi-supervision-branch.md)).
+On Pi and pi-signed the branch is a second conversation inside the captain's own process. PiG is configured to load the same branch extension ([pi-supervision-branch.md](pi-supervision-branch.md)), but its branch processing, watcher restoration, wake delivery, lifecycle recovery, and direct TUI behavior are unverified; readiness remains unknown.
 Other supported primaries have no such in-process branch, so the host owns their watcher cycle and runs the branch as a headless engine session.
-PiG's Go command handoffs have been exercised over RPC, but its complete live supervision lifecycle remains under verification.
+Only PiG's `/ahoy` and `/bearings` registration and skill handoffs have been exercised over RPC.
 
 It is one architecture with the Pi-compatible extension branch, not a second one.
-These parts are shared with Pi and PiG and decide what the branch may do:
+These parts are shared with Pi and the configured PiG integration and describe what the branch may do; this does not verify that PiG runs the branch lifecycle:
 
 - The same branch prompt.
 - The same row eligibility.
@@ -34,7 +34,7 @@ Today it runs beside a Claude, Cursor, OpenCode, omp, Grok, or Codex primary: aw
 - `/afk` launches no away daemon on a home of those harnesses that runs the host, because the host is the away session there.
 - `/quiet` enters nothing where the attended host runs, and elsewhere launches the daemon; see [Quiet mode](#quiet-mode).
   While the daemon's flag `state/.afk` exists, the host stands aside exactly as the plain arm does.
-- Pi, pi-signed, and PiG keep their in-process branch whatever the file says, and no Pi engine is built.
+- Pi and pi-signed keep their in-process branch whatever the file says, and no Pi engine is built. PiG is configured for an in-process branch and does not launch this host, but its runtime delivery and processing remain unverified.
 - Kimi has no primary supervision protocol, so it has no arm owner to run the host.
 
 ### Not yet on the host

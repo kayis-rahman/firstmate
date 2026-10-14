@@ -19,22 +19,23 @@ In this document, an arm is one run of `bin/fm-watch-arm.sh`, which starts a wat
 
 ## Ownership
 
-On Pi, pi-signed, PiG, omp, OpenCode, Cursor, and Claude primaries, one component owns re-arming the watcher.
+On Pi, pi-signed, omp, OpenCode, Cursor, and Claude primaries, one component owns re-arming the watcher. PiG is configured with the Pi watcher extension, but watcher restoration and wake delivery are unverified.
 Codex and Grok keep their own protocols; see [Manual recovery and other harnesses](#manual-recovery-and-other-harnesses).
 
 | Harness | Re-arm owner |
 | --- | --- |
-| Pi, pi-signed, and PiG | `.pi/extensions/fm-primary-pi-watch.ts` |
+| Pi and pi-signed | `.pi/extensions/fm-primary-pi-watch.ts` |
+| PiG | Configured to load `.pi/extensions/fm-primary-pi-watch.ts`; runtime re-arm behavior is unverified |
 | omp | `.omp/extensions/fm-primary-omp-watch.ts` |
 | OpenCode | `.opencode/plugins/fm-primary-watch-arm.js` |
 | Cursor | `.cursor/hooks.json` `stop` hook (`bin/fm-turnend-guard-cursor.sh`) |
 | Claude | `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) |
 
-On a host-eligible primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host). PiG uses the shared Pi extension path; its Go command handoffs are verified over RPC, but its full live supervision lifecycle remains unverified.
+On a host-eligible primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host). PiG is configured with the Pi extension path. Its `/ahoy` and `/bearings` registration and skill handoffs are verified over RPC, but watcher restoration, wake delivery, background coverage, lifecycle recovery, and direct TUI behavior remain unverified; readiness remains unknown.
 
-### Pi-compatible, omp, and OpenCode adapters
+### Pi, omp, and OpenCode adapters
 
-The Pi/PiG `.pi/extensions/fm-primary-pi-watch.ts`, omp's `.omp/extensions/fm-primary-omp-watch.ts`, and OpenCode's `.opencode/plugins/fm-primary-watch-arm.js` own continuous re-arm after an actionable child close.
+The Pi `.pi/extensions/fm-primary-pi-watch.ts`, omp's `.omp/extensions/fm-primary-omp-watch.ts`, and OpenCode's `.opencode/plugins/fm-primary-watch-arm.js` own continuous re-arm after an actionable child close. PiG's configured use of the Pi extension does not verify that it restores a watcher after child close.
 Each adapter:
 
 - Starts the next arm before delivering the wake prompt.
@@ -130,12 +131,14 @@ This section covers what each re-arm owner does between an actionable close and 
 
 ### Pi-compatible, omp, and OpenCode successor start
 
-After an actionable Pi, PiG, omp, or OpenCode child close, the adapter:
+After an actionable Pi, omp, or OpenCode child close, the adapter:
 
 1. Waits for the predecessor process to close.
 2. Starts and verifies one singleton successor.
 3. Confirms the handling handoff before scheduling the follow-up: Pi confirms against the restoration's own recovery token, while omp and OpenCode confirm against the current successor.
 4. Delivers the original wake.
+
+PiG's corresponding child-close recovery and wake delivery remain unverified.
 
 A complete Pi reason line can be observed while the predecessor is still finishing durable cleanup.
 That line is retained for replacement handoff, but the adapter never treats that already-ready predecessor as its own successor.

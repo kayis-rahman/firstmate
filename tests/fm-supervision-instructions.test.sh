@@ -302,6 +302,7 @@ test_pig_reuses_the_pi_compatibility_extensions_without_advertising_worker_suppo
   assert_contains "$out" "/ahoy and /bearings" "PiG snippet omitted verified commands"
   assert_contains "$out" "skill handoff" "PiG snippet omitted the verified skill handoff"
   assert_contains "$out" "Direct TUI invocation is unverified" "PiG snippet overstated direct TUI support"
+  assert_contains "$out" "routes are configured to use the Pi branch" "PiG posture routing is missing or presented as verified"
   assert_not_contains "$out" "fm_watch_arm_pi" "PiG snippet prescribed an unverified watcher arm"
   assert_not_contains "$out" "owns every later successor" "PiG snippet claimed unverified successor ownership"
   assert_contains "$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')" "wake delivery and watcher continuity are unverified" "PiG ordinary wake overstated lifecycle support"

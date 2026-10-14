@@ -492,7 +492,7 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
-    for route in explicit positional raw env command nohup bash-c bash-c-compound bash-c-env config; do
+    for route in explicit positional raw env command nohup bash-c bash-c-compound bash-c-env bash-nested bash-lc config; do
       id="pig-${kind}-${route}-z31"
       rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
       read_case_record "$rec"
@@ -522,6 +522,8 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         bash-c) invocation+=("bash -c 'pig --print refused'") ;;
         bash-c-compound) invocation+=("bash -c 'true; pig --print refused'") ;;
         bash-c-env) invocation+=("bash -c 'env pig --print refused'") ;;
+        bash-nested) invocation+=("bash -c \"bash -c 'pig --print refused'\"") ;;
+        bash-lc) invocation+=("bash -lc 'pig --print refused'") ;;
       esac
 
       if [ "$kind" = ship ]; then
@@ -569,6 +571,29 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
     expect_code 0 "$status" "$kind non-PiG bash -c launch should proceed"
     assert_contains "$out" "spawned $id harness=bash" "$kind shell raw launch was unexpectedly rejected"
     assert_contains "$(cat "$LAUNCH_LOG")" "bash -c 'codex --version'" "$kind shell command was not preserved"
+
+    id="pig-shell-login-verified-${kind}-z31"
+    rec=$(make_spawn_case "pig-shell-login-verified-${kind}" claude "$id")
+    read_case_record "$rec"
+    if [ "$kind" = secondmate ]; then
+      sm="$CASE_DIR/secondmate-shell-login-home"
+      make_seeded_secondmate_home "$sm" "$id"
+      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$sm" --secondmate "bash -lc 'codex --version'")
+    else
+      invocation=("$id" "$PROJ_DIR")
+      [ "$kind" != scout ] || invocation+=(--scout)
+      invocation+=("bash -lc 'codex --version'")
+      if [ "$kind" = ship ]; then
+        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      else
+        out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
+      fi
+    fi
+    status=$?
+    expect_code 0 "$status" "$kind non-PiG bash -lc launch should proceed"
+    assert_contains "$out" "spawned $id harness=bash" "$kind combined shell flag launch was rejected"
+    assert_contains "$(cat "$LAUNCH_LOG")" "bash -lc 'codex --version'" "$kind combined shell command was not preserved"
   done
   pass "PiG wrapper dispatch is refused while non-PiG shell launches proceed across worker modes"
 }

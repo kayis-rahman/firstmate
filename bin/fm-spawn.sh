@@ -2439,6 +2439,65 @@ case "$ARG3" in
 *) HARNESS=$ARG3 ;;
 esac
 
+raw_shell_has_c_flag() {  # <shell-option>
+  case "$1" in
+    --*) return 1 ;;
+    -c|-?*c*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+raw_shell_payload_has_pig() {  # <command-payload>
+  local payload=$1 segment word name command_start skip_next index nested_payload
+  local -a words
+  payload=$(printf '%s' "$payload" | tr ';|&()' '\n')
+  while IFS= read -r segment; do
+    read -r -a words <<< "$segment"
+    command_start=1
+    skip_next=0
+    index=0
+    while [ "$index" -lt "${#words[@]}" ]; do
+      word=${words[$index]}
+      index=$((index + 1))
+      [ "$skip_next" -eq 0 ] || { skip_next=0; continue; }
+      word=${word#\"}
+      word=${word#\'}
+      word=${word%\"}
+      word=${word%\'}
+      case "$word" in
+        ''|\#*) continue ;;
+        [A-Za-z_]*=*) continue ;;
+      esac
+      [ "$command_start" -eq 1 ] || continue
+      name=$(basename -- "$word")
+      case "$name" in
+        env|command|nohup|--) continue ;;
+        -u|--unset|-C|--chdir|--argv0) skip_next=1; continue ;;
+        -*) continue ;;
+      esac
+      case "$name" in
+        bash|sh|dash|zsh|ksh)
+          while [ "$index" -lt "${#words[@]}" ]; do
+            word=${words[$index]}
+            index=$((index + 1))
+            if raw_shell_has_c_flag "$word"; then
+              nested_payload=${words[*]:$index}
+              raw_shell_payload_has_pig "$nested_payload" && return 0
+              break
+            fi
+          done
+          command_start=0
+          ;;
+        pig) return 0 ;;
+        *) command_start=0 ;;
+      esac
+    done
+  done <<EOF
+$payload
+EOF
+  return 1
+}
+
 if [ "$RAW_LAUNCH" -eq 1 ]; then
   case "$HARNESS" in
     bash|sh|dash|zsh|ksh)
@@ -2450,7 +2509,7 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
           payload_words+=("$word")
           continue
         fi
-        if [ "$shell_seen" -eq 1 ] && [ "$word" = -c ]; then
+        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
           command_after_c=1
           continue
         fi
@@ -2459,32 +2518,7 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
         esac
       done
       if [ "$command_after_c" -eq 1 ]; then
-        payload=$(printf '%s ' "${payload_words[@]}" | tr ';|&()' '\n')
-        while IFS= read -r segment; do
-          command_start=1
-          skip_next=0
-          for word in $segment; do
-            [ "$skip_next" -eq 0 ] || { skip_next=0; continue; }
-            word=${word#\"}
-            word=${word#\'}
-            word=${word%\"}
-            word=${word%\'}
-            case "$word" in
-              ''|\#*) continue ;;
-              [A-Za-z_]*=*) continue ;;
-            esac
-            [ "$command_start" -eq 1 ] || continue
-            case "$(basename -- "$word")" in
-              env|command|nohup|--) continue ;;
-              -u|--unset|-C|--chdir|--argv0) skip_next=1; continue ;;
-              -*) continue ;;
-            esac
-            [ "$(basename -- "$word")" = pig ] && RAW_NESTED_PIG=1
-            command_start=0
-          done
-        done <<EOF
-$payload
-EOF
+        raw_shell_payload_has_pig "${payload_words[*]}" && RAW_NESTED_PIG=1
       fi
       ;;
   esac
