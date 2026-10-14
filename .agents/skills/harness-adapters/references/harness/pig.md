@@ -1,23 +1,30 @@
 # PiG
 
-PiG is a distinct Go-native harness selected as `pig`, never as `pi` or `pi-signed`.
-Its executable and anchored process identity are both `pig`.
-Firstmate's `FM_PIG_HARNESS=pig` launch marker is accepted only with matching PiG process ancestry.
+PiG is integrated as a primary-only adapter; worker, scout, and secondmate dispatch through PiG are not supported.
+The installed-runtime check on 2026-10-13 used PiG 0.4.1, upstream Pi 1.0.3, Go 1.27.1, and macOS arm64.
 
 ## Operating facts
 
 | Fact | Value |
 |---|---|
-| Configuration | PiG defaults to `~/.pig`; `PIG_HOME` selects the config root and `PIG_CODING_AGENT_DIR` selects the agent directory. PiG does not read or write `~/.pi`. |
-| Model | PiG accepts `--model` and `--thinking`; use `pig --list-models` and `pig auth check` for its own catalog and authentication evidence. |
-| Trust | Project resources require trust; an explicit `-e` path is available for a Firstmate-owned extension outside the project. |
-| Extension compatibility | PiG's Node subprocess runtime accepts a Pi-compatible TypeScript default export. This confirms loading and registration only; each Firstmate extension's behavior still needs live verification. |
-| TUI | `--tui-mode regular` is supported. Escape cancels the active dialog or model turn; Ctrl+C clears the editor, and a second Ctrl+C exits. |
+| Binary | `pig`, resolved from `PATH`. |
+| Scope | Primary only. `../../../bin/fm-harness.sh crew` refuses an absent or `default` worker choice under PiG; an explicit verified worker adapter remains selectable. |
+| Identity | PiG publishes no Firstmate identity marker. Set `FM_PIG_HARNESS=pig` when starting PiG; `../../../bin/fm-harness.sh` trusts it only when the exact `pig` executable is in the process ancestry. |
+| Session lock | The session lock names the PiG process. PiG's isolated Node extension process is accepted when the lock owner is an exact live `pig` process and the tracked Pi extension marker names a live descendant of it; this does not require `FM_PIG_HARNESS` in the inspecting process. Pi and pi-signed still require the exact lock owner. OMP's exact-process proof is unchanged. |
+| Model | `--model openai-codex/gpt-5.5` produced a live response on the installed runtime. `gpt-5.3-codex-spark` is rejected by PiG with the Codex-with-ChatGPT-account unsupported-model diagnostic. |
+| Thinking | `--thinking minimal` is accepted. PiG documents `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; only `minimal` was exercised in the Firstmate integration check. |
+| Primary extensions | Pass `-e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts -e .pi/extensions/fm-branch-supervision.ts` from the Firstmate repository. Configuring these extensions does not verify watcher restoration, wake delivery, lifecycle recovery, background-wake coverage, or direct TUI behavior. The Go commands are separate from these supervision extensions. |
+| Go commands | `.pig/extensions/fm-firstmate` auto-registers `/ahoy` and `/bearings`. Install validation succeeds, and an installed PiG 0.4.1 RPC-mode run confirmed both callbacks hand a synthesized user message to their loaded skills and settle a model turn. The direct TUI invocation and a full Bearings data read were not part of that check. |
+| Exit and interrupt | Not yet verified for Firstmate lifecycle control. Do not infer Pi's key behavior. |
 
-PiG 0.4.0+1.0.0 has an EXPERIMENTAL Firstmate adapter.
-Repository checks cover distinct harness detection, launch construction, trust setup, and CLI model/effort handling; these checks do not establish live integration behavior.
-Interactive/fleet lifecycle parity, busy/settled reporting, durable steering, interrupt, recovery, and primary supervision remain unverified.
-Do not gate PiG dispatch or recovery based on this experimental status, because existing fleet workers use PiG.
+## Primary integration
 
-PiG's own documentation is the authority for its installed CLI, model catalog, trust behavior, and extension API.
-The distinct native PiG extension port and Calm behavior parity are separate work; Firstmate's Pi-compatible Node extension path is compatibility behavior and has not been validated for Calm parity.
+PiG's configured Pi supervision path is described in `../../../docs/supervision-protocols/pig.md` and uses the tracked `.pi/extensions/` watcher, turn-end guard, and branch-supervision extension.
+Both supervision extensions loaded in an installed PiG TUI run on 2026-10-13, but that check did not prove watcher continuity, a live wake, or turn-end recovery.
+Full unattended primary support remains unverified until those supervision lifecycle paths are exercised end to end.
+
+The Go extension synthesizes a next-turn user message that directs PiG to follow the already-loaded `ahoy` or `bearings` skill; it does not reimplement either skill. The callback-to-skill handoff is verified over RPC, while direct TUI invocation remains unverified.
+PiG auto-discovers the top-level `.pig/extensions/fm-firstmate` resource in the Firstmate repository, while the Pi supervision files are explicitly loaded with `-e`.
+
+Use a verified non-PiG worker harness in `config/crew-harness` before dispatching crew or scout work from a PiG primary.
+`../../../bin/fm-harness.sh secondmate` applies the same primary-only boundary when the secondmate harness is absent or `default`.

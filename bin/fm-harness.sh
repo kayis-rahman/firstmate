@@ -112,6 +112,11 @@ harness_marker() {
   # additionally clears foreign markers at rovo's launch boundary as defense in depth.
   [ "${ATLASSIAN_AGENT_TYPE:-}" = "rovo" ] && { echo rovo; return; }
   [ "${ROVODEV_CLI:-}" = "1" ] && { echo rovo; return; }
+  # pig (PiG) publishes no environment identity of its own. FM_PIG_HARNESS=pig
+  # is Firstmate's primary-launch marker and is trusted only when an exact pig
+  # process appears in this process's ancestry. This preserves the same
+  # marker-versus-structure rule as omp while letting a Pig session started
+  # beneath another harness keep its own identity.
   if [ "${FM_PIG_HARNESS:-}" = pig ] && ancestry_names_pig; then
     echo pig
     return
@@ -184,7 +189,6 @@ ancestry_names_omp() {
   return 1
 }
 
-# Print "<strength> <harness>" when one process identifies a harness, or nothing.
 # Strength records how the match was made:
 #   comm - the ancestor's own executable name identifies the harness. This is a
 #          structural fact about the running program, so it outranks a marker.
@@ -463,7 +467,14 @@ detect_own() {
 resolve_crew() {
   local crew=
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
-  if [ -z "$crew" ] || [ "$crew" = "default" ]; then detect_own; else echo "$crew"; fi
+  if [ -z "$crew" ] || [ "$crew" = default ]; then
+    crew=$(detect_own) || return
+  fi
+  if [ "$crew" = pig ]; then
+    echo "error: PiG is verified as a primary-only harness; set config/crew-harness to a verified worker harness before dispatch" >&2
+    return 2
+  fi
+  printf '%s\n' "$crew"
 }
 
 # Print the first non-empty, non-comment line of config/secondmate-harness
@@ -508,8 +519,12 @@ secondmate_field() {
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
-  if [ -z "$sm" ] || [ "$sm" = "default" ]; then sm=$(resolve_crew) || exit; fi
-  echo "$sm"
+  if [ -z "$sm" ] || [ "$sm" = default ]; then sm=$(resolve_crew) || return; fi
+  if [ "$sm" = pig ]; then
+    echo "error: PiG is verified as a primary-only harness; set config/secondmate-harness to a verified secondmate harness before dispatch" >&2
+    return 2
+  fi
+  printf '%s\n' "$sm"
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or
