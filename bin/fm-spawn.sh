@@ -1840,6 +1840,7 @@ PROJ=
 ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
+RAW_NESTED_PIG=0
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2438,8 +2439,34 @@ case "$ARG3" in
 *) HARNESS=$ARG3 ;;
 esac
 
-case "$KIND:$HARNESS" in
-  ship:pig|scout:pig|secondmate:pig)
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$HARNESS" in
+    bash|sh|dash|zsh|ksh)
+      saw_shell=0
+      command_after_c=0
+      for word in $LAUNCH; do
+        if [ "$command_after_c" -eq 1 ]; then
+          word=${word#\"}
+          word=${word#\'}
+          word=${word%\"}
+          word=${word%\'}
+          [ "$(basename -- "$word")" = pig ] && RAW_NESTED_PIG=1
+          break
+        fi
+        if [ "$saw_shell" -eq 1 ] && [ "$word" = -c ]; then
+          command_after_c=1
+          continue
+        fi
+        case "$(basename -- "$word")" in
+          bash|sh|dash|zsh|ksh) saw_shell=1 ;;
+        esac
+      done
+      ;;
+  esac
+fi
+
+case "$KIND:$HARNESS:$RAW_NESTED_PIG" in
+  ship:pig:*|scout:pig:*|secondmate:pig:*|ship:*:1|scout:*:1|secondmate:*:1)
     echo "error: PiG is verified as a primary-only harness and cannot be dispatched for ship, scout, or secondmate work; select a separately verified harness" >&2
     exit 1
     ;;
