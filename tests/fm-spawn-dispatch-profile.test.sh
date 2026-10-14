@@ -492,7 +492,7 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
-    for route in explicit positional raw env command bash-c sh-c config; do
+    for route in explicit positional raw env command config; do
       id="pig-${kind}-${route}-z31"
       rec=$(make_spawn_case "pig-${kind}-${route}" claude "$id")
       read_case_record "$rec"
@@ -518,8 +518,6 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
         raw) invocation+=('pig --print refused') ;;
         env) invocation+=('env -u FM_PIG_HARNESS FM_PIG_HARNESS=pig pig --print refused') ;;
         command) invocation+=('command pig --print refused') ;;
-        bash-c) invocation+=("bash -c 'pig --print refused'") ;;
-        sh-c) invocation+=("sh -c 'pig --print refused'") ;;
       esac
 
       if [ "$kind" = ship ]; then
@@ -544,7 +542,16 @@ test_pig_primary_only_dispatch_refuses_every_worker_route() {
   assert_contains "$out" "spawned $id harness=codex" "the wrapped verified harness was not resolved"
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" 'env codex --version' "the accepted raw command was not preserved"
-  pass "PiG dispatch is refused across worker kinds and nested shells while verified harnesses proceed"
+  id=pig-wrapper-shell-verified-z31
+  rec=$(make_spawn_case pig-wrapper-shell-verified claude "$id")
+  read_case_record "$rec"
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" "bash -c 'codex --version'")
+  status=$?
+  expect_code 0 "$status" "a non-PiG bash -c raw launch should proceed"
+  assert_contains "$out" "spawned $id harness=bash" "the shell raw launch was unexpectedly rejected"
+  assert_contains "$(cat "$LAUNCH_LOG")" "bash -c 'codex --version'" "the shell raw command was not preserved"
+  pass "PiG direct dispatch is refused while separately selected raw commands proceed"
 }
 
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {

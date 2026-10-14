@@ -582,6 +582,9 @@ for family in pig pi pi-signed omp; do
   kill "$marker_pid" "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 done
+model_from_pig=$(env FM_SUPERVISION_MODEL=extension perl -e '$0="pig"; exec @ARGV' bash -c '. "$1/bin/fm-wake-lib.sh"; fm_supervision_model' _ "$ROOT")
+assert_equals "extension" "$model_from_pig" \
+  "the inspected-home model override must take precedence over the observer being PiG"
 pass "readiness requires live PiG-owned descendants and preserves strict Pi and OMP ownership"
 
 # --- invalid input ----------------------------------------------------------

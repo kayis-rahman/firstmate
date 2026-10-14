@@ -236,11 +236,11 @@ fm_watcher_healthy() {
 # bin/fm-harness.sh is the single detection owner.
 fm_supervision_model() {
   local harness
-  harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-  [ "$harness" = pig ] && { printf 'unverified\n'; return 0; }
   case "${FM_SUPERVISION_MODEL:-}" in
     autoarm|extension|persistent|unverified) printf '%s\n' "$FM_SUPERVISION_MODEL"; return 0 ;;
   esac
+  harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+  [ "$harness" = pig ] && { printf 'unverified\n'; return 0; }
   case "$harness" in
     claude|cursor) printf 'autoarm\n' ;;
     pi|pi-signed|omp) printf 'extension\n' ;;
