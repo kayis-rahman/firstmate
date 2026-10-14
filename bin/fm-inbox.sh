@@ -910,9 +910,8 @@ cmd_ready() {
     consumer_state=unknown
     consumer_reason="no-wake-lib"
   else
-    FM_SUPERVISION_MODEL=$resolved_model \
-      fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
-        "$FM_HOME" "$FM_ROOT"
+    fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
+      "$FM_HOME" "$FM_ROOT" "$resolved_model"
     if [ "$FM_WATCHER_VERDICT_OK" = true ]; then
       consumer_state=healthy
       consumer_reason="supervised"

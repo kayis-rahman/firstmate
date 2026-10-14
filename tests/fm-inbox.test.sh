@@ -492,6 +492,18 @@ assert_equals "healthy" "$(printf '%s' "$held" | json_get wake_consumer state)" 
   "lock-holder ancestry plus a fresh beacon is a healthy wake consumer"
 assert_equals "True" "$(printf '%s' "$held" | json_get can_receive)" \
   "a held lock with a healthy wake consumer can receive work"
+inspected_from_pig=$(env FM_SUPERVISION_MODEL=autoarm FM_HOME="$home" \
+  FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+  FM_CONFIG_OVERRIDE="$home/config" perl -e '
+    $0 = "pig";
+    my $child = fork();
+    die "fork failed" unless defined $child;
+    if ($child == 0) { exec @ARGV or die $!; }
+    waitpid($child, 0);
+    exit($? >> 8);
+  ' "$INBOX_BIN" ready) || fail "a PiG observer could not inspect another home"
+assert_equals "healthy" "$(printf '%s' "$inspected_from_pig" | json_get wake_consumer state)" \
+  "the inspected home's explicit model must override the PiG observer's own identity"
 kill_holder
 trap fm_test_cleanup EXIT
 
@@ -582,9 +594,16 @@ for family in pig pi pi-signed omp; do
   kill "$marker_pid" "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 done
-model_from_pig=$(env FM_SUPERVISION_MODEL=extension perl -e '$0="pig"; exec @ARGV' bash -c '. "$1/bin/fm-wake-lib.sh"; fm_supervision_model' _ "$ROOT")
-assert_equals "extension" "$model_from_pig" \
-  "the inspected-home model override must take precedence over the observer being PiG"
+model_from_pig=$(env FM_SUPERVISION_MODEL=extension perl -e '
+  $0 = "pig";
+  my $child = fork();
+  die "fork failed" unless defined $child;
+  if ($child == 0) { exec @ARGV or die $!; }
+  waitpid($child, 0);
+  exit($? >> 8);
+' bash -c '. "$1/bin/fm-wake-lib.sh"; fm_supervision_model' _ "$ROOT")
+assert_equals "unverified" "$model_from_pig" \
+  "a PiG primary must remain unverified despite its generic model override"
 pass "readiness requires live PiG-owned descendants and preserves strict Pi and OMP ownership"
 
 # --- invalid input ----------------------------------------------------------

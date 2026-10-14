@@ -231,16 +231,16 @@ fm_watcher_healthy() {
 #   persistent  every other harness (codex foreground checkpoint, opencode/grok
 #               background arm, tmux, unknown): the watcher runs as a tracked live
 #               process, so a live identity-matched pid is the real liveness signal.
-# FM_SUPERVISION_MODEL overrides detection (tests, and callers that already know
-# the harness), except that a detected PiG primary remains unverified. Otherwise
-# bin/fm-harness.sh is the single detection owner.
+# FM_SUPERVISION_MODEL may override other detected harnesses, but a PiG primary
+# remains unverified. Callers inspecting another home pass that home's resolved
+# model directly to fm_watcher_supervision_verdict.
 fm_supervision_model() {
   local harness
+  harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+  [ "$harness" = pig ] && { printf 'unverified\n'; return 0; }
   case "${FM_SUPERVISION_MODEL:-}" in
     autoarm|extension|persistent|unverified) printf '%s\n' "$FM_SUPERVISION_MODEL"; return 0 ;;
   esac
-  harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-  [ "$harness" = pig ] && { printf 'unverified\n'; return 0; }
   case "$harness" in
     claude|cursor) printf 'autoarm\n' ;;
     pi|pi-signed|omp) printf 'extension\n' ;;
@@ -426,7 +426,7 @@ fm_afk_mode() {
   esac
 }
 
-# fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root]
+# fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root] [model]
 # Model-aware "is supervision healthy right now" verdict for the pull warning
 # guard (bin/fm-guard.sh), NOT the arm layer or the turn-end guard. Sets:
 #   FM_WATCHER_VERDICT_OK      true when supervision is healthy for this model
@@ -455,7 +455,7 @@ FM_WATCHER_VERDICT_OK=false
 FM_WATCHER_VERDICT_REASON=stale-beacon
 fm_watcher_supervision_verdict() {
   local state=$1 watch=$2 grace=${3:-${FM_GUARD_GRACE:-300}} home=${4:-$FM_HOME}
-  local root=${5:-$FM_ROOT}
+  local root=${5:-$FM_ROOT} model_override=${6:-}
   local beat age fresh=false model
   FM_WATCHER_VERDICT_OK=false
   FM_WATCHER_VERDICT_REASON=stale-beacon
@@ -465,7 +465,10 @@ fm_watcher_supervision_verdict() {
     ''|*[!0-9]*) ;;
     *) [ "$age" -lt "$grace" ] && fresh=true ;;
   esac
-  model=$(fm_supervision_model)
+  case "$model_override" in
+    autoarm|extension|persistent|unverified) model=$model_override ;;
+    *) model=$(fm_supervision_model) ;;
+  esac
   if [ "$model" = unverified ]; then
     FM_WATCHER_VERDICT_REASON=unverified-supervision
     return 0
