@@ -228,7 +228,7 @@ assert_contains "$out" '  note: 1 eligible candidate(s) unranked (kimi)' "clear 
 assert_not_contains "$out" '--effort' "cursor profile without effort emits no --effort"
 argv=$(cat "$LOG/argv")
 assert_not_contains "$argv" "$KEY" "the key never appears on curl argv"
-assert_contains "$argv" 'https://api.typesafe.ai/v1/systemone' "the request uses the fixed typesafe.ai endpoint"
+assert_contains "$argv" 'https://api.typesafe.ai/v1/systemone' "the request uses the default typesafe.ai endpoint"
 assert_contains "$argv" $'--max-time\n5' "the request uses the fixed five-second timeout"
 assert_contains "$argv" '@/dev/fd/3' "the header is read from a file descriptor"
 assert_equals "Authorization: Bearer $KEY" "$(cat "$LOG/header")" "curl receives the bearer header on fd 3"
@@ -245,6 +245,20 @@ assert_not_contains "$body" 'SECRET-WHY-TEXT' "why text never leaves the machine
 assert_not_contains "$body" 'spendPriority' "quota never leaves the machine"
 assert_not_contains "$body" 'cursor-grok' "use profiles never leave the machine"
 pass "clear: one rule Choice request, key on the fd header only, spendPriority argmax over every candidate"
+
+# --- endpoint and model overrides, environment and .env ----------------------
+reset_log
+TYPESAFE_BASE=http://127.0.0.1:11234/ TYPESAFE_MODEL=aac6fef/laya-typed-decisions-mlx TYPESAFE_API_KEY=$KEY run code out err "$BRIEF" --project pager
+expect_code 0 "$code" "environment endpoint and model overrides succeed"
+assert_contains "$(cat "$LOG/argv")" 'http://127.0.0.1:11234/v1/systemone' "environment endpoint override reaches curl"
+assert_equals 'aac6fef/laya-typed-decisions-mlx' "$(jq -r .model < "$LOG/body")" "environment model override reaches request"
+printf '%s\n' 'TYPESAFE_BASE=http://env-file.invalid' 'TYPESAFE_MODEL=env-file-model' > "$HOME_DIR/.env"
+reset_log
+TYPESAFE_API_KEY=$KEY run code out err "$BRIEF" --project pager
+expect_code 0 "$code" ".env endpoint and model overrides succeed"
+assert_contains "$(cat "$LOG/argv")" 'http://env-file.invalid/v1/systemone' ".env endpoint override reaches curl"
+assert_equals 'env-file-model' "$(jq -r .model < "$LOG/body")" ".env model override reaches request"
+pass "endpoint and model settings override defaults from environment or .env"
 
 # --- never-send list: a match or a bad list withholds the request -------------
 NEVER_SEND="$HOME_DIR/config/dispatch-never-send"

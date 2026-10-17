@@ -8,13 +8,15 @@
 # Opt-in gate: TYPESAFE_API_KEY non-empty in this process environment, else a
 #   TYPESAFE_API_KEY= line in $FM_HOME/.env read with fmx_env_get, the same
 #   accessor as FMX_PAIRING_TOKEN (bin/fm-env-lib.sh). The environment wins.
+#   TYPESAFE_BASE and TYPESAFE_MODEL likewise override the defaults below
+#   from the environment or $FM_HOME/.env, with the environment taking priority.
 #   Absent in both: one "dispatch-resolve: off" line on stderr, nothing on
 #   stdout, exit 0, no network call, so firstmate dispatches exactly as today.
 #   The key lives in one shell variable and reaches curl as a header read from
 #   a file descriptor, never on argv; nothing logs or writes it.
 #
 # What it does when on with at least one rule: one POST to
-#   https://api.typesafe.ai/v1/systemone with the project name and the brief's
+#   $TYPESAFE_BASE/v1/systemone with the project name and the brief's
 #   `## Captain's intent` and `## Firstmate spec` sections, tagged when it is a
 #   scout brief (the whole brief when it has neither section), as state and
 #   ONE Choice question whose options are every rule's `when` from
@@ -63,7 +65,8 @@
 #   actionable, never selected around.
 #
 # Environment:
-#   TYPESAFE_API_KEY is the only resolver-specific environment setting.
+#   TYPESAFE_API_KEY enables the resolver. TYPESAFE_BASE and TYPESAFE_MODEL
+#   optionally override the endpoint and model.
 #
 # Authority: this tool never replaces firstmate's judgment, quota-array-dispatch,
 #   the captain-approval gate, or fm-spawn.sh validation; it publishes one
@@ -91,8 +94,8 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-brief-heading-lib.sh"
 
 CONFIDENCE_FLOOR=0.6
-TS_MODEL=jev-latest
-TS_BASE=https://api.typesafe.ai
+TS_MODEL=${TYPESAFE_MODEL:-}
+TS_BASE=${TYPESAFE_BASE:-}
 TS_TIMEOUT=5
 DEFAULT_WHEN="No listed rule applies to this task."
 
@@ -128,6 +131,11 @@ if [ -z "$TYPESAFE_API_KEY_PRIVATE" ]; then
   echo "dispatch-resolve: off (TYPESAFE_API_KEY absent from the environment and $FM_HOME/.env)" >&2
   exit 0
 fi
+[ -n "$TS_BASE" ] || TS_BASE=$(fmx_env_get TYPESAFE_BASE "$FM_HOME/.env")
+[ -n "$TS_MODEL" ] || TS_MODEL=$(fmx_env_get TYPESAFE_MODEL "$FM_HOME/.env")
+TS_BASE=${TS_BASE:-https://api.typesafe.ai}
+TS_BASE=${TS_BASE%/}
+TS_MODEL=${TS_MODEL:-jev-latest}
 
 # ---- inputs --------------------------------------------------------------------
 [ -n "$BRIEF" ] || die "brief file required (see --help)"
