@@ -3069,8 +3069,27 @@ EOF
     if [ "$kind" = secondmate ] && ! status_is_paused_or_captain_held "$last"; then
       continue
     fi
-    watcher_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" || continue
+    if ! watcher_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")"; then
+      if [ "$kind" != secondmate ]; then
+        meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
+        state=$(fm_busy_classify_live "$(fm_backend_of_meta "$meta")" "$w" \
+          "$(fm_meta_get "$meta" harness)" "$task" "$STATE" "$(window_label "$w")")
+        marker="$STATE/.endpoint-gone-wake-$key"
+        if [ "${state%% *}" = dead ] && ! status_is_terminal_verb "$(status_current_line "$STATE/$task.status" "$kind")"; then
+          if [ ! -e "$marker" ]; then
+            printf '%s\n' "$w" > "$marker" || exit 1
+            reason="stale: $w (recorded worker endpoint disappeared; inspect the task and recover its work)"
+            fm_wake_append stale "$w" "$reason" || exit 1
+            wake "$reason"
+          fi
+        else
+          rm -f "$marker"
+        fi
+      fi
+      continue
+    fi
     tail40=$WATCHER_CAPTURE
+    rm -f "$STATE/.endpoint-gone-wake-$key"
     h=$(printf '%s' "$tail40" | hash_pane)
     hf="$STATE/.hash-$key"
     cf="$STATE/.count-$key"
