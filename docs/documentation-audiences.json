@@ -273,6 +273,10 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": ".pig/extensions/firstmate/README.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "AGENTS.md",
       "audience": "agent-runtime"
     },

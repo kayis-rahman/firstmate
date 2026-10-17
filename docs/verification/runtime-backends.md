@@ -2253,6 +2253,7 @@ bash tests/fm-pig-primary-supervision-live-e2e.test.sh
 ok - PiG session start delivers the Firstmate digest from a throwaway FM_HOME
 ok - PiG /ahoy runs directly in the TUI
 ok - PiG /bearings reads and renders the live Firstmate fleet
+ok - PiG pre-tool guard blocks a persistent primary-home directory change
 ok - PiG pre-tool guard blocks a wrapped direct watcher launch
 ok - PiG delivers an actionable wake and the turn-end guard accepts healthy supervision
 ok - fm-control interrupt cancels a live PiG turn and preserves its pane

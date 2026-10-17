@@ -68,7 +68,7 @@ FM_PIG_PRIMARY_LIVE_CODE_ROOT=<Firstmate-repository> \
 bash tests/fm-pig-primary-supervision-live-e2e.test.sh
 ```
 
-It passed live session-start digest delivery, direct TUI `/ahoy` and `/bearings`, the pre-tool denial of a wrapped direct watcher launch, actionable status-wake delivery into the idle main conversation, watcher presence after wake delivery, and both healthy and missing-watcher turn-end behavior.
+It passed live session-start digest delivery, direct TUI `/ahoy` and `/bearings`, pre-tool denials for a persistent primary-home directory change and a wrapped direct watcher launch, actionable status-wake delivery into the idle main conversation, watcher presence after wake delivery, and both healthy and missing-watcher turn-end behavior.
 It also passed `bin/fm-control.sh` interrupt and clean-state exit, and verified that unsupported PiG primary-only worker relaunch is refused while preserving the live agent.
 The missing-watcher recovery fixture used a second throwaway home seeded with an active task before session start, then let the guarded lab teardown stop the session rather than attempting lifecycle exit after recovery.
 

@@ -145,6 +145,14 @@ printf '%s\n' "$bearings" | grep -Fq 'Charted Next' \
   || fail "the direct PiG /bearings output was incomplete"
 pass "PiG /bearings reads and renders the live Firstmate fleet"
 
+submit 'Use the bash tool to run exactly cd projects/example and then report the result. Do not run any other command.' \
+  || fail "could not submit the persistent-cd guard probe"
+cd_guard=$(wait_text 'persistent top-level directory change' 180) \
+  || fail "PiG did not block a persistent primary-home directory change"
+printf '%s\n' "$cd_guard" | grep -Fq 'Reach the target without moving the shell' \
+  || fail "the cd-guard denial did not explain the safe alternative"
+pass "PiG pre-tool guard blocks a persistent primary-home directory change"
+
 submit 'Use the bash tool to run exactly timeout 1 bin/fm-watch.sh, then report its result. Do not use any Pi watcher tool.' \
   || fail "could not submit the pre-tool guard probe"
 guard=$(wait_text 'watcher-direct' 180) \
@@ -233,8 +241,19 @@ wait_watch_in_recovery_home() {
   done
   return 1
 }
-wait_watch_in_recovery_home \
-  || fail "separate recovery home did not automatically arm its watcher"
+if ! wait_watch_in_recovery_home; then
+  printf 'recovery-home state after watcher startup timeout:\n' >&2
+  ls -la "$RECOVERY_HOME/state" >&2 || true
+  for record in "$RECOVERY_HOME/state/.lock" "$RECOVERY_HOME/state/.pi-watch-extension-loaded"; do
+    if [ -f "$record" ]; then
+      printf '%s: ' "$record" >&2
+      tr '\n' ' ' < "$record" >&2
+      printf '\n' >&2
+    fi
+  done
+  screen >&2
+  fail "separate recovery home did not automatically arm its watcher"
+fi
 stop=$(env FM_HOME="$RECOVERY_HOME" FM_ROOT_OVERRIDE="$CODE_ROOT" FM_POLL=1 \
   "$CODE_ROOT/bin/fm-watch-arm.sh" --stop 2>&1) \
   || fail "could not stop only the lab watcher for the turn-end recovery probe: $stop"
