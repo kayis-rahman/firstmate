@@ -55,18 +55,31 @@ Both tracked `.omp/extensions/*.ts` files loaded by auto-discovery alone (no `-e
 omp's `session_start` payload carries no reason field, so the adapter derives the source: the first start of the process is `startup` (or `resume` from a `--continue`/`--resume` launch line) and a later in-process start is `clear`; `tests/fm-omp-harness.test.sh` pins that mapping over a fake omp API.
 A file named both by `-e` and by auto-discovery loads twice (two factory calls, doubled `session_stop` continuations), which is why a secondmate launch never names its auto-discovered primary extensions with `-e` and the per-task busy extension lives in `state/`.
 
-### PiG primary integration, partial evidence, 2026-10-13
+### PiG primary integration, live verification, 2026-10-17
 
-The installed PiG 0.4.1 runtime (upstream Pi 1.0.3, Go 1.27.1, macOS arm64) loaded both tracked Pi-compatible supervision extensions in a real TUI session, and its session-start digest completed under a lock owned by the PiG process.
-A separate `pig --print` smoke using `openai-codex/gpt-5.5` returned a live model response.
-`pig status --json` reported healthy, and `pig install --validate-only --json .pig/extensions/fm-firstmate` reported the Go extension valid with `/ahoy` and `/bearings` registered.
-An isolated JSON-RPC run on the installed PiG 0.4.1 auto-discovered both commands, invoked each callback, observed its synthesized skill-handoff message, and received `agent_settled` after the model response.
-The run disabled tools and used a temporary Firstmate home, so it verified callback delivery rather than a live fleet digest or file changes.
+The installed PiG 0.4.1+1.0.3 runtime was exercised on macOS arm64 with `openai-codex/gpt-6-luna` at medium effort in a named Herdr lab and throwaway Firstmate homes.
+The credentialed end-to-end test was run as:
 
-This is not full primary verification.
-The live check did not prove a watcher arm, actionable wake, or turn-end recovery, and direct TUI invocation remains unverified.
-PiG is intentionally not a worker or secondmate adapter.
+```sh
+FM_PIG_PRIMARY_LIVE_E2E=1 \
+FM_PIG_PRIMARY_LIVE_MODEL=openai-codex/gpt-6-luna \
+FM_PIG_PRIMARY_LIVE_THINKING=medium \
+FM_PIG_PRIMARY_LIVE_CODE_ROOT=<Firstmate-repository> \
+bash tests/fm-pig-primary-supervision-live-e2e.test.sh
+```
+
+It passed live session-start digest delivery, direct TUI `/ahoy` and `/bearings`, the pre-tool denial of a wrapped direct watcher launch, actionable status-wake delivery into the idle main conversation, watcher presence after wake delivery, and both healthy and missing-watcher turn-end behavior.
+It also passed `bin/fm-control.sh` interrupt and clean-state exit, and verified that unsupported PiG primary-only worker relaunch is refused while preserving the live agent.
+The missing-watcher recovery fixture used a second throwaway home seeded with an active task before session start, then let the guarded lab teardown stop the session rather than attempting lifecycle exit after recovery.
+
+A preceding run verified the exit safety refusal after recovery: when Herdr reported the composer as pending or unknown, `fm-control.sh` refused to type the exit command and left the agent alive.
+That refusal is expected safety behavior, not an exit failure.
+
+Background delivery to a separate managed supervision branch and filtering host transcript rows remain unverified because PiG's released SDK cannot create managed agent sessions or filter host rows.
+The live wake was verified only in the main TUI conversation, and no workaround is claimed for the upstream SDK limits.
+PiG remains intentionally unavailable as a worker, scout, or secondmate adapter.
 The exact current boundary is in [the PiG harness reference](../../.agents/skills/harness-adapters/references/harness/pig.md).
+The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
 
 The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
 

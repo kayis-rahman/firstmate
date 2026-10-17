@@ -154,6 +154,31 @@ func TestLockOwnershipRejectsALiveLockOutsideAncestry(t *testing.T) {
 	}
 }
 
+func TestBeforeAgentStartArmsAfterSessionStartAcquiresTheLock(t *testing.T) {
+	home := newWatchHome(t, armScriptOnce)
+	lock := filepath.Join(home.state, ".lock")
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	w := newTestWatcher(t, home, newFakeHost())
+	if err := w.onSessionStart(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home.state, "arm-count")); !os.IsNotExist(err) {
+		t.Fatalf("session_start without a home lock must not arm: %v", err)
+	}
+	if err := os.WriteFile(lock, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.onBeforeAgentStart("first user prompt"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first arm after the lock is acquired", func() bool {
+		data, err := os.ReadFile(filepath.Join(home.state, "arm-count"))
+		return err == nil && strings.TrimSpace(string(data)) == "1"
+	})
+}
+
 func TestStartArmRefusesWhenAnotherSessionHoldsTheLock(t *testing.T) {
 	home := newWatchHome(t, armScriptOnce)
 	sleeper := exec.Command("sleep", "30")

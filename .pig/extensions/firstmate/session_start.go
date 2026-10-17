@@ -63,7 +63,12 @@ func registerSessionStart(ext *sdk.Extension, root string) {
 		return nil, nil
 	})
 	ext.OnEvent("before_agent_start", func(ctx sdk.Context, _ map[string]any) (any, error) {
-		message, ok := owner.claim(ctx, root)
+		generation := owner.current()
+		if generation == nil {
+			sessionID, _ := ctx.SessionManager().GetSessionID()
+			generation = owner.startIfMissing(sessionID, root)
+		}
+		message, ok := owner.claimGeneration(ctx, root, generation)
 		if !ok {
 			return nil, nil
 		}
@@ -117,6 +122,28 @@ func sessionStartSource(event map[string]any) string {
 	default:
 		return ""
 	}
+}
+
+func (o *sessionStartOwner) startIfMissing(sessionID, root string) *sessionStartGeneration {
+	o.mu.Lock()
+	if o.active != nil {
+		generation := o.active
+		o.mu.Unlock()
+		return generation
+	}
+	o.nextID++
+	generationCtx, cancel := context.WithCancel(context.Background())
+	generation := &sessionStartGeneration{
+		id: o.nextID, sessionID: sessionID, source: "startup", ctx: generationCtx, cancel: cancel,
+		done: make(chan struct{}), result: make(chan sessionStartResult, 1),
+	}
+	o.active = generation
+	o.mu.Unlock()
+	go func() {
+		defer close(generation.done)
+		generation.result <- runSessionStart(generation.ctx, root, generation.source)
+	}()
+	return generation
 }
 
 func (o *sessionStartOwner) replace(source, sessionID, root string) *sessionStartGeneration {

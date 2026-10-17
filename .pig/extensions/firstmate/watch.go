@@ -1340,11 +1340,16 @@ func userMessageText(content any) string {
 	return ""
 }
 
-func (w *watcher) onBeforeAgentStart(prompt string) {
+func (w *watcher) onBeforeAgentStart(prompt string) error {
 	watchMu.Lock()
 	generation := w.generation
 	watchMu.Unlock()
 	w.consumeWake(generation, prompt)
+	if w.lockOwnership() != lockOwned {
+		return nil
+	}
+	_, err := w.activateOwnedWatch(generation)
+	return err
 }
 
 func (w *watcher) onMessageStart(message map[string]any) {

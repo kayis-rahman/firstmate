@@ -24,8 +24,7 @@ func registerWatcher(ext *sdk.Extension, root string, bus *eventBus) *watcher {
 	ext.OnEvent("before_agent_start", func(ctx sdk.Context, event map[string]any) (any, error) {
 		w.setHost(ctx)
 		prompt, _ := event["prompt"].(string)
-		w.onBeforeAgentStart(prompt)
-		return nil, nil
+		return nil, w.onBeforeAgentStart(prompt)
 	})
 	ext.OnEvent("message_start", func(ctx sdk.Context, event map[string]any) (any, error) {
 		w.setHost(ctx)

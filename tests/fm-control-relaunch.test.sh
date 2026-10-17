@@ -43,9 +43,9 @@ TASK_TMPS=()
 relaunch_cleanup() {
   local d
   for d in "${TASK_TMPS[@]:-}"; do
-    [ -n "$d" ] && rm -rf "$d"
+    [ -n "$d" ] && fm_test_remove_tree "$d"
   done
-  rm -rf "$TMP_ROOT"
+  fm_test_remove_tree "$TMP_ROOT"
 }
 trap relaunch_cleanup EXIT
 
@@ -1070,6 +1070,21 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
 # only AFTER the running agent has been stopped - a secondmate would be left
 # with no agent at all. The control plane asks the same capability question
 # before it touches anything, so the refusal lands while the agent is still up.
+test_primary_only_adapter_relaunch_refuses_before_stop() {
+  local dir out rc
+  dir=$(new_case primary-only pigship)
+  add_ship_task "$dir" pigship pig
+  out=$(run_control "$dir" pigship relaunch --note "preserve the primary task"); rc=$?
+  expect_code 1 "$rc" "a primary-only adapter should refuse a worker-task relaunch"
+  assert_contains "$out" "not verified to run a ship task" \
+    "the refusal should name the unsupported worker task kind"
+  [ "$(meta_field "$dir" pigship harness)" = pig ] \
+    || fail "the refused relaunch must leave the durable record on PiG"
+  assert_no_grep "/exit" "$dir/fake/literal" \
+    "a primary-only relaunch refusal must preserve the running agent"
+  pass "fm-control relaunch: PiG primary-only worker relaunch refuses before stopping the agent"
+}
+
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop() {
   local dir home out rc
   dir=$(new_case smkind sm7)
@@ -2219,7 +2234,15 @@ test_herdr_relaunch_resumes_only_the_registered_pi_session() {
     }
     dir=$HERDR_CASE_DIR
     rm -f "$dir/fake/herdr-stopped"
-    sed -i 's/^harness=claude$/harness=pi/' "$dir/home/state/resume-$registered.meta"
+    if ! awk -F= '$1 == "harness" {$0="harness=pi"} {print}' \
+      "$dir/home/state/resume-$registered.meta" \
+      > "$dir/home/state/resume-$registered.meta.tmp"; then
+      fail "could not write the resume fixture for a Pi task"
+    fi
+    if ! mv "$dir/home/state/resume-$registered.meta.tmp" \
+      "$dir/home/state/resume-$registered.meta"; then
+      fail "could not install the resume fixture for a Pi task"
+    fi
     # Keep the pane's status authority registered to an existing Pi session,
     # while process-info proves that its previous agent has exited.
     printf '{"result":{"agent":{"agent":"%s","agent_status":"idle","agent_session":{"kind":"path","value":"/tmp/pi-bound-session.jsonl"}}}}\n' \
@@ -2558,6 +2581,7 @@ test_turnend_auth_paths_are_owned_by_the_control_adapter
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
 test_secondmate_claude_relaunch_keeps_local_settings
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
+test_primary_only_adapter_relaunch_refuses_before_stop
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config

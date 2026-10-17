@@ -2238,8 +2238,33 @@ FM_PIG_EXTENSION_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-pig-primary-live-e2e.tes
 ok - PiG 0.4.1+1.0.3 validates and registers the Firstmate Go extension without a model prompt
 ```
 
-The guard runs by default wherever PiG, jq, and Go are installed, verifies the exact PiG release and Go extension definition, and does not submit a prompt.
-The guard and the package tests do not verify live callback or lifecycle behavior; the extension's README records the released-SDK limits on host transcript presentation and managed agent sessions.
+The token-free guard runs by default wherever PiG, jq, and Go are installed, verifies the exact PiG release and Go extension definition, and does not submit a prompt.
+The credentialed primary E2E passed on 2026-10-17 with PiG 0.4.1+1.0.3 and `openai-codex/gpt-6-luna` at medium effort, in isolated Herdr and Firstmate homes:
+
+```sh
+FM_PIG_PRIMARY_LIVE_E2E=1 \
+FM_PIG_PRIMARY_LIVE_MODEL=openai-codex/gpt-6-luna \
+FM_PIG_PRIMARY_LIVE_THINKING=medium \
+FM_PIG_PRIMARY_LIVE_CODE_ROOT=<Firstmate-repository> \
+bash tests/fm-pig-primary-supervision-live-e2e.test.sh
+```
+
+```text
+ok - PiG session start delivers the Firstmate digest from a throwaway FM_HOME
+ok - PiG /ahoy runs directly in the TUI
+ok - PiG /bearings reads and renders the live Firstmate fleet
+ok - PiG pre-tool guard blocks a wrapped direct watcher launch
+ok - PiG delivers an actionable wake and the turn-end guard accepts healthy supervision
+ok - fm-control interrupt cancels a live PiG turn and preserves its pane
+ok - fm-control refuses PiG relaunch as primary-only and preserves the live lab agent
+ok - fm-control exit stops PiG while preserving the isolated Herdr pane
+ok - PiG turn-end guard injects recovery when the lab watcher is missing
+ok - PiG primary live verification completed on 0.4.1+1.0.3
+```
+
+This verifies the direct TUI callbacks, session-start context delivery, watcher presence across the tested turns, pre-tool denial, actionable wake delivery to the main conversation, healthy and unhealthy turn-end handling, and `fm-control.sh` interrupt and clean-state exit.
+A separate run observed the expected safety refusal when exit followed recovery and Herdr could not prove the composer empty; the isolated lab teardown ended that session without bypassing the refusal.
+The extension README records the released-SDK limits on host transcript presentation and managed agent sessions.
 
 ## Pi supervision branch
 

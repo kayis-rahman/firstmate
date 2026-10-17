@@ -37,10 +37,10 @@ func Extension() *sdk.Extension {
 }
 
 func firstmateRoot() string {
-	if root := os.Getenv("FM_HOME"); root != "" {
+	if root := os.Getenv("FM_ROOT_OVERRIDE"); root != "" {
 		return root
 	}
-	return os.Getenv("FM_ROOT_OVERRIDE")
+	return os.Getenv("FM_HOME")
 }
 
 func registerTurnEndGuard(ext *sdk.Extension, root string) {

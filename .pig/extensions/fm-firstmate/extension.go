@@ -24,5 +24,5 @@ func invokeSkill(ctx sdk.Context, skill, args string) error {
 		skill,
 		args,
 	)
-	return ctx.SendUserMessage(message, "nextTurn")
+	return ctx.SendUserMessage(message, "followUp")
 }
