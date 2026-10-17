@@ -227,6 +227,7 @@ test_pig_primary_marker_requires_real_ancestry() {
   bin=$(named_bin "$TMP_ROOT/pig-tree" pig)
   got=$(under_process "$bin")
   [ "$got" = pig ] || fail "an unmarked pig executable resolved '$got', expected pig"
+  # shellcheck disable=SC2016
   got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u FM_OMP_HARNESS -u GROK_AGENT \
     -u CURSOR_AGENT -u CURSOR_INVOKED_AS CLAUDECODE=1 FM_PIG_HARNESS=pig \
     "$bin" -c 'r=$("$1"); printf "%s" "$r"' _ "$HARNESS")
@@ -239,18 +240,22 @@ test_pig_primary_marker_requires_real_ancestry() {
 
   home="$TMP_ROOT/pig-worker-home"
   mkdir -p "$home/config"
+  # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
   assert_contains "$got" "PiG is verified as a primary-only harness" "default crew resolution must not silently dispatch through PiG"
   assert_contains "$got" "rc=2" "default crew resolution under PiG must return an actionable refusal"
   printf 'pi\n' > "$home/config/crew-harness"
+  # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew); printf "%s" "$r"' _ "$HARNESS")
   [ "$got" = pi ] || fail "an explicit verified worker harness must resolve under PiG, got '$got'"
 
   printf 'pig\n' > "$home/config/crew-harness"
+  # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
   assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG crew selection must refuse"
   assert_contains "$got" "rc=2" "an explicit PiG crew selection must return refusal status"
   printf 'pig\n' > "$home/config/secondmate-harness"
+  # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" secondmate 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
   assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG secondmate selection must refuse"
   assert_contains "$got" "rc=2" "an explicit PiG secondmate selection must return refusal status"

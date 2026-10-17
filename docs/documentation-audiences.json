@@ -457,6 +457,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": "docs/supervision-protocols/pig.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": "docs/supervision-protocols/supervision-host.md",
       "audience": "agent-runtime"
     },

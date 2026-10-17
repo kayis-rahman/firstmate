@@ -2222,6 +2222,25 @@ Refresh this harness-dependent proof before accepting a cursor upgrade:
 FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
 ```
 
+## PiG v0.4.1 Go extension
+
+The Firstmate Go runtime extension targets the released PiG v0.4.1 SDK v0.3.1, with no local `replace`.
+On 2026-10-14, the installed runtime reported PiG `0.4.1+1.0.3` and the host toolchain reported `go1.27.2 darwin/arm64`.
+From `.pig/extensions/firstmate`, `go test ./...`, `go build ./...`, `go vet ./...`, `go test -race ./...`, and `go mod tidy -diff` passed.
+The test output was `ok github.com/MichaelKinsy/firstmate-pig-extension` and `ok github.com/MichaelKinsy/firstmate-pig-extension/lib` for both standard and race-enabled tests; build, vet, and tidy-diff were silent with exit code 0.
+The installed PiG validator accepted and registered the extension without a model prompt:
+
+```sh
+FM_PIG_EXTENSION_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-pig-primary-live-e2e.test.sh
+```
+
+```text
+ok - PiG 0.4.1+1.0.3 validates and registers the Firstmate Go extension without a model prompt
+```
+
+The guard runs by default wherever PiG, jq, and Go are installed, verifies the exact PiG release and Go extension definition, and does not submit a prompt.
+The guard and the package tests do not verify live callback or lifecycle behavior; the extension's README records the released-SDK limits on host transcript presentation and managed agent sessions.
+
 ## Pi supervision branch
 
 The supervision-branch extension (`.pi/extensions/fm-branch-supervision.ts`, [docs/pi-supervision-branch.md](../pi-supervision-branch.md)) builds its second session through the Pi SDK surface: `createAgentSession` (including its `model`, `modelRuntime`, and `thinkingLevel` options), `DefaultResourceLoader` with `extensionFactories`, `SessionManager`, `createBashToolDefinition` with a `spawnHook`, `sendCustomMessage` for routine notes, `appendEntry` and `registerEntryRenderer` for captain outcomes, the `before_provider_request` hook, the command context's model registry for picker candidates, a fresh `ModelRuntime` for isolated-branch resolution, and Pi's own `getSupportedThinkingLevels`/`clampThinkingLevel` plus its `getThinkingLevel` and `thinking_level_select` extension surface for effort.

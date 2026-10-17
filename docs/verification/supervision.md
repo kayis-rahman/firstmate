@@ -68,6 +68,8 @@ The live check did not prove a watcher arm, actionable wake, or turn-end recover
 PiG is intentionally not a worker or secondmate adapter.
 The exact current boundary is in [the PiG harness reference](../../.agents/skills/harness-adapters/references/harness/pig.md).
 
+The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
+
 ### Run-tier source vocabulary and context-reset injection
 
 The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
