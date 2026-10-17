@@ -1021,6 +1021,10 @@ else
   "$SCRIPT_DIR/fm-startup-network.sh" harvest --pid $$ 2>&1 || true
 fi
 
+if LAVISH_HEALTH=$("$SCRIPT_DIR/fm-lavish-health.sh" 2>&1); then :; else
+  printf '\nLAVISH SERVER: %s\n' "$LAVISH_HEALTH"
+fi
+
 # --- 8. context digest -----------------------------------------------------
 # Last of the bulk sections deliberately: curated memory is stable session to
 # session, already governed by config/startup-memory-budget, and recoverable
