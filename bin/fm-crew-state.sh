@@ -24,7 +24,7 @@
 # Output is one stable, parseable, token-tight line firstmate can read every
 # heartbeat:
 #
-#   state: <working|parked|done|blocked|paused|failed|unknown> · source: <run-step|pane|status-log|remote-endpoint|none> · <detail>
+#   state: <working|parked|done|blocked|paused|failed|unknown> · source: <run-step|pane|status-log|remote-endpoint|none> · <detail> [· steer: <unread age=Ns|acked>]
 #
 # Logic, in order:
 #   1. Resolve worktree + backend target + kind from state/<id>.meta. A meta
@@ -175,6 +175,11 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+# The per-task steering inbox is an independent input to the state projection:
+# its handled/ move is the acknowledgement and the oldest queued record's age
+# tells supervisors how long a steer has remained unread.
+# shellcheck source=bin/fm-task-inbox-state-lib.sh
+. "$SCRIPT_DIR/fm-task-inbox-state-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -205,8 +210,10 @@ SEP=' · '
 
 # Emit the one canonical line and exit 0. Detail is optional.
 emit() {  # <state> <source> [detail]
-  local line="state: $1${SEP}source: $2"
+  local line="state: $1${SEP}source: $2" steer_state
   [ -n "${3:-}" ] && line="$line${SEP}$3"
+  steer_state=$(fm_task_inbox_read_state "$STATE" "$ID")
+  [ "$steer_state" = none ] || line="$line${SEP}steer: $steer_state"
   printf '%s\n' "$line"
   exit 0
 }
