@@ -16,6 +16,20 @@
 #                 <stamp>>; <n> failed attempt(s) ... last: <recorded failure>",
 #                 "BACKLOG_RECONCILE: <id>: <what this home could not reconcile>",
 #                 "BACKLOG_RECONCILE: code-root <file> is not this home's <file>; ...",
+#                 "COLLISION: <path> is recorded by <id>/<field>(<state-dir>) and
+#                 <id>/<field>(<state-dir>)" - two task records claim one live
+#                 working copy (bin/fm-slot-claim-lib.sh owns the scan); detect
+#                 and report only, never a repair - reconcile the stale record
+#                 with bin/fm-crew-state.sh: a spawn into that copy warns with
+#                 the same pair and teardown refuses it. The variant
+#                 "COLLISION: local task records could not be enumerated ..."
+#                 means the pair set is unverified this session start,
+#                 "HOOK_LAST_ERROR: task <id> busy-state hook last error: <line>"
+#                 - a worker's busy-state hook (bin/fm-busy-event.sh) recorded a
+#                 failure that every harness wrapper otherwise discards
+#                 silently; the record clears on the task's next successful arm
+#                 or retirement, so a line that persists names a hook still
+#                 failing on every use,
 #                 "TANGLE: <remediation>",
 #                 "SECONDMATE_SYNC: secondmate <id>: skipped: <reason>",
 #                 "NUDGE_SECONDMATES: secondmate <id>: send failed: <reason>",
@@ -1475,6 +1489,58 @@ detect_local_config() {
   detect_home_summary_publication
 }
 
+# Two task records naming one live working copy (the scan itself is
+# bin/fm-slot-claim-lib.sh's). The pair used to surface only as a teardown
+# refusal after the work was done; session start reports it plainly at once,
+# read-only - repairing a wrong record is bin/fm-crew-state.sh's operator
+# action, never this sweep's. The wake library carries a source-time state
+# mkdir, so it is sourced only once a state directory already exists; a fresh
+# home with no records creates nothing and reports nothing.
+detect_shared_copy_claims() {
+  local rc=0 line path claimants
+  [ -d "$STATE" ] || return 0
+  # shellcheck source=bin/fm-wake-lib.sh disable=SC1091
+  . "$SCRIPT_DIR/fm-wake-lib.sh"
+  # shellcheck source=bin/fm-slot-claim-lib.sh disable=SC1091
+  . "$SCRIPT_DIR/fm-slot-claim-lib.sh"
+  fm_slot_shared_rows "$STATE" || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "COLLISION: local task records could not be enumerated ($FM_SLOT_CLAIM_ERROR); shared working-copy pairs are unverified this session start"
+    return 0
+  fi
+  [ "$rc" -eq 0 ] || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    path=${line%%$'\t'*}
+    claimants=${line#*$'\t'}
+    claimants=${claimants//$'\t'/ and }
+    echo "COLLISION: $path is recorded by $claimants; reconcile the stale record (bin/fm-crew-state.sh) before cleanup refuses it"
+  done <<EOF
+$FM_SLOT_CLAIM_SHARED_ROWS
+EOF
+  return 0
+}
+
+# Surface the last error a worker's busy-state hook recorded. Every harness
+# wrapper around bin/fm-busy-event.sh deliberately swallows its exit status
+# (`|| true` in shell hooks, an ignoring callback in the Pi/OpenCode/omp
+# extensions), so without this record a hook that fails on every use produces
+# no named cause anywhere - its busy state simply stops moving (gap: environment
+# failures read as ordinary blockers). Read-only: prints one line per existing
+# record and touches nothing.
+detect_hook_last_errors() {
+  local record id content
+  [ -d "$STATE" ] || return 0
+  for record in "$STATE"/*.busy-event-last-error; do
+    [ -f "$record" ] && [ ! -L "$record" ] || continue
+    content=$(head -n 1 "$record" 2>/dev/null || true)
+    [ -n "$content" ] || continue
+    id=$(basename "$record" .busy-event-last-error)
+    echo "HOOK_LAST_ERROR: task $id busy-state hook last error: $content"
+  done
+  return 0
+}
+
 # Shadow-backlog check. When this home's data directory is not the code root's,
 # a code-root data/backlog.md or data/done-archive.md that is not this home's
 # own file is a queue a cwd-relative tasks-axi write has already forked; a link
@@ -1617,4 +1683,6 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   fi
 fi
 local_phase && secondmate_handoff_detect
+local_phase && detect_shared_copy_claims
+local_phase && detect_hook_last_errors
 exit 0

@@ -704,6 +704,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-project-capacity-lib.sh
 . "$SCRIPT_DIR/fm-project-capacity-lib.sh"
+# shellcheck source=bin/fm-slot-claim-lib.sh
+. "$SCRIPT_DIR/fm-slot-claim-lib.sh"
 # shellcheck source=bin/fm-worker-account-lib.sh
 . "$SCRIPT_DIR/fm-worker-account-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
@@ -4720,6 +4722,30 @@ fi
 # adoption. This also updates Herdr's restored pane shell before any harness is
 # started, so a later host restart inherits the task worktree rather than the
 # tab's original project directory.
+# One live copy, two task records (bin/fm-slot-claim-lib.sh owns the scan): a
+# stale or duplicated record already naming this copy means cleanup would
+# refuse for either task later, exactly as bin/fm-teardown.sh refuses it today.
+# Spawn cannot know WHICH record is stale (slot reuse legitimately hands a copy
+# on while an earlier record lingers - data/learnings.md 2026-10-07 - and only
+# the operator can reconcile that), so this check REPORTS the pair plainly at
+# dispatch instead of letting it surface first as a teardown refusal, and edits
+# no record: reconciliation is bin/fm-crew-state.sh's operator action.
+if [ "$KIND" != secondmate ] && [ -n "${WT:-}" ]; then
+  claim_rc=0
+  fm_slot_claim_rows "$STATE" "$STATE/$ID.meta" "$WT" || claim_rc=$?
+  if [ "$claim_rc" -eq 2 ]; then
+    echo "warning: cannot check whether $WT is already claimed by another task record ($FM_SLOT_CLAIM_ERROR); if two records end up on one working copy, cleanup will refuse for both" >&2
+  elif [ "$claim_rc" -eq 0 ]; then
+    echo "warning: $WT is already claimed by another task record:" >&2
+    while IFS=$'\t' read -r claim_id claim_field claim_state; do
+      [ -n "$claim_id" ] || continue
+      echo "warning:   task $claim_id records it in $claim_field (record in $claim_state)" >&2
+    done <<EOF
+$FM_SLOT_CLAIM_ROWS
+EOF
+    echo "warning: after this spawn, two task records name one working copy; cleanup will refuse for either until one record is reconciled (bin/fm-crew-state.sh); this check edited no record" >&2
+  fi
+fi
 spawn_enter_recorded_worktree
 spawn_assert_agent_worktree
 
