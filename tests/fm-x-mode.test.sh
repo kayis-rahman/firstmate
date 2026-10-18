@@ -624,6 +624,144 @@ test_poll_rejects_unsafe_request_id() {
   pass "fm-x-poll rejects an unsafe request_id (path-traversal guard)"
 }
 
+# --- relay idle alert (FMX_IDLE_ALERT_SECS) ---------------------------------
+#
+# Idle is exactly what the relay can prove: a successful poll with no pending
+# mention (HTTP 204). The alert is opt-in, silent below the threshold,
+# deduplicated to one wake per idle episode, and reset by an observed mention.
+# Error polls keep their one-shot x-mode-error diagnostic and are neither idle
+# nor activity.
+
+test_poll_idle_alert_disabled_by_default() {
+  local home fakebin out rc
+  home="$TMP_ROOT/poll-idle-off"; mkdir -p "$home"
+  fakebin=$(make_fake_curl "$home")
+  printf 'FMX_PAIRING_TOKEN=tok-idle-off\n' > "$home/.env"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_NOW_OVERRIDE=1700000000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle-off exit"
+  [ -z "$out" ] || fail "the idle alert must stay silent when unset (got: $out)"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_NOW_OVERRIDE=1700100000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle-off later exit"
+  [ -z "$out" ] || fail "an unset idle alert must stay silent after a long quiet stretch (got: $out)"
+  assert_absent "$home/state/x-idle.json" "an unset idle alert must not create state"
+  pass "fm-x-poll idle alert is inert unless configured"
+}
+
+test_poll_idle_alert_fires_once_per_episode() {
+  local home fakebin out rc
+  home="$TMP_ROOT/poll-idle-on"; mkdir -p "$home"
+  fakebin=$(make_fake_curl "$home")
+  printf 'FMX_PAIRING_TOKEN=tok-idle\n' > "$home/.env"
+
+  # The first quiet poll only starts the episode.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle start exit"
+  [ -z "$out" ] || fail "the first idle poll must only start the episode (got: $out)"
+  assert_present "$home/state/x-idle.json" "the first idle poll must record the episode"
+  [ "$(path_mode "$home/state/x-idle.json")" = 600 ] || fail "the idle record must be private"
+
+  # Below the threshold: still silent.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000059 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle below-threshold exit"
+  [ -z "$out" ] || fail "idle must stay silent below the threshold (got: $out)"
+
+  # Reaching the threshold: exactly one alert line with the idle seconds.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000060 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle threshold exit"
+  [ "$out" = "x-idle-alert 60" ] || fail "crossing the threshold must emit one alert (got: $out)"
+
+  # Later crossings in the same episode stay deduplicated.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700001200 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle repeat exit"
+  [ -z "$out" ] || fail "the alert must fire once per episode (got: $out)"
+
+  # An observed pending mention ends the episode.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=200 FAKE_POLL_BODY='{"request_id":"req-idle","text":"ping"}' \
+    FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700001300 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle mention exit"
+  assert_present "$home/state/x-inbox/req-idle.json" "the mention must stash as usual"
+  assert_absent "$home/state/x-idle.json" "an observed mention must reset the idle episode"
+
+  # A new quiet stretch starts fresh and alerts again, once.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700005000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle second-episode start exit"
+  [ -z "$out" ] || fail "a new episode must start silent (got: $out)"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700005060 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle second-episode alert exit"
+  [ "$out" = "x-idle-alert 60" ] || fail "a new episode must alert again (got: $out)"
+  pass "fm-x-poll raises one idle alert per episode and resets on a mention"
+}
+
+test_poll_idle_alert_ignores_error_polls() {
+  local home fakebin out rc
+  home="$TMP_ROOT/poll-idle-err"; mkdir -p "$home"
+  fakebin=$(make_fake_curl "$home")
+  printf 'FMX_PAIRING_TOKEN=tok-idle-err\n' > "$home/.env"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle episode start exit"
+  [ -z "$out" ] || fail "the first idle poll must only start the episode (got: $out)"
+
+  # An error poll keeps its own one-shot diagnostic and never alerts or resets.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=401 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000600 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle error exit"
+  [ "$out" = "x-mode-error relay returned HTTP 401" ] \
+    || fail "an error poll must keep only its diagnostic (got: $out)"
+
+  # The episode spans the error: the next 204 alerts with the full idle span.
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=60 FMX_NOW_OVERRIDE=1700000601 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle post-error exit"
+  [ "$out" = "x-idle-alert 601" ] \
+    || fail "an error poll must neither alert nor end the episode (got: $out)"
+  pass "fm-x-poll idle alert treats error polls as neither idle nor activity"
+}
+
+test_poll_idle_alert_clamps_low_threshold() {
+  local home fakebin out rc
+  home="$TMP_ROOT/poll-idle-clamp"; mkdir -p "$home"
+  fakebin=$(make_fake_curl "$home")
+  printf 'FMX_PAIRING_TOKEN=tok-idle-clamp\n' > "$home/.env"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=1 FMX_NOW_OVERRIDE=1700000000 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle clamp start exit"
+  [ -z "$out" ] || fail "the first idle poll must only start the episode (got: $out)"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=1 FMX_NOW_OVERRIDE=1700000030 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle clamp below exit"
+  [ -z "$out" ] || fail "a sub-minute threshold must clamp up to 60s (got: $out)"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FMX_RELAY_URL="https://relay.test" \
+    FAKE_POLL_CODE=204 FMX_IDLE_ALERT_SECS=1 FMX_NOW_OVERRIDE=1700000060 \
+    "$ROOT/bin/fm-x-poll.sh"); rc=$?
+  expect_code 0 "$rc" "poll idle clamp threshold exit"
+  [ "$out" = "x-idle-alert 60" ] || fail "the clamped threshold must alert at 60s (got: $out)"
+  pass "fm-x-poll clamps a sub-minute idle threshold up to 60 seconds"
+}
+
 test_reply_success_posts_request_bound_only() {
   local home fakebin log out rc keys
   home="$TMP_ROOT/reply-ok"; mkdir -p "$home"
@@ -3190,6 +3328,10 @@ test_poll_inbox_commit_failure_reports_error
 test_poll_inbox_private_publication_rejects_unsafe_paths
 test_poll_empty_text_is_silent
 test_poll_rejects_unsafe_request_id
+test_poll_idle_alert_disabled_by_default
+test_poll_idle_alert_fires_once_per_episode
+test_poll_idle_alert_ignores_error_polls
+test_poll_idle_alert_clamps_low_threshold
 test_reply_success_posts_request_bound_only
 test_reply_text_file_and_stdin
 test_reply_non_2xx_fails

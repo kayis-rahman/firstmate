@@ -1767,6 +1767,17 @@ Dismiss sends `POST /connector/dismiss` with `{request_id}`, posts no text, and 
 Relay auth or config problems are reported once as `x-mode-error ...` until recovery.
 A failed durable offer claim is likewise reported once as `x-mode-error cannot record mention offer` and remains deduplicated through quiet no-pending polls until a later offer confirms an existing valid marker or claims a new one.
 
+**Alert on a quiet relay**
+
+`FMX_IDLE_ALERT_SECS` (default `0`, disabled) raises one local wake after that many continuous seconds of relay quiet.
+Idle is exactly what the poll can prove: a successful `GET /connector/poll` returning HTTP 204 with nothing pending.
+Auth and config errors keep their own one-shot `x-mode-error` diagnostics, and a failed or timed-out poll proves nothing, so neither advances nor resets an idle episode.
+An observed pending mention ends the episode, and the next quiet stretch starts a fresh one.
+- Each episode emits at most one `x-idle-alert <seconds>` line, deduplicated through a private `state/x-idle.json` record, so one quiet stretch never re-alerts on every poll cycle.
+- Values from 1 to 59 seconds clamp up to 60 so the alert cannot fire every cycle; an empty, non-numeric, overlong, or `0` value disables it, and a home that never sets it gains no behavior and no state file.
+- The line rides the watcher's normal wake path like every other poll wake; the relay itself is never asked to post anything, and no Discord message is sent.
+An explicit environment value wins over `.env`.
+
 **Post replies and follow-ups**
 
 Live replies are posted by `bin/fm-x-reply.sh`, which sends `POST /connector/answer` with `{request_id,text}` for one-message replies.
@@ -2501,6 +2512,7 @@ FMX_DISCORD_REPLY_MAX_CHARS=1900   # Discord reply per-message split budget; val
 FMX_X_THREAD_MAX=25     # maximum messages in one auto-split reply thread
 FMX_FOLLOWUP_MAX_AGE_SECS=604800   # local window for posting Relay completion follow-ups (7 days)
 FMX_FOLLOWUP_MAX_COUNT=3   # local cap on Relay completion follow-ups per linked mention
+FMX_IDLE_ALERT_SECS=0   # opt-in seconds of continuous relay quiet (HTTP 204 polls) that raise one deduplicated local idle wake; 0 disables, 1..59 clamp to 60
 FM_PF_RETRY_BACKOFF_SECS=900   # seconds before the next attempt after a retryable promised-public-reply delivery error
 FM_LOCK_STALE_AFTER=2   # grace seconds for missing or nonnumeric lock-owner PIDs (minimum 2s); dead numeric PIDs have no age grace
 FM_GUARD_GRACE=300      # beacon freshness threshold for guard verdicts, arm health checks, and the primary turn-end guard; see docs/turnend-guard.md for model-aware exceptions
