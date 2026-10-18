@@ -2841,8 +2841,11 @@ test_crew_state_reports_unread_steer_age() {
     . "$FM_TASK_INBOX_ROOT_OVERRIDE"
     fm_task_inbox_write "$1" feat-unread "please adjust API"
   ' _ "$d/state")
+  perl -e 'utime(time() - 600, time() - 600, $ARGV[0]) or exit 1' "$rec"
   local out; out=$(run_crew_state "$d" feat-unread)
-  assert_contains "$out" 'steer: unread age=' 'crew-state must expose an unacknowledged steer and its age'
+  local age; age=$(printf '%s\n' "$out" | sed -n 's/.*steer: unread age=\([0-9][0-9]*\)s.*/\1/p')
+  [ -n "$age" ] && [ "$age" -ge 590 ] \
+    || fail "crew-state did not expose the unread steer's 10-minute age: $out"
   mkdir -p "$d/state/feat-unread.inbox/handled"
   mv "$rec" "$d/state/feat-unread.inbox/handled/"
   out=$(run_crew_state "$d" feat-unread)
