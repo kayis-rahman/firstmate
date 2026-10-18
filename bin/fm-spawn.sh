@@ -2671,6 +2671,15 @@ fi
 if [ "$HARNESS" = agy ]; then
   agy_model_validate "$AGY_BIN" "$MODEL" || exit 1
 fi
+# free-model-axi model health preflight (bin/fm-model-preflight.sh header owns
+# the verdict contract, including the tolerate cases): a model whose recorded
+# probe is unhealthy refuses the launch here - before any endpoint, worktree,
+# or record exists - printing the exact probe evidence and the healthiest
+# alternative, while an absent advisor, an unknown model, and a stale-snapshot
+# warning all proceed. The model itself is never changed by this gate; only the
+# captain chooses models, so a refusal goes back to the caller to re-dispatch or
+# escalate.
+"$SCRIPT_DIR/fm-model-preflight.sh" "$MODEL" || exit 1
 # Worker account pin (header above): resolved before any endpoint, worktree, or
 # record exists. An absent pin selects nothing and leaves every later launch
 # step exactly as it was. A pinned Claude root is exported here as well, so the
