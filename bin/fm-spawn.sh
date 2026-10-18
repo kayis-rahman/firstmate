@@ -1161,6 +1161,10 @@ spawn_remote_secondmate() {
     else
       sync_rc=$?
       echo "warning: remote secondmate $id sync skipped before launch: $(remote_sync_failure_reason "$sync_rc" "$sync_out")" >&2
+      # Named cause, not just a blocker: if the transport failed because a LAN
+      # host is unreachable in the macOS Local Network privacy pattern, say so
+      # (bin/fm-env-cause.sh owns the rule and its hedge).
+      printf '%s\n' "$sync_out" | "$SCRIPT_DIR/fm-env-cause.sh" classify >&2 || true
     fi
   else
     echo "warning: remote secondmate $id sync skipped before launch: primary default-branch commit cannot be resolved" >&2
@@ -1218,6 +1222,11 @@ spawn_remote_secondmate() {
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
     [ -z "$out" ] || printf '%s\n' "$out" >&2
+    # Named cause, not just a blocker: classify the captured launch failure so a
+    # LAN host blocked by macOS Local Network privacy is named with its setting
+    # instead of reading as an unexplained transport error
+    # (bin/fm-env-cause.sh owns the rule and its hedge).
+    [ -z "$out" ] || printf '%s\n' "$out" | "$SCRIPT_DIR/fm-env-cause.sh" classify >&2 || true
     if [ "$rc" -eq 255 ]; then
       echo "error: remote secondmate $id is unavailable or launch completion is unknown; preserved route $host:$home" >&2
     fi
