@@ -9,6 +9,8 @@ The Discord bot token stays in the local, private `~/.firstmate-discord/discord-
 A macOS LaunchAgent named `com.firstmate.discord-watcher` keeps the local watcher running in the background.
 The voice relay polls the configured Discord channel, ignores bot messages and messages from anyone except the configured owner, and writes accepted text messages to the local spool.
 The Firstmate-side `state/discord-spool.check.sh` consumer moves spooled messages into `bin/fm-inbox.sh`, which is the durable queue Firstmate reads and answers.
+For accepted owner text and voice messages, the relay adds an 👀 receipt reaction through the static `~/.firstmate-discord/react-seen.sh` helper; a reaction failure is logged without losing the captured message or interrupting transcription.
+The `/fleet` and `/bearings` commands use the static `~/.firstmate-discord/format-discord.sh` formatter rather than model-generated formatting.
 
 For an owner voice note, the relay accepts an audio attachment hosted by Discord, downloads it to a private temporary directory, checks its duration, and normalizes it to mono 16 kHz audio with `ffmpeg`.
 It runs the cached local Parakeet model with Hugging Face offline mode; there is no cloud transcription fallback.
@@ -47,10 +49,10 @@ A transcription failure is logged with its message ID, processing stage, and exc
 
 ## Sending Firstmate replies to Discord
 
-`bin/fm-inbox.sh reply` records a durable answer in Firstmate's inbox; it does not post that answer to Discord.
-To send a message to the captain in Discord, the local operator integration uses `~/.firstmate-discord/say.sh` with the source Discord message ID, or `-` for a channel message.
-Treat an inbox reply record as saved locally, not delivered externally; only report a Discord reply as sent after the posting command succeeds and the message is visible in the channel.
-This local installation has no automatic inbox-reply-to-Discord outbox, so Firstmate must explicitly post each requested update through the Discord send path.
+`bin/fm-inbox.sh reply` records a durable answer in Firstmate's inbox; the local voice LaunchAgent's outbox sends each new reply to its original Discord message.
+Only notes whose request id has the `discord-<message-id>` form are delivered this way; slash-command interactions retain their separate ephemeral reply path.
+The outbox stores a reply-sequence cursor, skips replies already present when first enabled, and uses Discord's nonce enforcement to reduce duplicate posts when a send must be retried.
+A local inbox reply is not proof of delivery; check `~/.firstmate-discord/watch.log` for a delivery failure and confirm the message is visible in the channel before reporting it sent.
 
 ## Safe checks
 
