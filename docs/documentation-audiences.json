@@ -553,6 +553,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/discord-voice-relay.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/watcher-continuity.md",
       "audience": "operator-current"
     },
