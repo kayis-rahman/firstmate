@@ -30,6 +30,28 @@ import { runCommandAsync } from "./fm-async-exec.ts";
 
 export const FM_BRANCH_DISPATCH_EVENT = "fm-branch-supervision:dispatch";
 
+// PiG cross-realm transport for the SAME offer contract above, owned by
+// docs/supervision-protocols/pig.md "Branch dispatch over the shared bus".
+// PiG's Go watcher extension owns wake delivery in the Go realm, where the
+// in-process FM_BRANCH_DISPATCH_EVENT handshake cannot reach the Node branch
+// extension's accept() closure. The shared pi.events bus carries the same
+// verdict instead: the Go watcher announces one actionable close on
+// FM_PIG_WATCH_CLOSE_EVENT {id, message} with a result listener already
+// registered; the branch extension runs the identical eligibility, ownership,
+// and cooldown checks as the dispatch listener above, replies synchronously on
+// FM_PIG_WATCH_RESULT_EVENT {id, accepted} before its handler returns, and -
+// when it accepted - reports the settlement outcome on
+// FM_PIG_WATCH_HANDLED_EVENT {id, failed?} so the Go watcher confirms
+// handling or falls back to main delivery exactly as Pi's catch does.
+// Every payload crosses as JSON values, so no promise or function ever leaves
+// the Node realm. A Node-side registration announces itself once per session
+// on FM_PIG_WATCH_READY_EVENT so the Go side can skip the offer entirely
+// (never wait) when no branch extension is listening.
+export const FM_PIG_WATCH_READY_EVENT = "fm-pig-watch:bridge-ready";
+export const FM_PIG_WATCH_CLOSE_EVENT = "fm-pig-watch:actionable-close";
+export const FM_PIG_WATCH_RESULT_EVENT = "fm-pig-watch:dispatch-result";
+export const FM_PIG_WATCH_HANDLED_EVENT = "fm-pig-watch:handled";
+
 // The away-posture record's state-relative filename, exactly as
 // bin/fm-afk-contract.sh writes it. Presence is the only fact read here; the
 // guarded scripts validate the record themselves (bin/fm-lease-lib.sh).

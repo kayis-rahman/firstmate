@@ -116,9 +116,15 @@ import {
   activateEligibleRowsOwner,
   afkPostureRecordPresent,
   awayPostureTailFor,
+  branchOfferForWake,
   branchWakePrompt,
+  createBranchDispatchOffer,
   deactivateEligibleRowsOwner,
   FM_BRANCH_DISPATCH_EVENT,
+  FM_PIG_WATCH_CLOSE_EVENT,
+  FM_PIG_WATCH_HANDLED_EVENT,
+  FM_PIG_WATCH_READY_EVENT,
+  FM_PIG_WATCH_RESULT_EVENT,
   releaseEligibleRowsSnapshot,
   scopeForUnreadWake,
   writeEligibleRowsSnapshot,
@@ -1660,24 +1666,77 @@ ${context.command}
   // side effects and the unread reconcile, both of which now run as the
   // settlement's first steps and reject to the watcher's main path if they
   // fail, exactly as a refused offer would.
-  pi.events?.on?.(FM_BRANCH_DISPATCH_EVENT, (data) => {
-    const offer = data as BranchDispatchOffer;
-    if (!offer || typeof offer.accept !== "function") return;
+  //
+  // One owner for those checks and the accept itself: the in-process Pi
+  // dispatch listener and the PiG cross-realm bridge listener below both run
+  // this, so an offered wake is judged identically on either transport.
+  function handleDispatchOffer(offer: BranchDispatchOffer): boolean {
+    if (!offer || typeof offer.accept !== "function") return false;
     // Check eligibility before the ownership read so an out-of-scope wake
     // gets neither branch routing nor branch-owned state/lease cleanup side
     // effects.
-    if (!offerEligible(offer)) return;
-    if (!generationOwnsLockSync(generation)) return; // cold start pre-lock, secondary session, or shutdown
+    if (!offerEligible(offer)) return false;
+    if (!generationOwnsLockSync(generation)) return false; // cold start pre-lock, secondary session, or shutdown
     const recoveryProbe = Boolean(
       branchBroken &&
       providerRecovery &&
       !providerRecovery.probeInFlight &&
       Date.now() >= providerRecovery.retryNotBefore
     );
-    if (branchBroken && !recoveryProbe) return; // main owns every wake inside the cooldown window
-    if (!collectCurrentMainDialog()) return;
+    if (branchBroken && !recoveryProbe) return false; // main owns every wake inside the cooldown window
+    if (!collectCurrentMainDialog()) return false;
     if (recoveryProbe && providerRecovery) providerRecovery.probeInFlight = true;
     offer.accept(enqueueWake(offer.message, generation, recoveryProbe, offer.awayOnly === true));
+    return offer.accepted;
+  }
+
+  pi.events?.on?.(FM_BRANCH_DISPATCH_EVENT, (data) => {
+    handleDispatchOffer(data as BranchDispatchOffer);
+  });
+
+  // PiG's Go watcher announces actionable closes over the shared cross-realm
+  // bus because its delivery runs in the Go realm (this file's header and
+  // lib/fm-branch-dispatch.ts own the transport contract). The listener runs
+  // synchronously inside the watcher's emit, so the verdict reply below is
+  // sent before this handler returns and the watcher never waits for a branch
+  // that is not listening. An accepted wake reports its settlement outcome on
+  // the handled channel, exactly the information Pi's watch extension reads
+  // from the in-process settlement promise: resolution means handling is
+  // complete, rejection means the watcher must deliver the wake to main.
+  pi.events?.on?.(FM_PIG_WATCH_CLOSE_EVENT, (data) => {
+    const close = data as { id?: unknown; message?: unknown } | null;
+    const id = typeof close?.id === "string" ? close.id : "";
+    const message = typeof close?.message === "string" ? close.message : "";
+    if (!id || !message) return;
+    const verdict = (accepted: boolean): void => {
+      try {
+        pi.events?.emit?.(FM_PIG_WATCH_RESULT_EVENT, { id, accepted });
+      } catch {
+        // A verdict the bus cannot carry leaves the watcher's bounded
+        // no-verdict fallback to deliver this wake to main.
+      }
+    };
+    const { scope, heartbeat, eligible, awayOnly } = branchOfferForWake(
+      state,
+      message,
+      afkPostureRecordPresent(state),
+    );
+    const offer = createBranchDispatchOffer(message, scope.projects, heartbeat, eligible, awayOnly);
+    const accepted = handleDispatchOffer(offer);
+    verdict(accepted);
+    if (!accepted) return;
+    const handled = (failed: boolean): void => {
+      try {
+        pi.events?.emit?.(FM_PIG_WATCH_HANDLED_EVENT, failed ? { id, failed: true } : { id });
+      } catch {
+        // Same fallback: the watcher treats a missing settlement report the
+        // way it treats a rejected settlement - deliver to main.
+      }
+    };
+    offer.settlement.then(
+      () => handled(false),
+      () => handled(true),
+    );
   });
 
   // Pi awaits every extension event handler, so an awaited ownership read
@@ -1834,6 +1893,16 @@ ${context.command}
   pi.on?.("session_start", async (_event, ctx) => {
     rememberMainModel(ctx);
     currentMainSession = ctx?.sessionManager ?? null;
+    // Announce the PiG bridge listener every session start so the Go watcher
+    // knows a branch realm is listening before its first actionable close;
+    // without this readiness the watcher never waits on an offer and delivers
+    // to main exactly as it did before the bridge existed.
+    try {
+      pi.events?.emit?.(FM_PIG_WATCH_READY_EVENT, {});
+    } catch {
+      // Readiness is a latency optimization, never an authority: a missing
+      // announcement only costs this session's first-offer fallback to main.
+    }
     // Every field this new generation depends on is set before the first
     // await, so anything already queued for the previous generation is
     // cancelled by its own recheck rather than racing this one.
