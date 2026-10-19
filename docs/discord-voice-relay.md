@@ -52,6 +52,12 @@ A transcription failure is logged with its message ID, processing stage, and exc
 `bin/fm-inbox.sh reply` records a durable answer in Firstmate's inbox; the local voice LaunchAgent's outbox sends each new reply to its original Discord message.
 Only notes whose request id has the `discord-<message-id>` form are delivered this way; slash-command interactions retain their separate ephemeral reply path.
 The outbox stores a reply-sequence cursor, skips replies already present when first enabled, and uses Discord's nonce enforcement to reduce duplicate posts when a send must be retried.
+
+Firstmate can also post a standalone update to the configured private channel through `~/.firstmate-discord/say.sh - "<message>"`, without replying to an existing Discord message.
+The helper truncates content at 1,900 characters, disables mentions, and returns Discord's HTTP response code; a successful request is not by itself confirmation that the message is visible, so verify delivery in Discord before reporting it sent.
+Using a Discord message id instead of `-` makes the post a threaded reply to that message.
+The local Discord bot token and configured channel remain private in `~/.firstmate-discord/discord-bot.env` and must not be copied into documentation, task records, or chat.
+
 A local inbox reply is not proof of delivery; check `~/.firstmate-discord/watch.log` for a delivery failure and confirm the message is visible in the channel before reporting it sent.
 
 ## Safe checks
