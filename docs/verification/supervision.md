@@ -83,6 +83,17 @@ The Go runtime extension's SDK compatibility and installed-runtime validation ar
 
 The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
 
+### PiG primary recheck, live verification, 2026-10-19
+
+A second installed PiG primary run used a separate scratch home and an explicitly named non-default Herdr session, with `FM_PIG_PRIMARY_LIVE_CODE_ROOT` set to the plain Firstmate checkout because the test worktree is linked.
+The model quoted the injected session-start digest from that scratch home, directly invoked `/ahoy` and `/bearings`, accepted both pre-tool denials, received an actionable status wake in main, and passed the healthy-cycle turn-end check.
+The run also verified `fm-control.sh` interrupt, primary-only relaunch refusal, and exit behavior.
+The first primary's watcher was confirmed live after the actionable wake.
+The second-home recovery assertion did not pass: the extension-loaded marker and session lock existed, but the test did not observe a live watcher lock before its timeout.
+This is an unresolved recovery result, not evidence that automatic recovery works or that the owning PiG extension failed to load.
+The probe did not exercise dispatch intake, worker briefing or spawn, ship-ready landing, section 9 escalation wording, or wake-drain acknowledgement.
+The exact output and current SDK/API research are in the private task report; no managed background branch capability was proven.
+
 ### Run-tier source vocabulary and context-reset injection
 
 The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
