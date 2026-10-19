@@ -197,16 +197,34 @@ suite_cleanup() {
 }
 trap suite_cleanup EXIT
 
+make_live_demo_endpoint() {  # <home>
+  cat > "$1/fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  has-session)
+    case "$*" in *fm-demo*) exit 0 ;; esac
+    exit 1
+    ;;
+  capture-pane)
+    case "$*" in *fm-demo*) printf 'worker ready\n'; exit 0 ;; esac
+    exit 1
+    ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$1/fakebin/tmux"
+  "$ROOT/bin/fm-busy-event.sh" arm "$1/state" demo >/dev/null
+}
+
 make_home() {  # <name> <attended|away|quiet> [config line]
   local home="$TMP_ROOT/$1"
   mkdir -p "$home/state" "$home/config" "$home/fakebin"
-  # An unreachable backend keeps the fixture from creating endpoint-specific wakes.
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$home/fakebin/tmux"
-  chmod +x "$home/fakebin/tmux"
   make_fake_crew_state "$home/fakebin" >/dev/null
   printf '%s\n' "${3:-}" > "$home/config/supervision-host"
   [ -n "${3:-}" ] || : > "$home/config/supervision-host"
   printf 'project=demo\nwindow=fm-demo\nharness=claude\n' > "$home/state/demo.meta"
+  # This fixture models an active worker; endpoint-loss behavior has separate tests.
+  make_live_demo_endpoint "$home"
   echo handle > "$home/stub-mode"
   # The captain has spoken in this session, so an attended wake has a mirror.
   [ "$2" = away ] \
@@ -876,6 +894,7 @@ test_branch_outcomes_keep_a_drain_presented_outcome_across_an_index_repair() {
 test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main() {
   local home first drained
   home=$(make_home attended-routine attended)
+  make_live_demo_endpoint "$home"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "attended: the host never started a watcher cycle: $(cat "$home/host.out")"
   append_status "$home" 'step one'
@@ -907,6 +926,7 @@ test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main() {
 test_attended_captain_outcome_reaches_main_through_branch_outcomes() {
   local home drained
   home=$(make_home attended-captain attended)
+  make_live_demo_endpoint "$home"
   echo captain > "$home/stub-mode"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "captain: the host never started a watcher cycle"
@@ -938,6 +958,7 @@ test_attended_captain_outcome_reaches_main_through_branch_outcomes() {
 test_captain_leaving_mid_turn_keeps_its_captain_outcome_for_the_return() {
   local home drained
   home=$(make_home attended-go-away attended)
+  make_live_demo_endpoint "$home"
   echo go-away > "$home/stub-mode"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "go-away: the host never started a watcher cycle"
@@ -961,6 +982,7 @@ test_captain_leaving_mid_turn_keeps_its_captain_outcome_for_the_return() {
 test_quiet_record_without_its_daemon_is_a_present_captain() {
   local home drained
   home=$(make_home quiet-captain quiet)
+  make_live_demo_endpoint "$home"
   echo captain > "$home/stub-mode"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "quiet: the host never started a watcher cycle"
@@ -978,6 +1000,7 @@ test_quiet_record_without_its_daemon_is_a_present_captain() {
   [ -f "$home/state/.afk-contract" ] || fail "the host must leave quiet mode's record in place"
 
   home=$(make_home quiet-main-only quiet)
+  make_live_demo_endpoint "$home"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "quiet main-only: the host never started a watcher cycle"
   append_status "$home" 'which export format?' needs-decision
@@ -1122,6 +1145,7 @@ SH
 test_attended_close_that_turns_main_only_before_its_turn_passes_to_main() {
   local home
   home=$(make_home attended-turns-main-only attended)
+  make_live_demo_endpoint "$home"
   turn_main_only_at_second_offer "$home" snapshot
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "turns-main-only: the host never started a watcher cycle"
@@ -1154,30 +1178,11 @@ test_attended_close_that_turns_main_only_before_its_turn_passes_to_main() {
 make_primary_home() {  # <name>
   local home
   home=$(make_home "$1" attended)
+  make_live_demo_endpoint "$home"
   git init -q "$home"
   : > "$home/AGENTS.md"
   ln -s "$ROOT/bin" "$home/bin"
   printf '%s\n' "$home"
-}
-
-# Give only handoff-race fixtures a live demo endpoint.
-# This prevents the endpoint-loss backstop from adding a second wake during successor confirmation.
-make_live_demo_endpoint() {  # <home>
-  cat > "$1/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-case "${1:-}" in
-  has-session)
-    case "$*" in *fm-demo*) exit 0 ;; esac
-    exit 1
-    ;;
-  capture-pane)
-    case "$*" in *fm-demo*) printf 'worker ready\n'; exit 0 ;; esac
-    exit 1
-    ;;
-  *) exit 1 ;;
-esac
-SH
-  chmod +x "$1/fakebin/tmux"
 }
 
 # One Claude main session under the fake harness. Each turn_end fires the real
@@ -1258,7 +1263,6 @@ test_claude_stop_hook_delivers_a_main_only_pass_through() {
 test_claude_stop_hook_restores_handoff_when_successor_closed_before_exit_to_main() {
   local home
   home=$(make_primary_home hook-successor-closed-before-return)
-  make_live_demo_endpoint "$home"
   ln -s "$ROOT/.agents" "$home/.agents"
   echo captain-close-before-return > "$home/stub-mode"
   start_hook_session "$home"
@@ -1276,7 +1280,6 @@ test_claude_stop_hook_restores_handoff_when_successor_closed_before_exit_to_main
 assert_claude_stop_hook_notifies_when_closed_successor_downtime_restore_fails() {
   local status=$1 home real_mktemp successor
   home=$(make_primary_home "hook-successor-restore-fails-$status")
-  make_live_demo_endpoint "$home"
   ln -s "$ROOT/.agents" "$home/.agents"
   echo captain-held > "$home/stub-mode"
   mkfifo "$home/stub-release"
@@ -1330,7 +1333,6 @@ test_claude_stop_hook_notifies_when_closed_announced_successor_downtime_restore_
 test_claude_stop_hook_restores_handoff_when_successor_closed_mid_engine_turn() {
   local home successor
   home=$(make_primary_home hook-successor-closed-before-outcome)
-  make_live_demo_endpoint "$home"
   ln -s "$ROOT/.agents" "$home/.agents"
   echo captain-held > "$home/stub-mode"
   mkfifo "$home/stub-release"
@@ -1759,6 +1761,7 @@ test_primary_without_a_verified_mirror_runs_away_only() {
       "the ledger must record that no verified mirror kept the close on main"
   done
   home=$(make_home away-grok away claude)
+  make_live_demo_endpoint "$home"
   FM_SUPERVISION_HOST_PRIMARY=grok start_host "$home"
   wait_until 150 watcher_live "$home" || fail "away grok: the host never started a watcher cycle"
   append_status "$home" 'step one'
@@ -1775,6 +1778,7 @@ test_primary_without_a_verified_mirror_runs_away_only() {
 test_attended_wake_carries_the_dialog_mirror() {
   local home first second
   home=$(make_home attended-mirror attended)
+  make_live_demo_endpoint "$home"
   printf '{"hook_event_name":"UserPromptSubmit","prompt_id":"p1","prompt":"keep the export worker on low effort"}' > "$home/mirror-seed.1"
   printf '{"hook_event_name":"Stop","prompt_id":"p1","last_assistant_message":"Understood, low effort it is."}' > "$home/mirror-seed.2"
   printf '{"hook_event_name":"UserPromptSubmit","prompt_id":"p2","prompt":"\342\201\243FIRSTMATE_OP: v1 watcher: signal: demo.status"}' > "$home/mirror-seed.3"
@@ -1803,6 +1807,7 @@ mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 test_dialog_bearing_files_are_owner_only() {
   local home old
   home=$(make_home attended-private attended)
+  make_live_demo_endpoint "$home"
   {
     printf '#!/usr/bin/env bash\nREAL_NODE=%q\n' "$(command -v node)"
     cat <<'SH'
@@ -1881,6 +1886,7 @@ park_after_stop() {  # <home>
 test_undelivered_dialog_is_fed_again_on_the_next_turn() {
   local home real_node second third fourth
   home=$(make_home mirror-boundary attended)
+  make_live_demo_endpoint "$home"
   real_node=$(command -v node)
   cat > "$home/fakebin/node" <<SH
 #!/usr/bin/env bash
