@@ -5871,7 +5871,7 @@ EOF
     fi
     exclude_path '.opencode/plugins/fm-busy-state.js'
     ;;
-  pi | pi-signed)
+  pi | pi-signed | pig)
     # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
     # loaded from inside the project (verified live), but an explicit -e path
     # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.

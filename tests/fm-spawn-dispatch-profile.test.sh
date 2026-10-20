@@ -80,6 +80,7 @@ SH
   chmod +x "$fakebin/timeout" "$fakebin/cursor-agent" "$fakebin/opencode"
   make_spawn_pi_probe "$fakebin" pi
   make_spawn_pi_probe "$fakebin" pi-signed
+  make_spawn_pi_probe "$fakebin" pig
   printf '%s\n' "$fakebin"
 }
 
@@ -1316,6 +1317,26 @@ test_pi_threads_model_and_max_effort() {
   pass "pi receives --model and --thinking max profile flags"
 }
 
+test_pig_spawn_generates_and_loads_pi_worker_extension() {
+  local rec id out status launch ext
+  id=profile-pig-worker-extension-z8e
+  rec=$(make_spawn_case profile-pig-worker-extension pig "$id")
+  read_case_record "$rec"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model openai-codex/gpt-5.6-sol --effort high)
+  status=$?
+  expect_code 0 "$status" "PiG spawn should succeed"
+  assert_contains "$out" "spawned $id harness=pig" "PiG spawn did not preserve its identity"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pig openai-codex/gpt-5.6-sol high
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "FM_PI_HARNESS=pig '$FAKEBIN_DIR/pig' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'high' -e '$HOME_DIR/state/$id.pi-ext.ts'" \
+    "PiG launch did not load the generated Pi lifecycle extension"
+  ext="$HOME_DIR/state/$id.pi-ext.ts"
+  assert_present "$ext" "PiG spawn did not generate the referenced Pi lifecycle extension"
+  pass "PiG spawn generates its Pi lifecycle extension and points the launch at it"
+}
+
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
   local rec id out status launch
   id=profile-pi-signed-z8b
@@ -1529,7 +1550,7 @@ test_pi_exclude_tools_reach_ship_and_scout_launches() {
 test_pi_exclude_tools_worker_registry_reports() {
   local harness kindflag scenario case_name rec id out status report
   command -v node >/dev/null 2>&1 || fail "node is required to drive Pi worker exclusion reporting"
-  for harness in pi pi-signed; do
+  for harness in pi pi-signed pig; do
     for kindflag in --ship --scout; do
       for scenario in matched unmatched unverified; do
         id="excl-registry-${harness}-${kindflag#--}-${scenario}"
@@ -2762,6 +2783,7 @@ test_batch_preserves_native_ultra
 test_pi_scout_launch_enters_recorded_worktree
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
+test_pig_spawn_generates_and_loads_pi_worker_extension
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity
