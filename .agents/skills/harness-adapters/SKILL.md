@@ -2,6 +2,7 @@
 name: harness-adapters
 description: >-
   Load before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
+  Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, cursor, gemini, muse, rovo, omp, agy, devin, commandcode, polytoken, and PiG.
 user-invocable: false
 metadata:
   internal: true
@@ -96,7 +97,8 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "agy": "references/harness/agy.md",
     "devin": "references/harness/devin.md",
     "commandcode": "references/harness/commandcode.md",
-    "polytoken": "references/harness/polytoken.md"
+    "polytoken": "references/harness/polytoken.md",
+    "pig": "references/harness/pig.md"
   }
 }
 ```

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|pig|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate [id]  print the harness the PRIMARY uses to launch
@@ -132,6 +132,13 @@ harness_marker() {
     return
   fi
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
+  # PiG (pig) publishes AI_AGENT=pig to every child process (documented in
+  # PiG's environment-variables page: "AI_AGENT=pi" is Pi's marker, and PiG
+  # publishes its own value). It does NOT clear an inherited AI_AGENT, so this
+  # marker is a fast path only and the ancestry walk below is what actually
+  # guarantees a pig process is identified. A Pi primary's own AI_AGENT=pi
+  # never names pig, so the two families cannot be confused by this value.
+  [ "${AI_AGENT:-}" = "pig" ] && { echo pig; return; }
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
@@ -223,6 +230,13 @@ harness_process_verdict() {  # <pid>
     # is why detect_own keeps a marker that agrees on the family.
     pi-signed) echo "comm pi"; return ;;
     pi) echo "comm pi"; return ;;
+    # PiG (pig) is a Go-compiled single binary whose process name is exactly
+    # `pig` (verified, PiG 0.5.1+1.3.0.1402973a: comm=pig with argv[0]=pig).
+    # Anchored, never *pig*, so unrelated commands containing that fragment
+    # cannot be misread as this harness. It sits below the pi arm because PiG
+    # runs Pi-compatible TypeScript extensions in its own Node runtime, and a
+    # Pi-compatible child process must still read as the Pi family.
+    pig) echo "comm pig"; return ;;
     # omp is a Bun-compiled single binary whose process name is exactly `omp`
     # (verified, omp 18.1.11: `ps -o comm=` reports omp from both its `!`
     # bash path and the model's bash tool). Anchored, never *omp*, so ompd,
@@ -273,6 +287,7 @@ harness_process_verdict() {  # <pid>
         *opencode*) echo "args opencode"; return ;;
         *grok*) echo "args grok"; return ;;
         *" pi "*|*/pi) echo "args pi"; return ;;
+        *" pig "*|*/pig) echo "args pig"; return ;;
       esac ;;
   esac
 }
@@ -408,6 +423,7 @@ harness_ancestry_descent() {  # <root> [<eligible-leaf-pid>...]
 harness_family() {
   case "$1" in
     pi-signed) printf 'pi\n' ;;
+  pig) printf 'pig\n' ;;
     *) printf '%s\n' "$1" ;;
   esac
 }
@@ -418,7 +434,7 @@ supervision_primary_pin() {
   local pin=${FM_SUPERVISION_PRIMARY_HARNESS:-}
   [ "${FM_SUPERVISION_ACTOR:-}" = branch ] && [ -n "$pin" ] || return 0
   case "$pin" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|pig)
       printf '%s\n' "$pin"
       ;;
     *)

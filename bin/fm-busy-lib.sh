@@ -239,7 +239,7 @@ fm_busy_sources_for_harness() {  # <harness>
     devin) adapter=devin-hook ;;
     commandcode) adapter=commandcode-mod ;;
     polytoken) adapter=polytoken-hook ;;
-    pi|pi-signed) adapter=pi-ext ;;
+    pi | pi-signed | pig) adapter=pi-ext ;;
     omp) adapter=omp-ext ;;
     kimi*)
       fm_busy_kimi_verified || { printf ''; return 0; }

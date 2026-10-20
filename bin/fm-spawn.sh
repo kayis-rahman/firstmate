@@ -2313,7 +2313,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-  '' | claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken)
+  '' | claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken | pig)
     ARG3=${POS[1]:-}
     ;;
   *' '*)
@@ -2547,6 +2547,9 @@ launch_template() {
     else
       printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
     fi
+    ;;
+  pig)
+    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u AI_AGENT FM_PI_HARNESS=pig __PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__ __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
     ;;
   # omp (Oh My Pi), a Pi fork. Same one-positional-brief, --model, --thinking,
   # and -e shape as Pi, verified on omp 18.1.11. The differences are all at
@@ -2813,7 +2816,7 @@ esac
 # docs/supervision-protocols/ carries no Command Code wake protocol (1.74.1).
 # polytoken has none either: only the crewmate/scout lifecycle is verified;
 # docs/supervision-protocols/ carries no polytoken primary wake protocol.
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ]; }; then
+if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ] || [ "$HARNESS" = pig ]; }; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
@@ -2848,6 +2851,21 @@ devin)
     echo "error: devin executable not found on PATH" >&2
     exit 1
   }
+  ;;
+pig)
+  PI_BIN=$(command -v pig) || {
+    echo "error: pig executable not found on PATH; install PiG or select a different verified harness" >&2
+    exit 1
+  }
+  PI_TUI_MODE=
+  if pi_supports_tui_mode "$PI_BIN"; then PI_TUI_MODE=' --tui-mode regular'; fi
+  PI_APPROVE=
+  if [ "$KIND" = secondmate ] && pi_supports_approve "$PI_BIN"; then PI_APPROVE=' --approve'; fi
+  PI_EXCLUDE=
+  [ -z "$EXCLUDE_TOOLS" ] || PI_EXCLUDE=" --exclude-tools $(shell_quote "$EXCLUDE_TOOLS")"
+  LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
+  LAUNCH=${LAUNCH//__PIAPPROVE__/$PI_APPROVE}
+  LAUNCH=${LAUNCH//__PIEXCLUDE__/$PI_EXCLUDE}
   ;;
 commandcode)
   COMMANDCODE_BIN=$(command -v commandcode) || {
@@ -3160,7 +3178,7 @@ model_flag_for_harness() {
     [ "$oc_major" = 1 ] || return 0
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
-  claude | codex | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode)
+  claude | codex | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode)
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
   # polytoken encodes reasoning effort inside the model reference, so the
@@ -3223,8 +3241,8 @@ effort_flag_for_harness() {
       ;;
     esac
     ;;
-  pi | pi-signed)
-    # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
+  pi | pi-signed | pig)
+    # PiG 0.5.1+ / Pi 0.80.6 accept the full shared effort vocabulary, including max, through
     # its --thinking flag.
     case "$effort" in
     ultra)
@@ -5551,7 +5569,7 @@ BUSY_GEN=
     ;;
   esac
   case "$WIRING_HARNESS" in
-  claude* | opencode* | pi | pi-signed | omp)
+  claude* | opencode* | pi | pi-signed | pig | omp)
     # opencode arms on every detected major: OpenCode 2 and the OpenCode 1 /
     # undetected->1.x path both provision a busy-state plugin below that needs
     # this gen, so gating the arm on major >= 2 would leave OpenCode 1 without
@@ -6449,7 +6467,7 @@ LAUNCH=${LAUNCH//__OMPEXT__/$sq_ompext}
 LAUNCH=${LAUNCH//__OMPWORKERCFG__/$sq_ompcfg}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
-pi | pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
+pi | pi-signed | pig) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
 cursor) LAUNCH=${LAUNCH//__CURSORBIN__/"$(shell_quote "$CURSOR_BIN")"} ;;
 gemini) LAUNCH=${LAUNCH//__GEMINISETTINGS__/"$(shell_quote "$STATE_REAL/$ID.gemini-settings.json")"} ;;
 omp) LAUNCH=${LAUNCH//__OMPBIN__/"$(shell_quote "$OMP_BIN")"} ;;
@@ -6519,7 +6537,7 @@ case "$LAUNCH" in
   ;;
 esac
 case "$HARNESS" in
-claude | codex | opencode | pi | pi-signed | grok | kimi | gemini | muse | rovo | agy | devin | commandcode)
+claude | codex | opencode | pi | pi-signed | pig | grok | kimi | gemini | muse | rovo | agy | devin | commandcode)
   LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI $LAUNCH"
   ;;
 esac

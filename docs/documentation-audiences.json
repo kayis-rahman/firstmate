@@ -235,6 +235,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/harness-adapters/references/harness/pig.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/harness-adapters/references/harness/rovo.md",
       "audience": "agent-runtime"
     },
@@ -540,6 +544,10 @@
     },
     {
       "path": "docs/verification/polytoken.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/verification/pig.md",
       "audience": "maintainer-verification"
     },
     {

@@ -29,7 +29,7 @@ set -u
 
 # This suite states the markers it means to test in every case. Drop the ambient
 # ones so a verdict never depends on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
+unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS AI_AGENT \
   FM_SUPERVISION_ACTOR FM_SUPERVISION_PRIMARY_HARNESS
 
 HARNESS="$ROOT/bin/fm-harness.sh"
@@ -45,7 +45,7 @@ under_process() {  # <named-executable> [VAR=VAL ...]
   local bin=$1
   shift
   env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    -u CURSOR_AGENT -u CURSOR_INVOKED_AS "$@" \
+    -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u AI_AGENT "$@" \
     "$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\""
 }
 
@@ -122,7 +122,10 @@ with_blind_ancestry() {  # <fakebin> [VAR=VAL ...]
 
 named_bin() {  # <dir> <name>
   mkdir -p "$1"
-  cp "$(command -v bash)" "$1/$2"
+  # Symlink the system shell rather than copying its signed binary. macOS
+  # reports the invoked symlink name as comm, which is the ancestry signal
+  # this test exercises; copying the binary is killed by platform code signing.
+  ln -sf "$(command -v bash)" "$1/$2"
   printf '%s\n' "$1/$2"
 }
 

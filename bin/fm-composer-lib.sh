@@ -459,7 +459,7 @@ fm_busy_lines_match() {  # [harness]
       commandcode) regex=$FM_DELIVERY_COMMANDCODE_BUSY_REGEX_DEFAULT ;;
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
-      pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
+      pi|pi-signed|pig) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       omp) regex=$FM_DELIVERY_OMP_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT ;;
       agy) regex=$FM_DELIVERY_AGY_BUSY_REGEX_DEFAULT ;;
