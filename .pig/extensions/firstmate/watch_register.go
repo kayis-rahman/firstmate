@@ -16,6 +16,10 @@ const watchArmToolDescription = "Start the first required Pi watcher cycle, or r
 
 func registerWatcher(ext *sdk.Extension, root string, bus *eventBus) *watcher {
 	w := newWatcher(root, bus)
+	// The cross-realm branch offer bridge (branch_bridge.go) rides the shared
+	// pi.events bus; without a listening Node branch it stays inert and every
+	// wake takes today's main path.
+	w.branchBridge = newBranchBridge(ext.Events())
 	// Publish this generation while the lock is absent so that session-start can
 	// tell a loaded extension from a missing one.
 	if err := w.bindInitialMarker(); err != nil {

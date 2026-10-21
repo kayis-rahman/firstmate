@@ -15,7 +15,7 @@ MODEL=${FM_PIG_PRIMARY_LIVE_MODEL:-openai-codex/gpt-6-luna}
 THINKING=${FM_PIG_PRIMARY_LIVE_THINKING:-medium}
 TASK_TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-pig-primary-live.XXXXXX")
 export FM_HERDR_LAB_STATE_DIR="$TASK_TMP/herdr-state"
-HERDR_LAB_SESSION=$("$HERDR_LAB_HELPER" name firstmate-pig-primary-live-verify-v1)
+HERDR_LAB_SESSION=${HERDR_LAB_SESSION:-$("$HERDR_LAB_HELPER" name firstmate-pig-parity-fix-v1)}
 FM_HOME=$("$LAB_HOME_HELPER" create "$TASK_TMP/fmhome")
 RECOVERY_HOME=
 LAB_TMUX_DIR=$("$LAB_HOME_HELPER" tmux-dir "$FM_HOME")
@@ -161,11 +161,44 @@ printf '%s\n' "$guard" | grep -Fq 'must not be run directly' \
   || fail "the pre-tool denial did not explain the direct-watcher restriction"
 pass "PiG pre-tool guard blocks a wrapped direct watcher launch"
 
-# A terminal status is the concrete wake fixture; the session-start-owned
-# watcher cycle must deliver it without a manual arm or duplicate cycle.
-printf 'done: PiG primary live notification LIVE_WAKE_1\n' > "$FM_HOME/state/pig-primary-live.status"
-wake=$(wait_text 'LIVE_WAKE_1' 180) \
-  || fail "the actionable watcher notification was not delivered to the main conversation"
+# An eligible status is the concrete wake fixture; the cross-realm bridge
+# (branch_bridge.go / lib/fm-branch-dispatch.ts) must hand it to the
+# supervision branch instead of main. The branch records its handling as an
+# outcome in the durable store; main must never see the watcher's wake
+# envelope for it. The task meta is registered first so the wake's scope is
+# unambiguous for the branch's eligibility read.
+printf 'kind=ship\nharness=pig\nbackend=herdr\nwindow=%s:%s\nendpoint_task_id=pig-primary-live\nworktree=%s\nproject=%s\nmode=direct-PR\nyolo=off\nmodel=%s\neffort=%s\nherdr_session=%s\nherdr_workspace_id=%s\nherdr_tab_id=%s\nherdr_pane_id=%s\n' \
+  "$HERDR_LAB_SESSION" "$PANE" "$ROOT" "$ROOT" "$MODEL" "$THINKING" \
+  "$HERDR_LAB_SESSION" "$WORKSPACE" "$TAB" "$PANE" > "$FM_HOME/state/pig-primary-live.meta"
+printf 'bridge probe wake one\n' > "$FM_HOME/state/pig-primary-live.status"
+branch_handled() {
+  local attempts=240 i=0
+  while [ "$i" -lt "$attempts" ]; do
+    if grep -Fq 'pig-primary-live' "$FM_HOME/state/branch-outcomes.jsonl" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+branch_handled \
+  || fail "the supervision branch did not handle the eligible wake off main: $(cat "$FM_HOME/state/branch-outcomes.jsonl" 2>/dev/null)"
+if screen | grep -Fq 'FIRSTMATE WATCHER WAKE'; then
+  fail "main received the watcher wake envelope for a branch-eligible wake"
+fi
+wait_watch || fail "PiG did not retain a live watcher after branch delivery"
+if screen | grep -Fq 'TURN WOULD END BLIND'; then
+  fail "the turn-end guard reported a healthy watcher cycle as missing"
+fi
+pass "PiG routes an eligible actionable wake to the supervision branch off main"
+
+# A decision-owned status is never branch-eligible: the declined offer must
+# fall back to main delivery exactly as before the bridge existed.
+needs_decision_at=$(date +%s)
+printf 'needs-decision [at=%s]: which region should the probe map next?\n' "$needs_decision_at" > "$FM_HOME/state/pig-primary-live.status"
+wake=$(wait_text 'which region should the probe map next?' 180) \
+  || fail "the decision-owned watcher notification was not delivered to the main conversation"
 printf '%s\n' "$wake" | grep -Eq 'signal:|Supervisor' \
   || fail "the delivered watcher message was not an actionable notification"
 wait_idle || fail "the actionable wake turn did not settle"
@@ -173,7 +206,7 @@ wait_watch || fail "PiG did not retain a live watcher after wake delivery"
 if screen | grep -Fq 'TURN WOULD END BLIND'; then
   fail "the turn-end guard reported a healthy watcher cycle as missing"
 fi
-pass "PiG delivers an actionable wake and the turn-end guard accepts healthy supervision"
+pass "PiG declines a decision-owned wake to the branch and delivers it to main"
 
 # Register only this isolated pane so the lifecycle test goes through the
 # public control plane and its verified Herdr postconditions.

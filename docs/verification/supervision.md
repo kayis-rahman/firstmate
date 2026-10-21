@@ -55,34 +55,6 @@ Both tracked `.omp/extensions/*.ts` files loaded by auto-discovery alone (no `-e
 omp's `session_start` payload carries no reason field, so the adapter derives the source: the first start of the process is `startup` (or `resume` from a `--continue`/`--resume` launch line) and a later in-process start is `clear`; `tests/fm-omp-harness.test.sh` pins that mapping over a fake omp API.
 A file named both by `-e` and by auto-discovery loads twice (two factory calls, doubled `session_stop` continuations), which is why a secondmate launch never names its auto-discovered primary extensions with `-e` and the per-task busy extension lives in `state/`.
 
-### PiG primary integration, live verification, 2026-10-17
-
-The installed PiG 0.4.1+1.0.3 runtime was exercised on macOS arm64 with `openai-codex/gpt-6-luna` at medium effort in a named Herdr lab and throwaway Firstmate homes.
-The credentialed end-to-end test was run as:
-
-```sh
-FM_PIG_PRIMARY_LIVE_E2E=1 \
-FM_PIG_PRIMARY_LIVE_MODEL=openai-codex/gpt-6-luna \
-FM_PIG_PRIMARY_LIVE_THINKING=medium \
-FM_PIG_PRIMARY_LIVE_CODE_ROOT=<Firstmate-repository> \
-bash tests/fm-pig-primary-supervision-live-e2e.test.sh
-```
-
-It passed live session-start digest delivery, direct TUI `/ahoy` and `/bearings`, pre-tool denials for a persistent primary-home directory change and a wrapped direct watcher launch, actionable status-wake delivery into the idle main conversation, watcher presence after wake delivery, and both healthy and missing-watcher turn-end behavior.
-It also passed `bin/fm-control.sh` interrupt and clean-state exit, and verified that unsupported PiG primary-only worker relaunch is refused while preserving the live agent.
-The missing-watcher recovery fixture used a second throwaway home seeded with an active task before session start, then let the guarded lab teardown stop the session rather than attempting lifecycle exit after recovery.
-
-A preceding run verified the exit safety refusal after recovery: when Herdr reported the composer as pending or unknown, `fm-control.sh` refused to type the exit command and left the agent alive.
-That refusal is expected safety behavior, not an exit failure.
-
-Background delivery to a separate managed supervision branch and filtering host transcript rows remain unverified because PiG's released SDK cannot create managed agent sessions or filter host rows.
-The live wake was verified only in the main TUI conversation, and no workaround is claimed for the upstream SDK limits.
-PiG remains intentionally unavailable as a worker, scout, or secondmate adapter.
-The exact current boundary is in [the PiG harness reference](../../.agents/skills/harness-adapters/references/harness/pig.md).
-The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
-
-The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
-
 ### Run-tier source vocabulary and context-reset injection
 
 The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
@@ -370,28 +342,54 @@ The secondmate-home scope and manual-repair wake path were measured with Claude 
 The current Stop-owned main/secondmate inclusion and child-worktree exclusion are covered deterministically by `tests/fm-claude-stop-autoarm.test.sh`.
 Session-lock ownership in `bin/fm-session-lock-lib.sh` is decided against a session's whole contiguous harness ancestry rather than one chosen pid, so the Stop auto-arm reaches its lock owner wherever that owner sits: a pid of Claude Code's multi-level `bg-spare` hook worker chain, or an inner pid when a harness-named daemon parents the session.
 A background Claude session whose transient helper chain is recycled loses that contiguity while its recorded owner stays alive, so the library also accepts a trusted same-session id: `CLAUDE_CODE_SESSION_ID` counts only when `CLAUDE_PID` is a Claude-shaped member of the current run, it must equal the id `bin/fm-lock.sh` recorded in `state/.lock-session`, and the recorded pid must still be a live harness, while every weaker combination (no id, no sidecar, an untrusted id, a different id, a dead recorded pid) leaves the ancestry verdict unchanged.
-For such a session `bin/fm-lock.sh` records `CLAUDE_PID` on lock line 1 instead of the outermost chain pid, so a shared daemon or front-end that outlives the session never keeps a dead session's lock alive, and a same-session confirmation never rewrites a live line 1.
+For such a session `bin/fm-lock.sh` records `CLAUDE_PID` on lock line 1 instead of the outermost chain pid, so a shared daemon or front-end that outlives the session never keeps a dead session's lock alive, and a same-session confirmation over a live line 1 outside the current ancestry rewrites line 1 to `CLAUDE_PID` and moves task leases and a Claude auto-arm rewake recorded against the old pid with it, so a later `/clear` re-key in the same process is still proven by ancestry, a held lease stays live, and the mid-turn guard still accepts that rewake.
 Harness identity is read from the executable path and `argv[0]` as well as the command basename, because Claude Code's native installer names the per-session executable by its version (`.../share/claude/versions/2.1.220`): `ps -o comm=` reports that path on macOS and the bare version string on Linux, and neither basename names a harness.
 `tests/fm-session-lock-ancestry.test.sh` pins both platforms' reporting semantics behind a deterministic process table and runs the real Stop auto-arm in version-named, daemon-parented, and combined real process trees.
-The same suite drives the ancestry and session-id signals apart in that table, asserting the divergence itself so no case is vacuous, and runs a real orphaned front-end, daemon, pty-host, and bg-spare tree whose daemon is ended mid-run: the same id keeps arming through the real `bin/fm-lock.sh`, `bin/fm-claude-stop-autoarm.sh`, and `bin/fm-turnend-guard.sh --claude` with lock line 1 and the sidecar untouched, a different id, an untrusted id, and no id each keep the live-owner refusal naming the recorded id, and the dead front-end is reclaimed onto the spare's pid rather than the outermost pty-host.
-`tests/fm-turnend-foreign-owner-repro.py` keeps the genuinely foreign live owner as the negative control and adds the same-id positive control.
-Both ran on 2026-09-18 on macOS with bash 3.2.57 as the fake harness interpreter:
+The same suite drives the ancestry and session-id signals apart in that table, asserting the divergence itself so no case is vacuous, and runs a real orphaned front-end, daemon, pty-host, and bg-spare tree whose daemon is ended mid-run: before the spare proves anything, a different id, an untrusted id, and no id each keep the live-owner refusal naming the recorded id; the same id then keeps arming through the real `bin/fm-lock.sh`, `bin/fm-claude-stop-autoarm.sh`, and `bin/fm-turnend-guard.sh --claude` with the sidecar untouched and lock line 1 moved off the live front-end onto the spare's pid rather than the outermost pty-host; and a new id from that same spare, with the front-end still alive, stays owned and re-keys the sidecar.
+`tests/fm-turnend-foreign-owner-repro.py` keeps the genuinely foreign live owner as the negative control, and its same-id positive control is a live process outside the owner's ancestry that re-anchors line 1 onto its own `CLAUDE_PID` while a different id stays refused against the re-anchored pid.
+The unit cases ran on 2026-09-18 on macOS with bash 3.2.57 as the fake harness interpreter:
 
 ```sh
 tests/fm-session-lock-ancestry.test.sh
-tests/fm-turnend-foreign-owner-arm-fix.test.sh
 ```
 
-Observed output, bounded to the lines the new coverage adds:
+Observed output, bounded to the lines that coverage added:
 
 ```text
 ok - session-lock: a trusted same-session id keeps owning a recycled background chain, and nothing weaker does
 ok - session-lock: a trusted id anchors the lock on the model-loop process, anything else on the outermost pid
-ok - session-lock e2e: a background session keeps its lock and its supervision across a recycled helper chain
-same-session acquisition rc=0 stdout='lock acquired: harness pid 41994\nlock_rc=0\n' stderr=''
-other-session acquisition rc=0 stdout='lock_rc=1\n' stderr='error: another live firstmate session holds the lock (pid 41994, session synthetic-same); operate read-only until resolved\n'
-FIXED same-session id owns the lock; a different id is still foreign
+```
+
+The re-anchor, same-process re-key, and lease phases ran on 2026-10-15 on Linux with GNU bash 5.3.9 as the fake harness interpreter and Python 3.14.4 for the repro:
+
+```sh
+bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh
+bin/fm-test-run.sh tests/fm-turnend-foreign-owner-arm-fix.test.sh
+```
+
+Observed output, bounded to the lines that coverage adds:
+
+```text
+ok - session-lock e2e: a background session keeps its lock and its supervision across a recycled helper chain and a same-process session-id change
+ok - session-lock: a re-anchor keeps both supervision actors' task leases live
+same-session acquisition rc=0 pid=3116951 output='lock acquired: harness pid 3116951\n'
+other-session acquisition rc=0 stdout='lock_rc=1\n' stderr='error: another live firstmate session holds the lock (pid 3116951, session synthetic-same); operate read-only until resolved\n'
+FIXED same-session id re-anchors the lock onto its own process; a different id is still foreign
 COMPLETE
+```
+
+The auto-arm rewake move and the lease claim pinned before a re-anchor ran on 2026-10-16 on Linux with GNU bash 5.3.9 as the fake harness interpreter:
+
+```sh
+bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh tests/fm-branch-supervision.test.sh
+```
+
+Observed output, bounded to the lines that coverage adds:
+
+```text
+ok - session-lock: a re-anchor during a rewake turn keeps the mid-turn auto-arm proof healthy
+ok - a claim pinned before a re-anchor records the live lock holder; a dead pin stays stale
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=43472
 ```
 
 No live unattended Claude background session ran on the verifying machine: that topology is documented by the real process listings in issues #3902, #2314, #3398, and #4066, and the coverage above is the structural predicate plus those executable fixtures, not a live pass.
@@ -898,3 +896,34 @@ Observed output:
 ```
 
 The safe command-channel contract is covered without a notification by `tests/fm-daemon.test.sh`: the summary reaches both `$1` and stdin, every channel is process-group bounded, and a failed channel falls through.
+
+## PiG primary integration
+
+### Live verification, 2026-10-17
+
+The installed PiG 0.4.1+1.0.3 runtime was exercised on macOS arm64 with `openai-codex/gpt-6-luna` at medium effort in a named Herdr lab and throwaway Firstmate homes.
+It also passed `bin/fm-control.sh` interrupt and clean-state exit, and verified that unsupported PiG primary-only worker relaunch is refused while preserving the live agent.
+Background delivery to a separate managed supervision branch and filtering host transcript rows remain unverified because PiG's released SDK cannot create managed agent sessions or filter host rows.
+
+### Primary recheck, live verification, 2026-10-19
+
+A second installed PiG primary run used a separate scratch home and an explicitly named non-default Herdr session, with `FM_PIG_PRIMARY_LIVE_CODE_ROOT` set to the plain Firstmate checkout because the test worktree is linked.
+The model quoted the injected session-start digest from that scratch home, directly invoked `/ahoy` and `/bearings`, accepted both pre-tool denials, received an actionable status wake in main, and passed the healthy-cycle turn-end check.
+The run also verified `fm-control.sh` interrupt, primary-only relaunch refusal, and exit behavior.
+The first primary's watcher was confirmed live after the actionable wake.
+The second-home recovery assertion did not pass: the extension-loaded marker and session lock existed, but the test did not observe a live watcher lock before its timeout.
+This is an unresolved recovery result, not evidence that automatic recovery works or that the owning PiG extension failed to load.
+The probe did not exercise dispatch intake, worker briefing or spawn, ship-ready landing, section 9 escalation wording, or wake-drain acknowledgement.
+The exact output and current SDK/API research are in the private task report; no managed background branch capability was proven.
+
+### Cross-realm branch dispatch, live verification, 2026-10-19
+
+A live run in a real Firstmate checkout (not the linked worktree) loaded the real Go `firstmate` extension and the real Node `fm-branch-supervision` plus a passive bus observer, with a pre-seeded eligible status wake.
+The observer recorded, in order: `fm-pig-watch:bridge-ready {}`, `fm-pig-watch:dispatch-result {"id":"pig-offer-1","accepted":true}`, then `fm-pig-watch:actionable-close {"id":"pig-offer-1",...}`.
+The branch session file was created, the branch ran the wake as a real agent turn (`fm-branch-prompt` system prompt, `bash` tool, drain and acknowledgement), and reported `fm-pig-watch:handled {"id":"pig-offer-1"}` 33 seconds later.
+Main received no `FIRSTMATE WATCHER WAKE` envelope for that wake; the durable outcome store gained no duplicate for the declined path.
+A later stale-endpoint wake was declined (`accepted:false`) and delivered to main exactly as before the bridge.
+The transport is therefore verified end to end: ready, verdict, settlement, and the declined fallback, with no new process.
+Go unit tests in `.pig/extensions/firstmate/branch_bridge_test.go` cover accept, decline, rejected settlement, timeout, no-readiness, nil-bridge, and the cross-language channel-name contract.
+
+Remaining unverified for PiG: watcher restoration in a second home, wake-drain acknowledgement, dispatch intake, worker briefing or spawn, ship-ready landing, section 9 escalation wording, and `/afk`/`/quiet` posture behavior.

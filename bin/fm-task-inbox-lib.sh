@@ -428,24 +428,6 @@ fm_task_inbox_oldest_unhandled() {  # <state-dir> <task-id>
   printf '%s' "$best"
 }
 
-# Owe a fire-and-forget record its one retry ring (see the header). A newer
-# mark replaces an older one: a ring names the whole inbox, not one record.
-fm_task_inbox_mark_retry() {  # <state-dir> <task-id> <record-path>
-  local dir
-  dir=$(fm_task_inbox_dir "$1" "$2")
-  { printf '%s\n' "${3##*/}" > "$dir/.retry-ring"; } 2>/dev/null
-}
-
-# Spend the retry mark after its ring, only while it still names that record:
-# a newer mark written meanwhile is owed its own retry and survives. Fails only
-# when the processed record's mark stays behind.
-fm_task_inbox_clear_retry() {  # <state-dir> <task-id> <record-path>
-  local dir
-  dir=$(fm_task_inbox_dir "$1" "$2")
-  [ "$(cat "$dir/.retry-ring" 2>/dev/null)" = "${3##*/}" ] || return 0
-  rm -f "$dir/.retry-ring"
-}
-
 fm_task_inbox_mark_retry() {  # <state-dir> <task-id> <record-path>
   local dir
   dir=$(fm_task_inbox_dir "$1" "$2")
