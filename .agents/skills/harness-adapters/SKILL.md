@@ -2,7 +2,7 @@
 name: harness-adapters
 description: >-
   Agent-only reference for firstmate harness operations.
-  Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
+  Load before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
   Contains verified facts for claude, codex, opencode, pi, pi-signed, pig, grok, kimi, cursor, gemini, muse, rovo, omp, agy, devin, commandcode, and polytoken.
 user-invocable: false
 metadata:
@@ -47,7 +47,7 @@ omp publishes no marker of its own; `FM_OMP_HARNESS=omp` is Firstmate's launch m
 PiG publishes no marker of its own; `FM_PIG_HARNESS=pig` is Firstmate's primary launch marker and is trusted only with an exact `pig` process in ancestry, as `references/harness/pig.md` records.
 `../../../bin/fm-spawn.sh` owns worker marker establishment, while the README launch command owns the signed-primary boundary.
 `../../../bin/fm-harness.sh crew` resolves `config/crew-harness`, where absent or `default` means firstmate's own harness except that PiG requires an explicit verified worker harness.
-`../../../bin/fm-harness.sh secondmate` resolves `config/secondmate-harness` -> `config/crew-harness` -> firstmate's own harness, subject to the same PiG worker boundary.
+`../../../bin/fm-harness.sh secondmate` resolves `config/secondmate-harness` -> `config/crew-harness` -> firstmate's own harness, subject to the same PiG worker boundary; [`docs/configuration.md`](../../../docs/configuration.md#choose-the-secondmate-harness) owns secondmate pin resolution, including per-mate overrides, and [`bin/fm-harness.sh`](../../../bin/fm-harness.sh) owns the resolver commands.
 `../../../bin/fm-spawn.sh` re-resolves on every spawn, and an explicit per-spawn argument wins for that spawn.
 A new adapter's verified marker and command name must land in `../../../bin/fm-harness.sh`.
 

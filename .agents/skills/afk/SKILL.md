@@ -2,7 +2,7 @@
 name: afk
 description: >-
   Enter the away posture when the captain invokes /afk, says they are going afk, `state/.afk-contract` or `state/.afk` exists, an incoming message starts with `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
-  It writes the durable away-posture record with the captain's away words verbatim as the whole mandate in the same turn as /afk, before any other work and without waiting for a further go, reads the words back in plain sentences after entry, announces hold-for-return only at entry, and keeps the one supervision session in the away posture. Pi uses its supervision branch for this posture; PiG is configured to route through the same branch, but wake delivery, branch processing, and lifecycle recovery remain unverified. The daemon still delivers batched digests elsewhere for now. On the first unmarked message, render the return brief from durable records before ordinary work resumes.
+  Load it at once in the /afk turn, before any other work. It writes the durable away-posture record with the captain's away words verbatim as the whole mandate in the same turn as /afk, reads the words back in plain sentences after entry, announces hold-for-return only at entry, and keeps the one supervision session in the away posture. Pi uses its supervision branch for this posture; PiG is configured to route through the same branch, but wake delivery, branch processing, and lifecycle recovery remain unverified. The daemon still delivers batched digests elsewhere for now. On the first unmarked message, render the return brief from durable records before ordinary work resumes.
 user-invocable: true
 metadata:
   internal: true
