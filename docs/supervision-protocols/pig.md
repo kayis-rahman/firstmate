@@ -9,7 +9,7 @@ announced an actionable close, the Node `fm-branch-supervision` extension
 answered `accepted=true`, the branch handled the wake off main, and reported
 `handled` on settlement. A decision-owned wake was declined and delivered to
 main exactly as before the bridge. The live evidence is recorded in
-[supervision verification](../verification/supervision.md#pig-primary-recheck-live-verification-2026-10-19).
+[supervision verification](../verification/supervision.md#primary-recheck-live-verification-2026-10-19).
 
 PiG requires explicit `-e` paths; configure the Pi supervision path when launching
 from the Firstmate repository:

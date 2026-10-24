@@ -3,7 +3,7 @@
 ![Multi-brain agent architecture: one agent, two branches of attention, events are commits](pi-supervision-branch-poster.svg)
 
 This document describes the supervision branch that runs beside the captain's chat on Pi and pi-signed primaries, and records the configured PiG integration.
-PiG's primary session-start, watcher, wake-to-main, turn-end guard, and direct TUI command integrations were verified on 2026-10-17, but its managed background branch remains unavailable because of upstream SDK limits; the Pi operational guarantees below are not claims about PiG. See [supervision verification](verification/supervision.md#pig-primary-integration-live-verification-2026-10-17).
+PiG's primary session-start, watcher, wake-to-main, turn-end guard, and direct TUI command integrations were verified on 2026-10-17, but its managed background branch remains unavailable because of upstream SDK limits; the Pi operational guarantees below are not claims about PiG. See [supervision verification](verification/supervision.md#live-verification-2026-10-17).
 Maintainers changing how wakes reach the branch, how its outcomes reach the captain, or how the attended and away postures differ need it.
 
 The poster is the visual of the idea.
