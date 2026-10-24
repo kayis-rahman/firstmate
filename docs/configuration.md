@@ -1015,8 +1015,9 @@ It has no primary or secondmate supervision protocol.
 The launch generates a private per-task config directory that mirrors the operator's provider/model configuration and enforces unattended permissions without modifying global configuration.
 The first-start license dialog requires an operator decision and is never accepted automatically.
 
-PiG (`pig`) has an implementation in supervised trial and is not yet a supported worker harness; the live isolated-spawn smoke is pending.
-The candidate adapter runs the external `pig` CLI in the task's isolated worktree and reuses Pi's extension, control, and busy-state wiring; [its adapter reference](../.agents/skills/harness-adapters/references/harness/pig.md) records the candidate contract and [PiG verification](verification/pig.md) records the capability probe and remaining live checks.
+PiG (`pig`) is a supported crewmate and scout worker harness, but not a primary or secondmate runtime.
+The adapter runs the external `pig` CLI in the task's isolated worktree and uses Pi-compatible extensions; its supervised smoke verified spawn, extension load, busy and turn-end events, and completion of a trivial task, while steering inbox delivery, interrupt, exit, and relaunch remain unverified.
+[Its adapter reference](../.agents/skills/harness-adapters/references/harness/pig.md) owns the operating contract and [PiG verification](verification/pig.md) records the evidence and limits.
 
 ### Verification and primary supervision
 
