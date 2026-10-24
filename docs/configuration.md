@@ -582,6 +582,17 @@ See [`trace-context.md`](trace-context.md) for carrier semantics, supported rout
 
 See [`fleet-ledger.md`](fleet-ledger.md) for the opt-in setup, record contract, and limits.
 
+## Go pilot (config/go-pilot)
+
+The optional local, gitignored `config/go-pilot` file enables the Go port of selected Firstmate tools through `bin/fm-go-pilot.sh`.
+It lists enabled tool names, one per line; blank lines and `#` comments are ignored.
+Absent or empty means every tool runs through its existing shell implementation, which stays the source of truth.
+
+When a tool is listed and its Go binary exists under `bin/go-pilot/`, the pilot runs the Go build.
+A missing binary falls back to the shell implementation, and a Go run that fails reports its own exit code without rerunning the shell version.
+
+See `bin/fm-go-pilot-build.sh` to compile the Go tools from `go/cmd` into the gitignored `bin/go-pilot/` directory.
+
 ## Firstmate role (config/firstmate-role)
 
 The optional local, gitignored `config/firstmate-role` declares this home's relationship to the firstmate repository itself.
