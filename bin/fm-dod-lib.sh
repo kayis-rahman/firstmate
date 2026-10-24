@@ -150,6 +150,11 @@ When this task works on Firstmate itself, the repository root `AGENTS.md` (also 
 Project instructions still govern the work wherever they do not conflict with this worker identity, including `CONTRIBUTING.md` and `firstmate-coding-guidelines` for Firstmate changes.
 EOF
   printf "If the \`firstmate-coding-guidelines\` skill name does not resolve in this session, read \`%s/.agents/skills/firstmate-coding-guidelines/SKILL.md\` instead.\n" "$root"
+  cat <<'EOF'
+Before writing code or doing architecture or software-engineering work, make a plan first.
+For code changes, follow the ponytail skill: make the smallest change that fully solves the task, without speculative abstractions or over-engineering.
+When the ponytail skill is available in your runtime, follow it; otherwise apply that same plan-first, smallest-sufficient-change discipline from this written rule.
+EOF
 }
 
 # Closed-set gate shared by every forge-aware renderer and bin/fm-brief.sh, so a

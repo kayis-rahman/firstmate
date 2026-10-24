@@ -317,14 +317,14 @@ Both choices are local to each Firstmate home and are not part of secondmate inh
 ## Supervision host (config/supervision-host)
 
 Two optional local, gitignored files control the supervision host for this home: `config/supervision-host-off` opts the home out, and `config/supervision-host` opts a home in and selects its engine.
-The host runs the supervision branch's contract on a headless engine session beside a non-Pi primary.
+The host runs the supervision branch's contract on a headless engine session beside a host-eligible primary that does not use the Pi-compatible in-process extension branch.
 [docs/supervision-host.md](supervision-host.md) defines its design, current scope, and verified engines.
 A Claude, Cursor, OpenCode, omp, Grok, or Codex primary can run the host.
 
 A present `config/supervision-host-off`, whatever it holds, opts the home out on every primary.
 Otherwise a Claude primary runs the host by default: with no `config/supervision-host` it runs exactly as with an empty one, at the Claude engine's default model.
 A Cursor, OpenCode, omp, Grok, or Codex primary runs the host only while `config/supervision-host` exists and the home is not opted out.
-A home that does not run the host behaves exactly as it does without it, and a Pi primary keeps its in-process supervision branch whatever either file says.
+A home that does not run the host behaves exactly as it does without it, and Pi, pi-signed, and PiG primaries keep their in-process supervision branch whatever either file says.
 `fm_supervision_host_enabled` in `bin/fm-supervision-engine-lib.sh` implements this gate for every reader.
 
 While the home runs the host, the primary's arm owner runs it in place of the watcher arm.
@@ -607,6 +607,17 @@ See [`trace-context.md`](trace-context.md) for carrier semantics, supported rout
 ## Fleet activity ledger (config/fleet-ledger)
 
 See [`fleet-ledger.md`](fleet-ledger.md) for the opt-in setup, record contract, and limits.
+
+## Go pilot (config/go-pilot)
+
+The optional local, gitignored `config/go-pilot` file enables the Go port of selected Firstmate tools through `bin/fm-go-pilot.sh`.
+It lists enabled tool names, one per line; blank lines and `#` comments are ignored.
+Absent or empty means every tool runs through its existing shell implementation, which stays the source of truth.
+
+When a tool is listed and its Go binary exists under `bin/go-pilot/`, the pilot runs the Go build.
+A missing binary falls back to the shell implementation, and a Go run that fails reports its own exit code without rerunning the shell version.
+
+See `bin/fm-go-pilot-build.sh` to compile the Go tools from `go/cmd` into the gitignored `bin/go-pilot/` directory.
 
 ## Firstmate role (config/firstmate-role)
 
@@ -984,6 +995,9 @@ A local standalone-clone home cannot receive a primary-local commit through that
 
 ## Harness support
 
+PiG has a verified primary adapter and a separate crewmate/scout worker adapter; it is not verified for secondmate launches.
+The worker adapter's smoke covers Firstmate spawn, extension loading, busy and turn-end events, and trivial-task completion, while steering inbox delivery, interrupt, exit, and relaunch remain unverified; primary support and its limits are recorded in the [PiG harness reference](../.agents/skills/harness-adapters/references/harness/pig.md).
+
 claude, codex, opencode, pi, pi-signed, grok, kimi, cursor, and omp are empirically verified for crewmate and secondmate launches; gemini is verified for crewmate and scout launches only, and [README requirements](../README.md#requirements) own the set supported for the primary session.
 
 ### Harness restrictions and credentials
@@ -1015,9 +1029,10 @@ It has no primary or secondmate supervision protocol.
 The launch generates a private per-task config directory that mirrors the operator's provider/model configuration and enforces unattended permissions without modifying global configuration.
 The first-start license dialog requires an operator decision and is never accepted automatically.
 
-PiG (`pig`) is a supported crewmate and scout worker harness, but not a primary or secondmate runtime.
-The adapter runs the external `pig` CLI in the task's isolated worktree and uses Pi-compatible extensions; its supervised smoke verified spawn, extension load, busy and turn-end events, and completion of a trivial task, while steering inbox delivery, interrupt, exit, and relaunch remain unverified.
-[Its adapter reference](../.agents/skills/harness-adapters/references/harness/pig.md) owns the operating contract and [PiG verification](verification/pig.md) records the evidence and limits.
+PiG (`pig`) is supported for primary sessions and crewmate/scout worker dispatch, but not secondmates.
+Workers use the external `pig` CLI in an isolated task worktree with Pi-compatible extensions; the worker smoke verified spawn, extension loading, busy and turn-end events, and completion of a trivial task only.
+Steering inbox delivery, interrupt, exit, and relaunch remain unverified.
+[The PiG harness reference](../.agents/skills/harness-adapters/references/harness/pig.md) owns both adapter contracts and [PiG verification](verification/pig.md) records the worker evidence and limits.
 
 ### Verification and primary supervision
 
@@ -1035,7 +1050,7 @@ Enabled primary-session turn-end guard integrations are tracked as repo-level ho
 Kimi remains outside the primary turn-end guard integrations; [`docs/turnend-guard.md`](turnend-guard.md#compatibility-limits) owns its separate captain-approved crew wake hook.
 Primary-session watcher wake protocols are rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/`](supervision-protocols/).
 
-Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Cursor's stop hook parks on the watcher, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, Pi and pi-signed use the same two tracked primary extensions, omp uses its own two tracked `.omp/extensions/` files with a blocking `session_stop` turn-end hook, and OpenCode uses its TUI plugin.
+Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Cursor's stop hook parks on the watcher, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, Pi, pi-signed, and PiG use the same two tracked primary extensions, omp uses its own two tracked `.omp/extensions/` files with a blocking `session_stop` turn-end hook, and OpenCode uses its TUI plugin.
 
 ### Choose the worker harness
 
@@ -1575,11 +1590,12 @@ Secondmate homes inherit this file from the primary, so a secondmate's own crewm
 ## Typed dispatch resolution (.env FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL)
 
 `bin/fm-dispatch-resolve.sh` resolves one concrete crewmate or scout profile from a written brief through typesafe.ai or OpenRouter, so the rule match that firstmate otherwise reasons out in its own context becomes one short tool turn.
-`FM_DISPATCH_PROVIDER` selects `typesafe` or `openrouter`, and `FM_DISPATCH_MODEL` selects the model.
+`FM_DISPATCH_PROVIDER` selects `typesafe` or `openrouter`, and `FM_DISPATCH_MODEL` selects a model when a provider is explicitly selected.
 Each setting comes from the calling environment or the home's gitignored `.env` through `bin/fm-env-lib.sh`; a non-empty environment value wins.
 OpenRouter requires both `FM_DISPATCH_PROVIDER=openrouter` and a non-empty `FM_DISPATCH_MODEL`; an omitted model is an actionable configuration error, and the presence of an OpenRouter key never selects the provider by itself.
-With no provider setting, the original typesafe.ai behavior is unchanged: `jev-latest` is used when `TYPESAFE_API_KEY` is available, `FM_DISPATCH_MODEL` is ignored, and the resolver is off otherwise.
-Explicit `FM_DISPATCH_PROVIDER=typesafe` also uses `jev-latest` when no model is set.
+With no provider setting, the original typesafe.ai behavior remains: `jev-latest` is used when `TYPESAFE_API_KEY` is available, `FM_DISPATCH_MODEL` is ignored, and the resolver is off otherwise.
+`TYPESAFE_BASE` and `TYPESAFE_MODEL` optionally override the typesafe endpoint and model from the environment or `.env`, with the environment taking priority; defaults are `https://api.typesafe.ai` and `jev-latest`.
+For an explicitly selected typesafe provider, `FM_DISPATCH_MODEL` takes precedence over `TYPESAFE_MODEL`.
 The selected provider's key must be non-empty in the environment or `.env`, with the environment taking precedence.
 
 Off means one `dispatch-resolve: off` line on stderr, nothing on stdout, exit 0, and no network call, so firstmate dispatches exactly as it does without the tool.
@@ -1688,7 +1704,7 @@ Firstmate passes its profile line unless it states a reason to override, such as
 - The resolver copies either environment-provided key into a non-exported private variable and unsets both `TYPESAFE_API_KEY` and `OPENROUTER_API_KEY` before launching child processes; bootstrap also protects the typesafe key.
 - The resolver sends only the selected key to `curl` as a header read from a file descriptor, never on argv, and never prints, logs, or writes either key.
 - The typesafe.ai endpoint is `https://api.typesafe.ai/v1/systemone`, and the OpenRouter endpoint is `https://openrouter.ai/api/alpha/decisions`.
-- The default confidence floor remains 0.6; request timeouts are 5 seconds for typesafe.ai and 10 seconds for OpenRouter.
+- Typesafe endpoint and model overrides are `TYPESAFE_BASE` and `TYPESAFE_MODEL`; the default confidence floor is 0.6, with request timeouts of 5 seconds for typesafe.ai and 10 seconds for OpenRouter.
 
 The recommended OpenRouter model is `typesafe/jev-1.13` because it is built for fast typed choices and supplies native per-option probabilities without generated text.
 The dated model catalog observation is recorded in [dispatch verification](verification/dispatch-resolve.md#the-api-the-tool-depends-on).
@@ -2145,6 +2161,17 @@ Dismiss sends `POST /connector/dismiss` with `{request_id}`, posts no text, and 
 
 Relay auth or config problems are reported once as `x-mode-error ...` until recovery.
 A failed durable offer claim is likewise reported once as `x-mode-error cannot record mention offer` and remains deduplicated through quiet no-pending polls until a later offer confirms an existing valid marker or claims a new one.
+
+**Alert on a quiet relay**
+
+`FMX_IDLE_ALERT_SECS` (default `0`, disabled) raises one local wake after that many continuous seconds of relay quiet.
+Idle is exactly what the poll can prove: a successful `GET /connector/poll` returning HTTP 204 with nothing pending.
+Auth and config errors keep their own one-shot `x-mode-error` diagnostics, and a failed or timed-out poll proves nothing, so neither advances nor resets an idle episode.
+An observed pending mention ends the episode, and the next quiet stretch starts a fresh one.
+- Each episode emits at most one `x-idle-alert <seconds>` line, deduplicated through a private `state/x-idle.json` record, so one quiet stretch never re-alerts on every poll cycle.
+- Values from 1 to 59 seconds clamp up to 60 so the alert cannot fire every cycle; an empty, non-numeric, overlong, or `0` value disables it, and a home that never sets it gains no behavior and no state file.
+- The line rides the watcher's normal wake path like every other poll wake; the relay itself is never asked to post anything, and no Discord message is sent.
+An explicit environment value wins over `.env`.
 
 **Post replies and follow-ups**
 
@@ -2876,14 +2903,17 @@ FMX_RELAY_URL=https://myfirstmate.io   # optional Relay endpoint override, mainl
 FMX_ENV_FILE=           # optional alternate .env file for direct Relay client invocations; bootstrap still checks $FM_HOME/.env
 FMX_DRY_RUN=            # truthy previews Relay replies and dismissals to state/x-outbox/ without posting or requiring a token
 FMX_X_REPLY_MAX_CHARS=280   # X reply per-message split budget; values below 50 clamp to 50
-FM_DISPATCH_PROVIDER=   # typesafe or openrouter; absent preserves the original typesafe key gate ("Typed dispatch resolution")
-FM_DISPATCH_MODEL=      # explicit model for the selected provider; required for openrouter
+FM_DISPATCH_PROVIDER=   # typesafe or openrouter; absent preserves the typesafe key gate
+FM_DISPATCH_MODEL=      # explicit model for a selected provider; required for openrouter
 TYPESAFE_API_KEY=       # typesafe dispatch key, from the environment or .env
+TYPESAFE_BASE=          # optional typesafe endpoint override; default https://api.typesafe.ai
+TYPESAFE_MODEL=         # optional typesafe model override; default jev-latest
 OPENROUTER_API_KEY=     # OpenRouter dispatch key, from the environment or .env
 FMX_DISCORD_REPLY_MAX_CHARS=1900   # Discord reply per-message split budget; values below 50 clamp to 50, values above 2000 reset to 1900
 FMX_X_THREAD_MAX=25     # maximum messages in one auto-split reply thread
 FMX_FOLLOWUP_MAX_AGE_SECS=604800   # local window for posting Relay completion follow-ups (7 days)
 FMX_FOLLOWUP_MAX_COUNT=3   # local cap on Relay completion follow-ups per linked mention
+FMX_IDLE_ALERT_SECS=0   # opt-in seconds of continuous relay quiet (HTTP 204 polls) that raise one deduplicated local idle wake; 0 disables, 1..59 clamp to 60
 FM_PF_RETRY_BACKOFF_SECS=900   # seconds before the next attempt after a retryable promised-public-reply delivery error
 FM_LOCK_STALE_AFTER=2   # grace seconds for missing or nonnumeric lock-owner PIDs (minimum 2s); dead numeric PIDs have no age grace
 FM_GUARD_GRACE=300      # beacon freshness threshold for guard verdicts, arm health checks, and the primary turn-end guard; see docs/turnend-guard.md for model-aware exceptions

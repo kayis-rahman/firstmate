@@ -7,10 +7,10 @@
 #
 # Opt-in gate: FM_DISPATCH_PROVIDER and FM_DISPATCH_MODEL select the provider
 #   and model from the environment or $FM_HOME/.env (environment wins). With no
-#   provider set, retain the original typesafe.ai/jev-latest key gate exactly.
-#   OpenRouter requires both its provider selection and a model. The selected
-#   key lives in a non-exported shell variable and reaches curl through fd 3,
-#   never argv, logs, or child environments.
+#   provider set, retain the original typesafe.ai key gate and its optional
+#   TYPESAFE_BASE and TYPESAFE_MODEL overrides. OpenRouter requires both its
+#   provider selection and a model. The selected key lives in a non-exported
+#   shell variable and reaches curl through fd 3, never argv, logs, or children.
 #
 # What it does when on with at least one rule: one POST with the project name and the brief's
 #   `## Captain's intent` and `## Firstmate spec` sections, tagged when it is a
@@ -62,8 +62,9 @@
 #   selected around.
 #
 # Environment:
-#   FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL, TYPESAFE_API_KEY, and
-#   OPENROUTER_API_KEY are read from the environment or $FM_HOME/.env.
+#   FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL, TYPESAFE_API_KEY, TYPESAFE_BASE,
+#   TYPESAFE_MODEL, and OPENROUTER_API_KEY are read from the environment or
+#   $FM_HOME/.env. Environment values win.
 #
 # Authority: this tool never replaces firstmate's judgment, quota-array-dispatch,
 #   the captain-approval gate, or fm-spawn.sh validation; it publishes one
@@ -94,8 +95,8 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-brief-heading-lib.sh"
 
 CONFIDENCE_FLOOR=0.6
-TS_MODEL=jev-latest
-TS_BASE=https://api.typesafe.ai
+TS_MODEL=${TYPESAFE_MODEL:-}
+TS_BASE=${TYPESAFE_BASE:-}
 TS_TIMEOUT=5
 OR_BASE=https://openrouter.ai/api
 OR_TIMEOUT=10
@@ -130,6 +131,11 @@ DISPATCH_PROVIDER=${FM_DISPATCH_PROVIDER:-}
 [ -n "$DISPATCH_PROVIDER" ] || DISPATCH_PROVIDER=$(fmx_env_get FM_DISPATCH_PROVIDER "$FM_HOME/.env")
 DISPATCH_MODEL=${FM_DISPATCH_MODEL:-}
 [ -n "$DISPATCH_MODEL" ] || DISPATCH_MODEL=$(fmx_env_get FM_DISPATCH_MODEL "$FM_HOME/.env")
+[ -n "$TS_BASE" ] || TS_BASE=$(fmx_env_get TYPESAFE_BASE "$FM_HOME/.env")
+[ -n "$TS_MODEL" ] || TS_MODEL=$(fmx_env_get TYPESAFE_MODEL "$FM_HOME/.env")
+TS_BASE=${TS_BASE:-https://api.typesafe.ai}
+TS_BASE=${TS_BASE%/}
+TS_MODEL=${TS_MODEL:-jev-latest}
 case "$DISPATCH_PROVIDER" in
   '')
     DISPATCH_PROVIDER=typesafe

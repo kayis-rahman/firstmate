@@ -2991,6 +2991,34 @@ test_no_run_idle_pane_uses_log() {
   pass "no run + idle pane uses the status-log verb"
 }
 
+test_crew_state_reports_unread_steer_age() {
+  reset_fakes
+  local d rec; d=$(new_case unread-steer)
+  make_repo_on_branch "$d/wt" fm/feat-unread
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-unread.meta" "window=fm:fm-feat-unread" "worktree=$d/wt" "kind=ship" "harness=claude"
+  printf 'working: compiling\n' > "$d/state/feat-unread.status"
+  FM_FAKE_AXI_STATUS=""
+  FM_FAKE_BUSY=1
+  local gen; gen=$("$ROOT/bin/fm-busy-event.sh" arm "$d/state" feat-unread)
+  "$ROOT/bin/fm-busy-event.sh" apply "$d/state" feat-unread busy --gen "$gen" \
+    --source claude-hook --event user-prompt-submit
+  rec=$(FM_TASK_INBOX_ROOT_OVERRIDE="$ROOT/bin/fm-task-inbox-lib.sh" bash -c '
+    . "$FM_TASK_INBOX_ROOT_OVERRIDE"
+    fm_task_inbox_write "$1" feat-unread "please adjust API"
+  ' _ "$d/state")
+  perl -e 'utime(time() - 600, time() - 600, $ARGV[0]) or exit 1' "$rec"
+  local out; out=$(run_crew_state "$d" feat-unread)
+  local age; age=$(printf '%s\n' "$out" | sed -n 's/.*steer: unread age=\([0-9][0-9]*\)s.*/\1/p')
+  [ -n "$age" ] && [ "$age" -ge 590 ] \
+    || fail "crew-state did not expose the unread steer's 10-minute age: $out"
+  mkdir -p "$d/state/feat-unread.inbox/handled"
+  mv "$rec" "$d/state/feat-unread.inbox/handled/"
+  out=$(run_crew_state "$d" feat-unread)
+  assert_contains "$out" 'steer: acked' 'handled/ is the read acknowledgement'
+  pass "crew-state reports unread steering age and observes the handled acknowledgement"
+}
+
 test_no_run_idle_pane_uses_keyed_log() {
   reset_fakes
   local d; d=$(new_case keyed-idle)
@@ -5926,6 +5954,7 @@ test_no_run_herdr_husk_dead_still_reads_gone
 test_no_run_herdr_idle_agent_status_outranked_by_record
 test_no_run_herdr_idle_agent_status_and_idle_record_stays_idle
 test_no_run_idle_pane_uses_log
+test_crew_state_reports_unread_steer_age
 test_no_run_idle_pane_uses_keyed_log
 test_no_run_idle_pane_paused
 test_no_run_idle_pane_custom_paused_verb

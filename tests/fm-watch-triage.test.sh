@@ -4115,6 +4115,34 @@ gone_endpoint_env() {  # <dead|missing> -> assignments for the round below
   esac
 }
 
+test_missing_herdr_endpoint_surfaces_working_task_once() {
+  local dir state fakebin out pid
+  dir=$(make_case vanished-herdr-endpoint)
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *'status --json') printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true}}\n' ;;
+  *'pane get '*) printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *'pane read '*|*'agent get '*) printf '{"error":{"code":"pane_not_found"}}\n' >&2; exit 1 ;;
+  *) printf 'unsupported fake herdr command: %s\n' "$*" >&2; exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  printf 'window=default:w1C:p2\nkind=ship\nbackend=herdr\nharness=pi\n' > "$state/vanished.meta"
+  printf 'working: compiling\n' > "$state/vanished.status"
+  prime_status_seen "$state" "$state/vanished.status"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" \
+    FM_CONFIG_OVERRIDE="$dir/config" FM_POLL=1 FM_SIGNAL_GRACE=0 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    "$WATCH" > "$out" 2>&1 &
+  pid=$!
+  if ! wait_for_exit "$pid" 150; then reap "$pid"; fail "a missing Herdr endpoint on a working task did not wake firstmate: $(cat "$out")"; fi
+  [ "$(grep -c 'endpoint disappeared' "$out" || true)" -eq 1 ] \
+    || fail "the wake did not name the vanished endpoint exactly once: $(cat "$out")"
+  pass "a vanished Herdr endpoint wakes firstmate despite a working-only status tail"
+}
+
 test_gone_endpoint_reports_once_instead_of_escalating_forever() {
   local dir state fakebin out capture window key verdict round
   local failed='state: failed · source: run-step · run failed'
@@ -7385,6 +7413,7 @@ test_stale_terminal_status_overridden_by_active_run
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold
 test_wedge_escalation_resets_when_pane_becomes_active
+test_missing_herdr_endpoint_surfaces_working_task_once
 test_gone_endpoint_reports_once_instead_of_escalating_forever
 test_live_and_unproven_endpoints_still_wedge_escalate
 test_wedge_guards_absent_config_keeps_the_unchanged_ladder

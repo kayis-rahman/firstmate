@@ -594,6 +594,17 @@ test_backend_key_capability_matrix() {
   pass "fm-control-lib: the backend key matrix matches each adapter's real send-key surface"
 }
 
+test_harness_interrupt_transport() {
+  [ "$(fm_control_interrupt_transport pig)" = key ] \
+    || fail "PiG's verified interrupt uses the key transport"
+  [ "$(fm_control_interrupt_transport polytoken)" = rest ] \
+    || fail "Polytoken's verified interrupt uses the REST transport"
+  if fm_control_interrupt_transport unknown >/dev/null 2>&1; then
+    fail "an unknown harness must not be assigned an interrupt transport"
+  fi
+  pass "fm-control-lib: PiG and Polytoken retain their verified interrupt transports"
+}
+
 # A verified adapter is not automatically verified for every task kind, and the
 # check has to sit on the pre-stop side of a relaunch: muse has no primary
 # supervision protocol, so bin/fm-spawn.sh refuses it for a secondmate, and
@@ -1301,6 +1312,7 @@ test_harness_family_resolution
 test_relaunch_resume_flag_is_per_adapter_and_reference_owner
 test_prefixed_recorded_harness_reaches_each_control_verb
 test_backend_key_capability_matrix
+test_harness_interrupt_transport
 test_harness_kind_capability
 test_orca_refuses_an_escape_harness_interrupt
 test_unverified_state_backends_refuse_stop_verbs

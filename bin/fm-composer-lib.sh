@@ -459,7 +459,7 @@ fm_busy_lines_match() {  # [harness]
       commandcode) regex=$FM_DELIVERY_COMMANDCODE_BUSY_REGEX_DEFAULT ;;
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
-      pi|pi-signed|pig) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
+      pig|pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       omp) regex=$FM_DELIVERY_OMP_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT ;;
       agy) regex=$FM_DELIVERY_AGY_BUSY_REGEX_DEFAULT ;;
@@ -2218,7 +2218,7 @@ _fm_composer_classify_bare_pi_overlap() {  # <screen> <styled> <has-identity> <i
     return 0
   fi
   agent=${identity%%$'\t'*}
-  if [ "$agent" = pi ]; then
+  if [ "$agent" = pi ] || [ "$agent" = pig ]; then
     _fm_composer_pi_verdict "$screen" "$styled" "$has_identity" "$identity"
   else
     _fm_composer_classify_bare_row "$screen" "$styled" "$row"
@@ -2257,7 +2257,7 @@ _fm_composer_pi_verdict() {  # <screen> <styled> <has_identity> <identity>
   # polytoken keeps the strict unknown - its composer really is empty
   # mid-turn (Enter queues, verified live), but the unknown keeps the
   # busy-queue conversion honest through the submit cores.
-  if { [ "$agent" != pi ] && [ "$agent" != polytoken ]; } \
+  if { [ "$agent" != pi ] && [ "$agent" != pig ] && [ "$agent" != polytoken ]; } \
     || [ "$FM_COMPOSER_SCAN_PI_PAIR_VALID" != 1 ]; then
     printf 'unknown'
     return 0

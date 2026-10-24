@@ -64,7 +64,7 @@ fm_control_verb_allowed() {  # <verb>
 # section 4's verified-adapter list; an unverified adapter is refused rather
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harnesses() {
-  printf '%s\n' claude codex opencode pi pi-signed grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken pig
+  printf '%s\n' claude codex opencode pi pi-signed pig grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken
 }
 
 fm_control_harness_supported() {  # <harness>
@@ -88,12 +88,12 @@ fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
+    pig) printf 'pig' ;;
     omp) printf 'omp' ;;
     agy) printf 'agy' ;;
     devin) printf 'devin' ;;
     commandcode) printf 'commandcode' ;;
     polytoken) printf 'polytoken' ;;
-    pig) printf 'pig' ;;
     claude*) printf 'claude' ;;
     codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
@@ -312,10 +312,8 @@ fm_control_exit_command() {  # <harness> [opencode-major]
 # Prints the flag name only; the caller quotes and appends the reference, since
 # shell quoting belongs to the owner of the launch line (bin/fm-spawn.sh).
 fm_control_relaunch_resume_flag() {  # <harness> <registered-agent>
-  case "${1-}" in
-    pi|pi-signed)
-      [ "${2-}" = pi ] && printf -- '--session'
-      ;;
+  case "${1-}:${2-}" in
+    pi:pi|pi-signed:pi|pig:pig) printf -- '--session' ;;
   esac
   return 0
 }

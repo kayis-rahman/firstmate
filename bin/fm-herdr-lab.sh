@@ -25,8 +25,10 @@
 # delete is available only through teardown.
 # Both paths perform a fresh refuse-default check immediately before each
 # destructive call.
-# Provision records the running default session as a fleet-state tripwire and
-# teardown requires that record to be identical afterward.
+# Prepare writes the live default session's fleet state to an ownership tripwire.
+# It is safe to prepare before provision; repeated prepare verifies, rather than
+# overwrites, the matching tripwire, and provisioning checks that same record.
+# Teardown requires the default-session record to be identical afterward.
 # The viewer command attaches or detaches one real foreground Herdr client on
 # an owned lab session over a fixed 40-row by 120-column pty;
 # bin/fm-herdr-lab-viewer.py owns the pty mechanics.
@@ -114,10 +116,10 @@ fm_herdr_lab_prepare() { # <session>
   state_dir=$(fm_herdr_lab_state_dir)
   tripwire=$(fm_herdr_lab_tripwire_path "$name")
   mkdir -p "$state_dir" || return 1
-  [ ! -e "$tripwire" ] || {
-    fm_herdr_lab_error "tripwire already exists for '$name'; refusing ambiguous ownership"
-    return 1
-  }
+  if [ -e "$tripwire" ]; then
+    fm_herdr_lab_check_tripwire "$name" || return 1
+    return 0
+  fi
   fm_herdr_lab_fleet_state "$name" > "$tripwire" || {
     rm -f "$tripwire"
     return 1

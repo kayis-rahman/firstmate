@@ -870,6 +870,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-project-capacity-lib.sh
 . "$SCRIPT_DIR/fm-project-capacity-lib.sh"
+# shellcheck source=bin/fm-slot-claim-lib.sh
+. "$SCRIPT_DIR/fm-slot-claim-lib.sh"
 # shellcheck source=bin/fm-worker-account-lib.sh
 . "$SCRIPT_DIR/fm-worker-account-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
@@ -1336,6 +1338,10 @@ spawn_remote_secondmate() {
     else
       sync_rc=$?
       echo "warning: remote secondmate $id sync skipped before launch: $(remote_sync_failure_reason "$sync_rc" "$sync_out")" >&2
+      # Named cause, not just a blocker: if the transport failed because a LAN
+      # host is unreachable in the macOS Local Network privacy pattern, say so
+      # (bin/fm-env-cause.sh owns the rule and its hedge).
+      printf '%s\n' "$sync_out" | "$SCRIPT_DIR/fm-env-cause.sh" classify >&2 || true
     fi
   else
     echo "warning: remote secondmate $id sync skipped before launch: primary default-branch commit cannot be resolved" >&2
@@ -1393,6 +1399,11 @@ spawn_remote_secondmate() {
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
     [ -z "$out" ] || printf '%s\n' "$out" >&2
+    # Named cause, not just a blocker: classify the captured launch failure so a
+    # LAN host blocked by macOS Local Network privacy is named with its setting
+    # instead of reading as an unexplained transport error
+    # (bin/fm-env-cause.sh owns the rule and its hedge).
+    [ -z "$out" ] || printf '%s\n' "$out" | "$SCRIPT_DIR/fm-env-cause.sh" classify >&2 || true
     if [ "$rc" -eq 255 ]; then
       echo "error: remote secondmate $id is unavailable or launch completion is unknown; preserved route $host:$home" >&2
     fi
@@ -2144,6 +2155,7 @@ PROJ=
 ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
+RAW_SHELL_C=0
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2313,7 +2325,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-  '' | claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken | pig)
+  '' | claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken)
     ARG3=${POS[1]:-}
     ;;
   *' '*)
@@ -2433,6 +2445,33 @@ agy_model_validate() {  # <agy-bin> <model>
   return 1
 }
 
+# PiG's Pi-compatible `--list-models` emits `<provider> <model>` rows, with a
+# header. Only a reachable listing that names the provider can prove a requested
+# model unsupported; an unknown provider or unavailable listing may be supplied
+# by an extension and therefore remains unvalidated rather than being guessed.
+pig_model_validate() { # <pig-bin> <provider/model>
+  local bin=$1 model=$2 provider model_id listing rc=0 bound=${FM_PIG_MODELS_TIMEOUT:-15}
+  case "$bound" in ''|*[!0-9]*|0*) bound=15 ;; esac
+  [ -n "$model" ] && [ "$model" != default ] || return 0
+  case "$model" in */*) ;; *) return 0 ;; esac
+  provider=${model%%/*}
+  model_id=${model#*/}
+  listing=$(fm_run_timed "$bound" "$bin" --list-models "$provider" 2>/dev/null < /dev/null) || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "$listing" ]; then
+    echo "notice: PiG model listing is unreachable (exit $rc); launching with --model '$model' unvalidated" >&2
+    return 0
+  fi
+  if ! printf '%s\n' "$listing" | awk -v p="$provider" '$1 == p { found=1 } END { exit !found }'; then
+    echo "notice: PiG provider '$provider' is not in 'pig --list-models' (extension-registered providers may be absent); launching '$model' unvalidated" >&2
+    return 0
+  fi
+  if printf '%s\n' "$listing" | awk -v p="$provider" -v m="$model_id" '$1 == p && $2 == m { found=1 } END { exit !found }'; then
+    return 0
+  fi
+  echo "error: PiG model '$model' is not listed by 'pig --list-models' although provider '$provider' is; choose a listed <provider>/<id> or omit --model" >&2
+  return 1
+}
+
 # The verified launch command per adapter. The knowledge half of each adapter
 # (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
 launch_template() {
@@ -2537,6 +2576,9 @@ launch_template() {
     fi
     ;;
   opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}__EFFORTFLAG__}'\'' __OPENCODEBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  pig)
+    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u FM_PIG_HARNESS -u FM_OMP_HARNESS -u GROK_AGENT -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u AI_AGENT FM_PI_HARNESS=pig __PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__ __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+    ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
@@ -2547,9 +2589,6 @@ launch_template() {
     else
       printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
     fi
-    ;;
-  pig)
-    printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u AI_AGENT FM_PI_HARNESS=pig __PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__ __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
     ;;
   # omp (Oh My Pi), a Pi fork. Same one-positional-brief, --model, --thinking,
   # and -e shape as Pi, verified on omp 18.1.11. The differences are all at
@@ -2756,12 +2795,27 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
+  raw_skip_next=0
   for word in $LAUNCH; do
-    case "$word" in [A-Za-z_]*=*) continue ;; *)
-      HARNESS=$(basename "$word")
-      break
-      ;;
+    if [ "$raw_skip_next" -eq 1 ]; then
+      raw_skip_next=0
+      continue
+    fi
+    case "$word" in
+      [A-Za-z_]*=*) continue ;;
+      -u|--unset|-C|--chdir) raw_skip_next=1; continue ;;
+      -S|--split-string) continue ;;
     esac
+    word=${word#\"}
+    word=${word#\'}
+    word=${word%\"}
+    word=${word%\'}
+    case "$(basename -- "$word")" in
+      env|command|nohup|--) continue ;;
+      -*) continue ;;
+    esac
+    HARNESS=$(basename -- "$word")
+    break
   done
   ;;
 '')
@@ -2771,32 +2825,71 @@ case "$ARG3" in
   # active. Resolving here on every spawn is what makes the split DURABLE - a
   # respawn (recovery, /updatefirstmate, restart) re-resolves, so
   # config/secondmate-harness keeps governing secondmate launches across restarts.
-  # The launch_template lookup below is the unverified-adapter guard for both
-  # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID")
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID") || exit 1
     harness_src='config/secondmate-harness (falling back to config/crew-harness)'
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
       echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
       exit 1
     fi
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew) || exit 1
     harness_src='config/crew-harness'
   fi
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
   ;;
-*)
-  HARNESS=$ARG3
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
-  ;;
+*) HARNESS=$ARG3 ;;
 esac
+
+raw_shell_has_c_flag() {  # <shell-option>
+  case "$1" in
+    --*) return 1 ;;
+    -c|-?*c*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$HARNESS" in
+    bash|sh|dash|zsh|ksh)
+      shell_seen=0
+      for word in $LAUNCH; do
+        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
+          RAW_SHELL_C=1
+          break
+        fi
+        case "$(basename -- "$word")" in
+          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
+        esac
+      done
+      ;;
+  esac
+fi
+
+if [ "$RAW_LAUNCH" -eq 1 ] && [ "$HARNESS" = pig ]; then
+  echo "error: raw PiG launch commands are not verified; select the PiG adapter to use its worker lifecycle extension" >&2
+  exit 1
+fi
+
+case "$KIND:$HARNESS:$RAW_SHELL_C" in
+  ship:*:1|scout:*:1|secondmate:*:1)
+    echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$RAW_LAUNCH" -eq 0 ]; then
+  if [ -z "$ARG3" ]; then
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  else
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  fi
+fi
 
 # muse, gemini, agy, devin, commandcode, and polytoken are verified as CREWMATE/SCOUT adapters only. A secondmate is
 # a firstmate instance, so it needs a primary supervision protocol.
@@ -2846,14 +2939,8 @@ if [ "$KIND" != secondmate ]; then
 fi
 
 case "$HARNESS" in
-devin)
-  DEVIN_BIN=$(command -v devin) || {
-    echo "error: devin executable not found on PATH" >&2
-    exit 1
-  }
-  ;;
 pig)
-  PI_BIN=$(command -v pig) || {
+  PI_BIN=$(resolve_pi_executable pig) || {
     echo "error: pig executable not found on PATH; install PiG or select a different verified harness" >&2
     exit 1
   }
@@ -2866,6 +2953,15 @@ pig)
   LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
   LAUNCH=${LAUNCH//__PIAPPROVE__/$PI_APPROVE}
   LAUNCH=${LAUNCH//__PIEXCLUDE__/$PI_EXCLUDE}
+  if [ -n "$MODEL" ] && [ "$MODEL" != default ]; then
+    pig_model_validate "$PI_BIN" "$MODEL" || exit 1
+  fi
+  ;;
+devin)
+  DEVIN_BIN=$(command -v devin) || {
+    echo "error: devin executable not found on PATH" >&2
+    exit 1
+  }
   ;;
 commandcode)
   COMMANDCODE_BIN=$(command -v commandcode) || {
@@ -2974,6 +3070,15 @@ fi
 if [ "$HARNESS" = agy ]; then
   agy_model_validate "$AGY_BIN" "$MODEL" || exit 1
 fi
+# free-model-axi model health preflight (bin/fm-model-preflight.sh header owns
+# the verdict contract, including the tolerate cases): a model whose recorded
+# probe is unhealthy refuses the launch here - before any endpoint, worktree,
+# or record exists - printing the exact probe evidence and the healthiest
+# alternative, while an absent advisor, an unknown model, and a stale-snapshot
+# warning all proceed. The model itself is never changed by this gate; only the
+# captain chooses models, so a refusal goes back to the caller to re-dispatch or
+# escalate.
+"$SCRIPT_DIR/fm-model-preflight.sh" "$MODEL" || exit 1
 # polytoken's model validation composes firstmate's model and effort axes into
 # the launch model reference (bin/fm-polytoken-lib.sh owns the reasoning): the
 # base model must be concrete and listed, and effort maps to the nearest
@@ -3242,7 +3347,10 @@ effort_flag_for_harness() {
     esac
     ;;
   pi | pi-signed | pig)
-    # PiG 0.5.1+ / Pi 0.80.6 accept the full shared effort vocabulary, including max, through
+    # PiG worker model and reasoning options were CLI-probed; the isolated smoke
+    # verified spawn, extension load, busy and turn-end events, and a trivial task.
+    # Worker steering, interrupt, exit, and relaunch remain unverified.
+    # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
     # its --thinking flag.
     case "$effort" in
     ultra)
@@ -5365,6 +5473,30 @@ fi
 # adoption. This also updates Herdr's restored pane shell before any harness is
 # started, so a later host restart inherits the task worktree rather than the
 # tab's original project directory.
+# One live copy, two task records (bin/fm-slot-claim-lib.sh owns the scan): a
+# stale or duplicated record already naming this copy means cleanup would
+# refuse for either task later, exactly as bin/fm-teardown.sh refuses it today.
+# Spawn cannot know WHICH record is stale (slot reuse legitimately hands a copy
+# on while an earlier record lingers - data/learnings.md 2026-10-07 - and only
+# the operator can reconcile that), so this check REPORTS the pair plainly at
+# dispatch instead of letting it surface first as a teardown refusal, and edits
+# no record: reconciliation is bin/fm-crew-state.sh's operator action.
+if [ "$KIND" != secondmate ] && [ -n "${WT:-}" ]; then
+  claim_rc=0
+  fm_slot_claim_rows "$STATE" "$STATE/$ID.meta" "$WT" || claim_rc=$?
+  if [ "$claim_rc" -eq 2 ]; then
+    echo "warning: cannot check whether $WT is already claimed by another task record ($FM_SLOT_CLAIM_ERROR); if two records end up on one working copy, cleanup will refuse for both" >&2
+  elif [ "$claim_rc" -eq 0 ]; then
+    echo "warning: $WT is already claimed by another task record:" >&2
+    while IFS=$'\t' read -r claim_id claim_field claim_state; do
+      [ -n "$claim_id" ] || continue
+      echo "warning:   task $claim_id records it in $claim_field (record in $claim_state)" >&2
+    done <<EOF
+$FM_SLOT_CLAIM_ROWS
+EOF
+    echo "warning: after this spawn, two task records name one working copy; cleanup will refuse for either until one record is reconciled (bin/fm-crew-state.sh); this check edited no record" >&2
+  fi
+fi
 spawn_enter_recorded_worktree
 spawn_assert_agent_worktree
 
@@ -5871,10 +6003,9 @@ EOF
     fi
     exclude_path '.opencode/plugins/fm-busy-state.js'
     ;;
-  pi | pi-signed | pig)
-    # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
-    # loaded from inside the project (verified live), but an explicit -e path
-    # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
+  pig | pi | pi-signed)
+    # Written OUTSIDE the worktree so the Pi-compatible -e extension path avoids
+    # project trust prompts and never trusts project-local extension code.
     cat >"$STATE/$ID.pi-ext.ts" <<EOF
 // Firstmate semantic busy-state events + turn-end notification; written by
 // fm-spawn under the contract owned by bin/fm-busy-lib.sh.
@@ -6434,6 +6565,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RESUME_ARGS=$(relaunch_resume_args "$HARNESS" "$BACKEND" "$T") || RESUME_ARGS=
 fi
 LAUNCH=${LAUNCH//__PIRESUME__/$RESUME_ARGS}
+LAUNCH=${LAUNCH//__PIGRESUME__/$RESUME_ARGS}
 LAUNCH=${LAUNCH//__CLAUDEPERMFLAG__/$CLAUDE_PERM_FLAG}
 case "$LAUNCH" in
 *__CLAUDESETTINGS__*)

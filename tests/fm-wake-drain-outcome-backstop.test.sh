@@ -64,6 +64,30 @@ test_uncovered_keyless_captain_events_surface_on_the_next_main_drain() {
   pass "a newest keyless done, blocked, or needs-decision event with no newer branch outcome surfaces on the next main drain"
 }
 
+test_routine_outcome_cannot_ack_and_later_done_is_recovered() {
+  local dir state out seq refusal
+  dir=$(make_case routine-before-done)
+  state="$dir/state"
+  out="$dir/drain.out"
+  printf 'working: task still in progress\n' > "$state/general-mate.status"
+  seq=$(FM_STATE_OVERRIDE="$state" "$OUTCOMES" append --task general-mate \
+    --verdict routine --summary 'mate resumed its child work') \
+    || fail "could not record the routine outcome"
+  FM_STATE_OVERRIDE="$state" "$OUTCOMES" mark-read --through "$seq" \
+    || fail "could not mark the routine row presented"
+  refusal=$(FM_STATE_OVERRIDE="$state" "$OUTCOMES" mark-processed --through "$seq" 2>&1) \
+    && fail "a routine row was accepted as a captain outcome"
+  assert_contains "$refusal" 'not an unprocessed captain outcome' \
+    'the routine row must remain outside captain processing'
+  printf 'done: child work completed after the routine outcome\n' >> "$state/general-mate.status"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" \
+    || fail "main drain failed after a later task completion"
+  grep -F 'general-mate done: child work completed after the routine outcome' "$out" >/dev/null \
+    || fail "the later completion was lost behind the routine outcome: $(cat "$out")"
+  pass "a routine outcome is correctly unprocessable, and the later done event is recovered by the status backstop"
+}
+
 test_newer_task_outcome_and_routine_latest_events_stay_silent() {
   local dir state out old
   dir=$(make_case covered-and-routine)
@@ -514,6 +538,7 @@ test_backstop_output_is_bounded() {
 }
 
 test_uncovered_keyless_captain_events_surface_on_the_next_main_drain
+test_routine_outcome_cannot_ack_and_later_done_is_recovered
 test_newer_task_outcome_and_routine_latest_events_stay_silent
 test_older_or_other_task_outcome_cannot_hide_a_new_captain_event
 test_branch_annotation_cannot_consume_the_main_resurfacing_backstop

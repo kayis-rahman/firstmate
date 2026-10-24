@@ -42,6 +42,16 @@ The mate home's own status scans treat that remote channel the same way: `status
 The remote reply adapter already mirrors every channel line into the parent home, so folding the channel again here would only spin spurious wakes and a phantom `parent-replies` task, while a `parent-replies.status` in a main home or in a local mate is an ordinary task log that keeps folding and waking.
 A missed-reply escalation includes the complete first sighting path and line number in readable shell-escaped form.
 
+## Discord front-desk handoffs
+
+The answering procedure for a designated Discord inbox mate is owned by the [`discord-front-desk` skill](../.agents/skills/discord-front-desk/SKILL.md).
+Only the primary may delegate a Discord message, and only while busy after the message has remained unhandled for more than two minutes; its trusted steer must begin with `Front desk request`.
+`bin/fm-discord-front-desk-gate.sh` rejects an absent or misplaced prefix, while the primary remains responsible for satisfying the busy and elapsed-time conditions before sending the steer.
+The mate handles only the delegated message, answers factual questions from authorized fleet records, and forwards new work, merge requests, and approval requests to the primary through `fm_parent_channel_report`.
+That helper resolves the existing local or remote parent route rather than creating a second inbox, and a Discord message id is not a parent-reply correlation token.
+The mate reports what it answered through the same parent channel and does not claim a message handled until the handoff, threaded reply, and parent receipt have confirmed success.
+The external poll and reply commands remain black boxes; the skill defines the missed-message guarantees they must provide without reading their source or configuration.
+
 ## What is deliberately not built
 
 - No mirror of the mate's chat: chat can mix outcomes with other conversation, so choosing which sentence is an outcome would itself be model behavior, and every harness exposes turn text differently.
@@ -57,7 +67,7 @@ A missed-reply escalation includes the complete first sighting path and line num
 `tests/fm-teardown.test.sh` covers teardown delivering a child's final line and refusing when the channel cannot be written.
 It also covers the registration-time ready line and its withholding until checks are green under `config/ready-after-green`.
 `tests/fm-brief.test.sh` pins the charter's channel rule.
-`tests/fm-pending-reply.test.sh` covers helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, and the rule that arbitrary mate-home sightings never acknowledge a reply.
+`tests/fm-pending-reply.test.sh` covers helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, the rule that arbitrary mate-home sightings never acknowledge a reply, the trusted first-line front-desk delegation gate, and idempotent handoffs through local and remote parent routes.
 `tests/fm-parent-channel-scan-exclusion.test.sh` covers the home-shape-aware scan exclusion against real remote, main-home, and local-mate fixtures: the watcher signal scan, both heartbeat backstops, the fleet-wide folds, and the real `fm-wake-drain.sh` end to end.
 
 ## Live verification

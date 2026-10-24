@@ -9,14 +9,19 @@
 # no-op keeps the watcher behaving exactly as today until a user opts in.
 #
 # Behavior when X mode is on:
-#   HTTP 204 / empty / missing text              -> print nothing, exit 0 (no wake)
+#   HTTP 204 / empty / missing text              -> print nothing, exit 0 (no wake);
+#       with FMX_IDLE_ALERT_SECS enabled, a 204 also advances the idle episode
+#       and prints one "x-idle-alert <seconds>" line per episode once the
+#       continuous quiet reaches that threshold (state/x-idle.json dedupes it)
 #   auth/config errors                           -> print one rate-limited diagnostic
 #   a newly offered mention with non-empty text -> stash the full object to
 #       state/x-inbox/<request_id>.json, record the durable per-request reply
 #       context to state/x-context/<request_id>.json (best-effort), atomically
 #       claim state/x-context/<request_id>.offered.json, and print one compact
 #       line "x-mention <request_id>" (which becomes the watcher wake payload)
-#   an already offered request_id                -> print nothing, exit 0
+#   an already offered request_id                -> print nothing, exit 0; an
+#       observed pending mention (HTTP 200) ends any idle episode even when the
+#       offer marker keeps the mention itself silent
 #   a new set of unreconciled public-followup terminal results -> print one
 #       "public-followup ..." line BEFORE the relay call, so a promised final
 #       reply is surfaced through this same wake path
@@ -143,8 +148,8 @@ code=$(curl -m 5 -s -o "$BODY_FILE" -w '%{http_code}' \
 
 # 204 (nothing pending) is the common path; only 200 can carry a mention.
 case "$code" in
-  200) ;;
-  204) clear_error; exit 0 ;;
+  200) fmx_idle_activity "$STATE" ;;
+  204) clear_error; fmx_idle_tick "$STATE"; exit 0 ;;
   400|401|403|404) emit_error_once "relay returned HTTP $code"; exit 0 ;;
   *) exit 0 ;;
 esac

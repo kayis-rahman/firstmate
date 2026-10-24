@@ -59,9 +59,12 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 ### Requirements
 
-- A verified primary agent harness: Claude Code, Grok, Pi, `pi-signed`, Oh My Pi (`omp`), Codex, OpenCode, or Cursor Agent CLI.
+- A verified primary agent harness: Claude Code, Grok, Pi, `pi-signed`, Oh My Pi (`omp`), PiG, Codex, OpenCode, or Cursor Agent CLI.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
 - The CLI and dependencies for your selected runtime backend; tmux is the reference default.
+
+PiG has a verified primary integration and a separate verified crewmate/scout worker adapter; secondmate use is unsupported.
+The worker smoke verified Firstmate spawn, extension loading, busy and turn-end events, and trivial-task completion; worker steering inbox delivery, interrupt, exit, and relaunch remain unverified.
 
 The first mate detects supported missing or outdated tools and offers their install or upgrade after you approve.
 Backend-specific setup is linked in [Documentation](#documentation).
@@ -77,6 +80,9 @@ Oh My Pi (`omp`), a Pi fork, is verified as a primary with the same extension-ow
 Codex and OpenCode are also verified and supported as primary harnesses; Codex uses bounded foreground checkpoints, and OpenCode uses a TUI plugin, so both carry more harness-specific supervision tradeoffs than the three co-primaries.
 Cursor Agent CLI is verified as a primary too, using a tracked project-scope `.cursor/hooks.json` whose `stop` hook parks on the watcher between turns, closest in shape to Claude Code's.
 Launch it with `--trust`, or none of its project hooks load; it also has no turn-end hook in headless `cursor-agent -p`, so run the primary session interactively.
+
+PiG is also available for crewmate and scout dispatch through its separate worker adapter, but not for secondmates.
+The primary adapter's Go command callbacks, skill handoffs, watcher and turn-end behavior, and managed supervision-branch bridge have live evidence; consult the PiG harness reference for remaining primary and worker lifecycle limits.
 
 ### Install and launch
 
@@ -117,6 +123,21 @@ FM_OMP_HARNESS=omp omp
 ```
 
 Start `omp` with this checkout as its working directory: it auto-discovers the tracked `.omp/extensions/*.ts` files with no trust dialog, and naming them with `-e` as well would load each twice.
+
+**PiG (primary)**
+
+```sh
+FM_PIG_HARNESS=pig pig --approve \
+  -e .pi/extensions/fm-primary-turnend-guard.ts \
+  -e .pi/extensions/fm-primary-pi-watch.ts \
+  -e .pi/extensions/fm-branch-supervision.ts
+```
+
+The 2026-10-19 live primary run verified session-start delivery, pre-tool denials, watcher continuity across tested turns, wake delivery, healthy-cycle turn-end behavior, and the managed supervision-branch bridge.
+Watcher restoration, wake-drain acknowledgement, ship-ready landing, section 9 escalation wording, and direct TUI behavior remain unverified.
+
+The Go extension auto-registers `/ahoy` and `/bearings` from `.pig/extensions/fm-firstmate`.
+RPC callbacks that hand off to the loaded skills and direct TUI invocation were verified; the full primary lifecycle remains partially verified as described above.
 
 For Grok, `--trust` is needed once per clone so project hooks and the turn-end guard load; `/hooks-trust` inside Grok works too.
 For Pi, approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
@@ -184,8 +205,8 @@ Claude and grok use the slash form shown here; codex uses the same names with `$
 
 | Skill              | What it does                                                                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/afk`             | Enter away-mode supervision: Pi's in-process branch, a [supervision host](docs/configuration.md#supervision-host-configsupervision-host) beside the other primaries (on by default for Claude), or the daemon handles wakes while you step away; see the [away procedure](.agents/skills/afk/SKILL.md) for the posture and return contract |
-| `/quiet`           | Keep routine wakes off main while staying and chatting; requested actions proceed now rather than waiting for your return. Where Pi's branch or an [attended supervision host](docs/supervision-host.md#quiet-mode) already does this, it only says so; otherwise it starts the quiet daemon, which stays active through ordinary chat until `/quiet off` |
+| `/afk`             | Enter away-mode supervision: Pi's in-process branch, PiG's configured but unverified branch route, a [supervision host](docs/configuration.md#supervision-host-configsupervision-host) beside the other primaries (on by default for Claude), or the daemon handles wakes while you step away; PiG wake delivery and lifecycle recovery remain unverified. See the [away procedure](.agents/skills/afk/SKILL.md) for the posture and return contract |
+| `/quiet`           | Keep routine wakes off main while staying and chatting; requested actions proceed now rather than waiting for your return. Pi uses its attended branch; PiG is configured for the same route, but its wake delivery and lifecycle are unverified. An [attended supervision host](docs/supervision-host.md#quiet-mode) may handle this on other primaries; otherwise the quiet daemon stays active until `/quiet off` |
 | `/ahoy`            | Recap visible session events since the prior real captain message plus visibly unanswered captain decisions, then guide the captain through any open decisions one at a time in agent-judged impact order; fall back to Bearings when invoked as the session's first real captain message |
 | `/bearings`        | Generate a concise four-section chat digest from bounded fleet state, including registered remote-home ledgers and measured follow-up for owned contributions; use `/bearings file` to also replace today's dated report in `data/`, and add `include PRs` for live GitHub enrichment |
 | `/updatefirstmate` | Guardedly update the running firstmate and its secondmates - fast-forward, or reconcile a redundant post-squash-merge divergence - then persist and restart every live mate successfully left on the target commit - including already-current homes - with an honest re-read nudge only when restart cannot be proven |
@@ -219,6 +240,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/remote-secondmates.md](docs/remote-secondmates.md) - current setup, routing, transfer, recovery, and safety behavior for whole-home remote second mates.
 - [docs/calm.md](docs/calm.md) - current `/calm` behavior on Pi and Claude Code and its supported presentation limits.
 - [docs/voice-relay.md](docs/voice-relay.md) - the optional spoken interface: setup on both machines, measured round-trip cost, what a spoken answer may read, and what this build does not do yet.
+- [docs/discord-voice-relay.md](docs/discord-voice-relay.md) - a local Discord message and voice-note integration, its private confirmation flow, and runtime repair checks.
 - [docs/fleet-ledger.md](docs/fleet-ledger.md) - the opt-in activity ledger outside tools can read to follow a home's tasks, and its record contract.
 - [docs/wedge-alarm.md](docs/wedge-alarm.md) - configure the active alert for an away-mode escalation delivery that gets stuck.
 - [docs/usage-warner.md](docs/usage-warner.md) - configure the opt-in local threshold warner for Claude usage windows.
@@ -238,7 +260,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/forgejo-tea-integration.md](docs/forgejo-tea-integration.md) - maintainer verification for watching and merging Forgejo/Gitea pull requests via `tea`.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
 - [docs/verification/supervision.md](docs/verification/supervision.md) - active maintainer verification for session-start, guard, continuity, and wedge integrations.
-- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Claude, Codex, OpenCode, Pi and `pi-signed`, omp, Grok, Cursor, and unknown harness fallback.
+- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Claude, Codex, OpenCode, Pi, `pi-signed`, PiG, omp, Grok, Cursor, and unknown harness fallback.
 - [docs/scripts.md](docs/scripts.md) - the `bin/` toolbelt reference.
 - [docs/documentation-audiences.md](docs/documentation-audiences.md) - documentation audiences and the machine-checked placement boundary.
 - [`AGENTS.md`](AGENTS.md) - the supervisor contract, role boundary, and routing index for conditional procedures.

@@ -1,8 +1,10 @@
 ---
 name: harness-adapters
 description: >-
+  Agent-only reference for firstmate harness operations.
   Load before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
-  Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, cursor, gemini, muse, rovo, omp, agy, devin, commandcode, polytoken, and PiG.
+  Contains verified facts for claude, codex, opencode, pi, pi-signed, pig, grok, kimi, cursor, gemini, muse, rovo, omp, agy, devin, commandcode, and polytoken.
+  PiG has separate references for its primary adapter and verified crewmate/scout worker adapter.
 user-invocable: false
 metadata:
   internal: true
@@ -35,6 +37,7 @@ Deliver lifecycle actions only through `../../../bin/fm-control.sh <task-id> int
 Never type an interrupt key or exit command through `fm-send`, where routing-marked lifecycle text becomes chat.
 Trust handling is complete only when inspection proves the target started processing its instructions; delivery success alone is not proof.
 Muse, Gemini, AGY, Devin, Command Code, and Polytoken are verified only for crewmate and scout work, never a secondmate or primary.
+PiG has a separately verified primary adapter and crewmate/scout worker adapter, but no secondmate adapter; the worker smoke verifies spawning, extension loading, busy and turn-end events, and trivial-task completion, while worker steering inbox delivery, interrupt, exit, and relaunch remain unverified.
 
 ## Detection
 
@@ -42,9 +45,10 @@ Muse, Gemini, AGY, Devin, Command Code, and Polytoken are verified only for crew
 A marker names its harness, but a structural ancestor of a different harness outranks it, because a marker is ordinary environment state a child or a multiplexer can retain while ancestry is what proves who owns the process tree.
 Only `FM_PI_HARNESS=pi-signed` at the launch boundary together with `PI_CODING_AGENT=true` selects Pi-signed; shared unmarked launcher ancestry remains Pi.
 omp publishes no marker of its own; `FM_OMP_HARNESS=omp` is Firstmate's launch marker and the anchored process name `omp` is its ancestry evidence, as `references/harness/omp.md` records.
+PiG's primary launch uses Firstmate's `FM_PIG_HARNESS=pig` marker, trusted only with an exact `pig` process in ancestry; the verified worker version publishes `AI_AGENT=pig`, as `references/harness/pig.md` records.
 `../../../bin/fm-spawn.sh` owns worker marker establishment, while the README launch command owns the signed-primary boundary.
-`../../../bin/fm-harness.sh crew` resolves `config/crew-harness`, where absent or `default` means firstmate's own harness.
-[`docs/configuration.md`](../../../docs/configuration.md#choose-the-secondmate-harness) owns secondmate pin resolution, including per-mate overrides; [`bin/fm-harness.sh`](../../../bin/fm-harness.sh) owns the resolver commands.
+`../../../bin/fm-harness.sh crew` resolves `config/crew-harness`, where absent or `default` means firstmate's own harness, including PiG when its worker adapter is selected.
+`../../../bin/fm-harness.sh secondmate` resolves `config/secondmate-harness` -> `config/crew-harness` -> firstmate's own harness, but refuses PiG because neither integration is a verified secondmate runtime; [`docs/configuration.md`](../../../docs/configuration.md#choose-the-secondmate-harness) owns secondmate pin resolution, including per-mate overrides, and [`bin/fm-harness.sh`](../../../bin/fm-harness.sh) owns the resolver commands.
 `../../../bin/fm-spawn.sh` re-resolves on every spawn, and an explicit per-spawn argument wins for that spawn.
 A new adapter's verified marker and command name must land in `../../../bin/fm-harness.sh`.
 

@@ -36,7 +36,10 @@
 #      uncached status read - accepting any verb - immediately before firing
 #  18. A same-kind escalation after an operator close appends again and reopens
 #      the decision; a retry while that decision is still open appends nothing
-#  19. A request summary keeps accented letters, drops control characters, and
+#  19. A Discord front-desk handoff is idempotently delivered through the
+#      existing local and remote parent-channel routes
+#  20. Only a trusted steer starting with the front-desk marker passes the gate
+#  21. A request summary keeps accented letters, drops control characters, and
 #      caps at 120 characters without splitting one under any caller locale
 set -u
 
@@ -49,6 +52,7 @@ set -u
 
 SEND="$ROOT/bin/fm-send.sh"
 REPORT="$ROOT/bin/fm-secondmate-report.sh"
+FRONT_DESK_GATE="$ROOT/bin/fm-discord-front-desk-gate.sh"
 TMP_ROOT=$(fm_test_tmproot fm-pending-reply)
 
 export FM_PENDING_REPLY_GRACE_SECS=0
@@ -1853,6 +1857,72 @@ test_child_status_wrong_home_is_not_copied() {
   pass "a child-file mate-home sighting is not copied and still escalates"
 }
 
+test_discord_front_desk_requires_primary_delegation_marker() {
+  local input
+  printf '%s\n' 'Front desk request: message-id=fixture-42' | "$FRONT_DESK_GATE" \
+    || fail "a trusted front-desk delegation marker must pass"
+  for input in \
+    'ordinary Discord note: what is happening?' \
+    'Discord body: Front desk request: message-id=fixture-42' \
+    'Front desk requester: message-id=fixture-42' \
+    'front desk request: message-id=fixture-42'; do
+    if printf '%s\n' "$input" | "$FRONT_DESK_GATE" >/dev/null 2>&1; then
+      fail "an untrusted or malformed front-desk marker must not pass: $input"
+    fi
+  done
+  if printf '%s\n' 'ordinary parent steer' 'Front desk request: message-id=fixture-42' \
+    | "$FRONT_DESK_GATE" >/dev/null 2>&1; then
+    fail "a marker outside the first line must not pass"
+  fi
+  pass "only the primary's first-line front-desk marker passes the delegation gate"
+}
+
+test_discord_front_desk_handoff_uses_parent_channel() {
+  local parent state local_mate remote_mate line local_status remote_status
+  parent=$(setup_parent discord-front-desk-local)
+  state="$parent/state"
+  local_mate=$(bind_local_mate "$parent" mate)
+  line='note: Discord message 132456789012345678 forwarded to primary: review the release approval'
+
+  FM_TEST_LIB_SOURCED=1 bash -c '
+    # shellcheck source=bin/fm-parent-channel-lib.sh
+    . "$1/bin/fm-parent-channel-lib.sh"
+    fm_parent_channel_report "$2" "$3" "$4"
+    fm_parent_channel_report "$2" "$3" "$4"
+  ' _ "$ROOT" "$local_mate" "$local_mate/state" "$line" \
+    || fail "front-desk handoff should publish through the local parent route"
+  local_status="$state/mate.status"
+  [ "$(wc -l < "$local_status")" -eq 1 ] \
+    || fail "a local front-desk handoff retry must not duplicate the parent receipt"
+  grep -Fq 'Discord message 132456789012345678 forwarded to primary' "$local_status" \
+    || fail "the local parent channel must retain the forwarded Discord request"
+  [ ! -e "$local_mate/state/mate.status" ] \
+    || fail "a local mate must not write its handoff into its own task status"
+
+  remote_mate="$TMP_ROOT/discord-front-desk-remote-$RANDOM"
+  mkdir -p "$remote_mate/state"
+  printf '%s\n' mate > "$remote_mate/.fm-secondmate-home"
+  cat > "$remote_mate/.fm-secondmate-parent" <<EOF
+schema=fm-secondmate-parent.v1
+route=remote
+parent_host=remote.example
+EOF
+  line='note: Discord message 132456789012345679 forwarded to primary: approve the requested merge'
+  FM_TEST_LIB_SOURCED=1 bash -c '
+    # shellcheck source=bin/fm-parent-channel-lib.sh
+    . "$1/bin/fm-parent-channel-lib.sh"
+    fm_parent_channel_report "$2" "$3" "$4"
+    fm_parent_channel_report "$2" "$3" "$4"
+  ' _ "$ROOT" "$remote_mate" "$remote_mate/state" "$line" \
+    || fail "front-desk handoff should publish through the remote parent route"
+  remote_status="$remote_mate/state/parent-replies.status"
+  [ "$(wc -l < "$remote_status")" -eq 1 ] \
+    || fail "a remote front-desk handoff retry must not duplicate the parent receipt"
+  grep -Fq 'Discord message 132456789012345679 forwarded to primary' "$remote_status" \
+    || fail "the remote parent channel must retain the forwarded Discord request"
+  pass "Discord front-desk handoffs use the idempotent local and remote parent-channel routes"
+}
+
 test_mechanical_helper_writes_parent_channel() {
   local home state sm_home corr empty_corr rc
   home=$(setup_parent mechanical-helper)
@@ -2168,6 +2238,8 @@ test_mirrored_remote_reply_never_triggers_a_repost
 test_same_basename_self_home_corr_resolves_on_tick
 test_same_basename_reply_resolves_after_recovery_failure
 test_child_status_wrong_home_is_not_copied
+test_discord_front_desk_requires_primary_delegation_marker
+test_discord_front_desk_handoff_uses_parent_channel
 test_mechanical_helper_writes_parent_channel
 test_remote_parent_replies_is_not_wrong_home
 test_local_parent_replies_is_wrong_home_evidence

@@ -10,7 +10,12 @@
 #   fmx_env_get <key> <file>   - read one KEY=VALUE from a .env-style file
 #                                (defined by bin/fm-env-lib.sh, sourced here)
 #   fmx_load_config            - resolve FMX_TOKEN, FMX_RELAY, FMX_DRY, FMX_MAX,
-#                                and FMX_THREAD_MAX (env wins over .env)
+#                                FMX_THREAD_MAX, and FMX_IDLE_ALERT (env wins over .env)
+#   fmx_idle_tick <state>      - observe one successful no-pending poll; print
+#                                one "x-idle-alert <seconds>" line per idle
+#                                episode once FMX_IDLE_ALERT_SECS is reached
+#   fmx_idle_activity <state>  - end the current idle episode when a pending
+#                                mention is observed
 #   fmx_auth_header_file       - write the bearer header to a 0600 temp file
 #   fmx_extract_reply_context <json-file> - the single owner of reply-context
 #                                extraction: infer {platform, reply_max_chars}
@@ -279,6 +284,86 @@ fmx_load_config() {
   [ "$threadraw" -ge 1 ] 2>/dev/null || threadraw=25
   # shellcheck disable=SC2034 # FMX_THREAD_MAX is read by callers (fm-x-reply.sh) after sourcing.
   FMX_THREAD_MAX=$threadraw
+
+  # Opt-in relay idle alert: one deduplicated wake after this many continuous
+  # seconds of successful no-pending polls (HTTP 204). 0, the default, disables
+  # it entirely, so a home that never sets it gains no behavior and no state
+  # file. Non-numeric, overlong, and 0 values disable; 1..59 clamp up to 60 so
+  # the alert can never fire on every poll cycle (the Relay cadence is 30s).
+  local idleraw
+  if [ -n "${FMX_IDLE_ALERT_SECS+x}" ]; then idleraw=${FMX_IDLE_ALERT_SECS-}; else idleraw=$(fmx_env_get FMX_IDLE_ALERT_SECS "$env_file"); fi
+  case "$idleraw" in ''|*[!0-9]*) idleraw=0 ;; esac
+  [ "${#idleraw}" -le 9 ] || idleraw=0
+  if [ "$idleraw" -gt 0 ] 2>/dev/null && [ "$idleraw" -lt 60 ] 2>/dev/null; then idleraw=60; fi
+  # shellcheck disable=SC2034 # FMX_IDLE_ALERT is read by callers (fm-x-poll.sh) after sourcing.
+  FMX_IDLE_ALERT=$idleraw
+}
+
+# --- relay idle alert (state/x-idle.json) -----------------------------------
+#
+# The relay's only positive "nothing is happening" signal is a successful
+# GET /connector/poll returning HTTP 204: no pending mention. Auth/config errors
+# keep their own one-shot x-mode-error diagnostics and a failed or timed-out
+# poll proves nothing about idleness, so only a 204 advances an idle episode and
+# only an observed pending mention (HTTP 200) ends one.
+#
+# While FMX_IDLE_ALERT_SECS is enabled, the first 204 of a quiet stretch records
+# the episode start in state/x-idle.json ({since, alerted}); once consecutive
+# 204 seconds reach the threshold, exactly one wake line "x-idle-alert <seconds>"
+# is printed for that episode and the durable alerted flag suppresses repeats
+# until a mention resets the episode. The dedupe mirrors fm-x-poll.sh's
+# x-mode-error markers: private 0600 guarded publication, one line per episode,
+# state ended by the next observed mention. FMX_NOW_OVERRIDE fixes the clock for
+# tests.
+
+# fmx_idle_write <state> <since> <alerted>: publish the durable episode record.
+# Best-effort: a failure leaves the record unreadable, and the next observed
+# 204 starts a fresh episode attempt, mirroring the poll diagnostic markers'
+# behavior when state cannot be stored.
+fmx_idle_write() {
+  local state=$1 since=$2 alerted=$3
+  (set -o pipefail; jq -cn --argjson since "$since" --argjson alerted "$alerted" \
+    '{since:$since, alerted:$alerted}' \
+    | fmx_private_artifact_publish_stdin "$state" "x-idle.json" 600)
+}
+
+# fmx_idle_activity <state>: a pending mention was observed, so any idle
+# episode ends here and the next quiet stretch starts a fresh one. No-op when
+# the alert is disabled or no valid record exists.
+fmx_idle_activity() {
+  local state=$1 threshold=${FMX_IDLE_ALERT:-0}
+  case "$threshold" in ''|*[!0-9]*|0) return 0 ;; esac
+  fmx_private_artifact_file_valid "$state" "x-idle.json" 600 || return 0
+  rm -f -- "$state/x-idle.json" 2>/dev/null || true
+  return 0
+}
+
+# fmx_idle_tick <state>: observe one successful no-pending poll. Starts the
+# episode on the first one, stays silent below the threshold, and prints
+# "x-idle-alert <seconds>" once when the episode reaches it.
+fmx_idle_tick() {
+  local state=$1 threshold=${FMX_IDLE_ALERT:-0} now since alerted=0 file
+  case "$threshold" in ''|*[!0-9]*|0) return 0 ;; esac
+  now=${FMX_NOW_OVERRIDE:-$(date +%s)}
+  case "$now" in ''|*[!0-9]*) return 0 ;; esac
+  [ "${#now}" -le 18 ] || return 0
+  file="$state/x-idle.json"
+  since=
+  if fmx_private_artifact_file_valid "$state" "x-idle.json" 600; then
+    since=$(jq -r '.since | if type == "number" and . >= 0 then tostring elif type == "string" and test("^[0-9]+$") then . else empty end' "$file" 2>/dev/null) || since=
+    alerted=$(jq -r 'if .alerted == 1 then "1" else "0" end' "$file" 2>/dev/null) || alerted=0
+    case "$alerted" in 1) alerted=1 ;; *) alerted=0 ;; esac
+  fi
+  case "$since" in ''|*[!0-9]*) since= ;; esac
+  [ "${#since}" -le 18 ] || since=
+  if [ -z "$since" ] || [ "$now" -lt "$since" ]; then
+    fmx_idle_write "$state" "$now" 0 || true
+    return 0
+  fi
+  [ "$alerted" = 0 ] || return 0
+  [ $((now - since)) -ge "$threshold" ] || return 0
+  fmx_idle_write "$state" "$since" 1 || true
+  printf 'x-idle-alert %s\n' "$((now - since))"
 }
 
 # fmx_extract_reply_context <json-file>: the SINGLE owner of reply-context

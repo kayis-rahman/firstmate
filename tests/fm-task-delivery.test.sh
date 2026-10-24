@@ -1045,6 +1045,9 @@ EOF
       assert_grep "$home/state/$id.inbox" "$brief" "$project_kind $kind omitted its exact steering inbox"
       assert_grep 'When this task works on Firstmate itself' "$brief" "$project_kind $kind made the exception unconditional"
       assert_grep 'Project instructions still govern the work wherever they do not conflict with this worker identity' "$brief" "$project_kind $kind displaced project guidance"
+      assert_grep 'Before writing code or doing architecture or software-engineering work, make a plan first.' "$brief" "$project_kind $kind omitted plan-first guidance"
+      assert_grep 'follow the ponytail skill: make the smallest change that fully solves the task' "$brief" "$project_kind $kind omitted the ponytail discipline"
+      assert_grep 'When the ponytail skill is available in your runtime, follow it; otherwise apply that same plan-first' "$brief" "$project_kind $kind omitted the runtime fallback"
       ! grep -q '^This section supersedes every earlier brief instruction about your role' "$brief" ||
         fail "$project_kind $kind revoked the brief's own role for a task that is not Firstmate"
       assert_no_grep '# Current worker role contract' "$home/data/$id/brief.md" "spawn rewrote the source brief"

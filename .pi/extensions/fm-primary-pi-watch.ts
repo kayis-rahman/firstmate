@@ -55,6 +55,7 @@ import {
   FIRSTMATE_CALM_PRESENTATION_EVENT,
 } from "./lib/fm-calm-visibility.ts";
 import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
+import { createCaptainAttentionSound } from "./lib/fm-captain-attention-sound.ts";
 
 type ArmResult = {
   ok: boolean;
@@ -169,6 +170,7 @@ const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
 
 let nextHandoffId = 0;
 let activeGeneration: SessionGeneration | null = null;
+const attentionSound = createCaptainAttentionSound();
 let replacementHandoff: PendingActionableClose[] | null = null;
 type ReplacementActionableReceiver = (pending: PendingActionableClose) => void;
 type ActionableDeliveryClaim = {
@@ -789,10 +791,14 @@ export default function (pi: ExtensionAPI) {
         } catch {}
       }
     }
+    if (/\b(?:needs-decision|blocked)(?=[:\s])/.test(message)) {
+      attentionSound.notify("actionable-blocker", pending.token);
+    }
     return await sendWake(owner, message, pending);
   }
 
   function surfaceFailure(owner: SessionGeneration, message: string): void {
+    attentionSound.notify("watcher-failure", message);
     void sendWake(owner, message).catch(() => {
       // Pi owns delivery errors; continuity restoration never waits on prompting.
     });

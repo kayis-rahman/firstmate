@@ -231,11 +231,11 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/harness-adapters/references/harness/polytoken.md",
+      "path": ".agents/skills/harness-adapters/references/harness/pig.md",
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/harness-adapters/references/harness/pig.md",
+      "path": ".agents/skills/harness-adapters/references/harness/polytoken.md",
       "audience": "agent-runtime"
     },
     {
@@ -276,6 +276,10 @@
     },
     {
       "path": ".greptile/rules.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": ".pig/extensions/firstmate/README.md",
       "audience": "maintainer-architecture"
     },
     {
@@ -443,6 +447,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/storage-policy.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/sessionstart-nudge.md",
       "audience": "operator-current"
     },
@@ -476,6 +484,10 @@
     },
     {
       "path": "docs/supervision-protocols/pi.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "docs/supervision-protocols/pig.md",
       "audience": "agent-runtime"
     },
     {
@@ -583,6 +595,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/discord-voice-relay.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/watcher-continuity.md",
       "audience": "operator-current"
     },
@@ -612,6 +628,10 @@
     },
     {
       "path": ".agents/skills/away-quiet-supervision/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/discord-front-desk/SKILL.md",
       "audience": "agent-runtime"
     },
     {
