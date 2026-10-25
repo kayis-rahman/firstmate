@@ -675,6 +675,21 @@ IFS= read -r -d '' SHARED_NO_CD_RULE <<'EOF' || true
 EOF
 SHARED_NO_CD_RULE=${SHARED_NO_CD_RULE%$'\n'}
 
+# One shared string keeps the ship and scout browser-lifetime rule identical.
+# An abandoned browser chain is not the launcher's problem alone: a session killed
+# outright never runs its own cleanup, so the rule names the shapes that cannot leak.
+IFS= read -r -d '' SHARED_BROWSER_RULE <<'EOF' || true
+9. Stop every browser process you start, before you report done. A chrome started with a
+   pinned `--remote-debugging-port` and a fixed `--user-data-dir`, or a `chrome-devtools-axi`
+   bridge with its `chrome-devtools-mcp` child, otherwise outlives the session that started
+   it: it is reparented, keeps its port, and holds hundreds of megabytes until someone finds
+   it by hand. Use a path that owns the lifetime instead - playwright's `chromium.launch()`,
+   which dies with its driver, or `chrome-devtools-axi` followed by `chrome-devtools-axi stop`
+   before you finish. Never start a browser with `&`, and if a pinned port is genuinely
+   required, start it in its own process group and kill that group from an EXIT trap.
+EOF
+SHARED_BROWSER_RULE=${SHARED_BROWSER_RULE%$'\n'}
+
 if [ -n "$BASE_BRANCH" ]; then
   SETUP_BASE="You are in a disposable git worktree of $REPO, at a detached HEAD on a clean copy of its base branch.
 Base branch: $BASE_BRANCH"
@@ -723,6 +738,7 @@ $CREWMATE_PAUSE_INSTRUCTIONS
    Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append \`resolved [at=<epoch>]: {how it cleared}\` yourself (same \`[key=<slug>]\` if you opened it with one) as you resume.
 $SHARED_INFRA_RULE
 $SHARED_NO_CD_RULE
+$SHARED_BROWSER_RULE
 
 $WAIT_BLOCK$INBOX_SECTION
 
@@ -804,6 +820,7 @@ $ASK_USER_BLOCK
    Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append \`resolved [at=<epoch>]: {how it cleared}\` yourself (same \`[key=<slug>]\` if you opened it with one) as you resume.
 $SHARED_INFRA_RULE
 $SHARED_NO_CD_RULE
+$SHARED_BROWSER_RULE
 
 $WAIT_BLOCK$INBOX_SECTION
 

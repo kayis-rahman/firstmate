@@ -70,4 +70,64 @@ if LSOF_ACTIVE=1 HOME="$tmp/home" FM_HOME="$tmp/home" PATH="$tmp/bin:$PATH" bash
   exit 1
 fi
 [ -d "$tmp/home/.cache/go-build" ]
+# An orphaned browser (parent already gone, a chrome executable, and a scratch /tmp
+# profile) is a cleanup candidate. A browser with a live parent, and a process that is
+# not a browser, are not. The scanner reads the process table through ps, so this case
+# drives it with a ps stub plus one real disposable process to signal. The stub's
+# process exits 0 on TERM so the suite's own output stays free of job-status noise.
+bash -c 'trap "exit 0" TERM; while :; do sleep 1; done' &
+orphan_pid=$!
+live_pid=424242
+chrome_cmdline="/tmp/fake/chrome-headless-shell --headless --remote-debugging-port=9299 --user-data-dir=/tmp/fm-test-chrome about:blank"
+cat > "$tmp/bin/ps" <<EOF
+#!/usr/bin/env bash
+ax=0; want_ppid=0; want_cmd=0; pid=
+while [ \$# -gt 0 ]; do
+  case "\$1" in
+    ax) ax=1 ;;
+    *ppid=*) want_ppid=1 ;;
+    *command=*) want_cmd=1 ;;
+    -p) shift; pid=\$1 ;;
+  esac
+  shift
+done
+if [ "\$ax" = 1 ]; then
+  printf '%s\n' "$orphan_pid $chrome_cmdline" "$live_pid $chrome_cmdline" "$orphan_pid /bin/sleep 300"
+  exit 0
+fi
+if [ "\$want_ppid" = 1 ]; then
+  [ "\$pid" = "$orphan_pid" ] && { echo 1; exit 0; }
+  [ "\$pid" = "$live_pid" ] && { echo "$live_pid"; exit 0; }
+  echo 0; exit 0
+fi
+if [ "\$want_cmd" = 1 ]; then
+  echo "$chrome_cmdline"; exit 0
+fi
+exit 1
+EOF
+chmod +x "$tmp/bin/ps"
+HOME="$tmp/home" FM_HOME="$tmp/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$tmp/bin:$PATH" bash "$ROOT/bin/fm-housekeeping.sh" scan "$tmp/proc-report.tsv" >/dev/null
+proc_id=$(awk -F '\t' '$1 == "probably-safe" && $4 == "process" { print $2; exit }' "$tmp/proc-report.tsv")
+test -n "$proc_id"
+grep -q "orphaned-browser pid=$orphan_pid" "$tmp/proc-report.tsv"
+if grep -q "pid=$live_pid" "$tmp/proc-report.tsv"; then
+  echo 'a browser with a live parent was reported as an orphan' >&2
+  exit 1
+fi
+printf '%s\n' "$proc_id" > "$tmp/approved.txt"
+HOME="$tmp/home" FM_HOME="$tmp/home" PATH="$tmp/bin:$PATH" bash "$ROOT/bin/fm-housekeeping.sh" apply "$tmp/proc-report.tsv" "$tmp/approved.txt" >/dev/null
+kill -0 "$orphan_pid" || { echo 'the dry run signalled the process' >&2; exit 1; }
+HOME="$tmp/home" FM_HOME="$tmp/home" PATH="$tmp/bin:$PATH" bash "$ROOT/bin/fm-housekeeping.sh" apply "$tmp/proc-report.tsv" "$tmp/approved.txt" --execute >/dev/null
+wait "$orphan_pid" 2>/dev/null || true
+if kill -0 "$orphan_pid" 2>/dev/null; then
+  echo 'an approved orphaned browser was not signalled' >&2
+  exit 1
+fi
+grep -q "RECEIPT.*$proc_id" "$tmp/home/state/housekeeping-receipts.tsv"
+# A process the report never listed, and one whose parent is alive, both refuse.
+printf 'pid:999999\n' > "$tmp/approved.txt"
+if HOME="$tmp/home" FM_HOME="$tmp/home" PATH="$tmp/bin:$PATH" bash "$ROOT/bin/fm-housekeeping.sh" apply "$tmp/proc-report.tsv" "$tmp/approved.txt" --execute >/dev/null 2>&1; then
+  echo 'an unapproved process id was applied' >&2
+  exit 1
+fi
 echo 'fm-housekeeping: PASS'

@@ -1649,6 +1649,13 @@ test_crewmate_scaffolds_forbid_pool_administration() {
     || fail "scout brief leading-cd rule is missing or differs from the ship brief"
   assert_grep "every sub-agent you launch" "$brief" "scout brief did not pass the leading-cd rule to sub-agents"
 
+  ship_browser_rule=$(awk '/^9\. Stop every browser process/,/^$/' "$home/data/brief-pool-no-mistakes/brief.md")
+  scout_browser_rule=$(awk '/^9\. Stop every browser process/,/^$/' "$brief")
+  [ -n "$ship_browser_rule" ] || fail "ship brief emitted no browser-lifetime rule"
+  [ "$ship_browser_rule" = "$scout_browser_rule" ] \
+    || fail "ship and scout browser-lifetime rules have drifted apart"
+  assert_grep 'chrome-devtools-axi stop' "$brief" "scout brief did not require stopping a browser it started"
+
   # The daemon half of the rule survived the fold.
   assert_grep "no-mistakes" "$brief" "scout brief lost the shared no-mistakes daemon rule"
   # shellcheck disable=SC2016 # Literal backticks and braces must remain unexpanded.

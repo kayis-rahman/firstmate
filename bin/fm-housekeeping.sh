@@ -13,6 +13,24 @@ usage() { echo 'Usage: fm-housekeeping.sh scan [report-path] | apply <report-pat
 size_bytes() { du -sk "$1" 2>/dev/null | awk '{print $1 * 1024}'; }
 item_id() { printf '%s' "$1" | cksum | awk '{print $1}'; }
 add() { printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$(item_id "$2:$3:$4")" "$2" "$3" "$4" >> "$OUT"; }
+# Orphaned browser automation outlives the session that started it: a chrome reparented
+# to launchd keeps its pinned debugging port and hundreds of megabytes until a person
+# finds it by hand. Only a process whose parent is already gone, whose executable is a
+# chrome binary, and whose profile is a scratch /tmp profile is a candidate, and apply
+# re-checks all three before it signals anything.
+scan_orphaned_browsers() {
+  command -v ps >/dev/null 2>&1 || return 0
+  local line pid ppid profile
+  while IFS= read -r line; do
+    pid=${line%% *}
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    [ "$ppid" = 1 ] || continue
+    profile=$(printf '%s' "$line" | sed -n 's/.*[[:space:]]--user-data-dir=\([^[:space:]]*\).*/\1/p')
+    case "$profile" in /tmp/*|/private/tmp/*) ;; *) continue ;; esac
+    add probably-safe "pid:$pid" process "orphaned-browser pid=$pid profile=$profile"
+  done < <(ps ax -o pid=,command= 2>/dev/null | awk '{ exe=$2; sub(/.*\//, "", exe); if (exe == "chrome" || exe == "chrome-headless-shell" || exe == "Chromium" || exe == "chromium") print }')
+}
 scan_size() {
   local path=$1 cap=$2 size
   [ -e "$path" ] || return 0
@@ -71,6 +89,7 @@ scan() {
     fi
   done
   for path in "$HOME_DIR"/state/*.status; do [ -f "$path" ] || continue; add keep "$path" worker-record "status-history-is-not-current-state"; done
+  scan_orphaned_browsers
   if [ -d "$HOME_DIR/.treehouse" ]; then
     read -r total_kb free_kb < <(df -Pk "$HOME_DIR/.treehouse" | awk 'NR == 2 { print $2, $4 }')
     if [[ "$total_kb" =~ ^[0-9]+$ && "$free_kb" =~ ^[0-9]+$ && "$total_kb" -gt 0 ]]; then
@@ -107,7 +126,7 @@ scan() {
   printf 'Scan report: %s\n' "$output"
 }
 apply() {
-  local report=$1 approved=$2 mode=${3:-} requested id class path action detail matched receipt
+  local report=$1 approved=$2 mode=${3:-} requested id class path action detail matched receipt pid
   [ "$mode" = "" ] || [ "$mode" = --execute ] || { echo 'invalid apply mode' >&2; return 2; }
   receipt="$STATE/housekeeping-receipts.tsv"
   [ -f "$report" ] && [ ! -L "$report" ] || { echo 'invalid report' >&2; return 1; }
@@ -150,6 +169,21 @@ apply() {
           task=${detail#task=}; task=${task%% *}
           [ -n "$task" ] || { echo 'refusing worker item without task id' >&2; return 1; }
           "$SCRIPT_DIR/fm-teardown.sh" "$task" || return 1
+          ;;
+        probably-safe:process)
+          case "$path" in pid:*) pid=${path#pid:} ;; *) echo "refusing malformed process item: $path" >&2; return 1 ;; esac
+          case "$pid" in ''|*[!0-9]*) echo "refusing non-numeric process item: $path" >&2; return 1 ;; esac
+          command -v ps >/dev/null 2>&1 || { echo 'refusing process cleanup: ps unavailable' >&2; return 1; }
+          kill -0 "$pid" 2>/dev/null || { echo "refusing missing process: $pid" >&2; return 1; }
+          [ "$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')" = 1 ] || { echo "refusing process with a live parent: $pid" >&2; return 1; }
+          ps -o command= -p "$pid" 2>/dev/null | grep -qE -- '--user-data-dir=(/tmp|/private/tmp)/' || { echo "refusing unverified browser process: $pid" >&2; return 1; }
+          if [ "$mode" = --execute ]; then
+            kill -TERM "$pid" 2>/dev/null || return 1
+            for _ in 1 2 3 4 5 6; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+            kill -0 "$pid" 2>/dev/null && { kill -KILL "$pid" 2>/dev/null || return 1; }
+          else
+            printf 'DRY-RUN\t%s\tkill\t%s\n' "$requested" "$pid"
+          fi
           ;;
         probably-safe:branch)
           [ -d "$path/.git" ] || { echo "refusing changed project: $path" >&2; return 1; }
