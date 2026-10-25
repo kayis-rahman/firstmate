@@ -7,37 +7,47 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <style>
   :root {
-    color-scheme: dark;
-    --bg: #0b1016;
-    --bg-2: #111821;
-    --bg-3: #17212c;
-    --panel: #0f1620;
-    --line: #223041;
-    --line-soft: #1a2532;
-    --text: #dce7f2;
-    --muted: #8fa3b8;
-    --faint: #64758a;
-    --accent: #5cc8ff;
-    --accent-2: #8b7bff;
-    --ok: #43d39e;
-    --warn: #ffbf5b;
-    --bad: #ff6b7a;
-    --chip-bg: #1b2634;
-    --shadow: 0 18px 50px rgba(0, 0, 0, .35);
-    --radius: 12px;
+    color-scheme: light;
+    --bg: #f4f6f8;
+    --bg-soft: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --line: #dbe1e8;
+    --line-strong: #c6ced8;
+    --text: #18212b;
+    --text-soft: #3f4b5a;
+    --muted: #5f6b7a;
+    --faint: #6b7789;
+    --accent: #1d4ed8;
+    --accent-soft: #e8efff;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 10px 28px rgba(16, 24, 40, .07);
+    --radius: 14px;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --state-working: #047857;
+    --state-working-bg: #ecfdf5;
+    --state-working-border: #a7f3d0;
+    --state-blocked: #b91c1c;
+    --state-blocked-bg: #fef2f2;
+    --state-blocked-border: #fecaca;
+    --state-parked: #92400e;
+    --state-parked-bg: #fffbeb;
+    --state-parked-border: #fde68a;
+    --state-done: #1e40af;
+    --state-done-bg: #eff6ff;
+    --state-done-border: #bfdbfe;
+    --state-other: #6d28d9;
+    --state-other-bg: #f5f3ff;
+    --state-other-border: #ddd6fe;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; }
   body {
-    background: radial-gradient(1200px 700px at 15% -10%, #142334 0%, transparent 55%),
-                radial-gradient(900px 600px at 100% 0%, #1c1730 0%, transparent 45%),
-                var(--bg);
+    background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
     font-size: 14px;
-    line-height: 1.45;
+    line-height: 1.5;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
   }
@@ -45,132 +55,164 @@
   button, input, select { font: inherit; color: inherit; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .wrap { width: 100%; max-width: 1480px; margin: 0 auto; padding: 16px; min-width: 0; }
+  .wrap { width: 100%; max-width: 1600px; margin: 0 auto; padding: 18px; min-width: 0; }
 
   .topbar {
     position: sticky; top: 0; z-index: 20;
+    background: rgba(255, 255, 255, .92);
     backdrop-filter: blur(14px);
-    background: rgba(10, 15, 22, .82);
     border-bottom: 1px solid var(--line);
   }
   .topbar-inner {
-    max-width: 1480px; margin: 0 auto; padding: 10px 16px;
+    max-width: 1600px; margin: 0 auto; padding: 10px 18px;
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0;
   }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .brand-mark {
-    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    display: grid; place-items: center; color: #06121c; font-weight: 800; font-size: 15px;
+    width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+    display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px;
+    box-shadow: 0 2px 6px rgba(29, 78, 216, .24);
   }
-  .brand h1 { font-size: 15px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
+  .brand h1 { font-size: 15px; margin: 0; letter-spacing: .1px; white-space: nowrap; }
   .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
-  .tabs { display: flex; gap: 4px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tabs {
+    display: flex; gap: 3px; background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 10px; padding: 3px;
+  }
   .tabs button {
     border: 0; background: transparent; color: var(--muted); cursor: pointer;
-    padding: 6px 13px; border-radius: 7px; font-weight: 600; font-size: 13px;
+    padding: 6px 14px; border-radius: 7px; font-weight: 650; font-size: 13px;
   }
-  .tabs button.active { background: var(--bg-3); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
   .topbar-spacer { flex: 1 1 auto; }
-  .refresh {
-    display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px;
-    min-width: 0;
-  }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
-  .dot.busy { background: var(--warn); animation: pulse 1s infinite; }
-  .dot.err { background: var(--bad); }
+  .refresh { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #059669; flex: 0 0 auto; }
+  .dot.busy { background: #d97706; animation: pulse 1s infinite; }
+  .dot.err { background: #dc2626; }
   @keyframes pulse { 50% { opacity: .35; } }
   .btn {
-    background: var(--bg-3); border: 1px solid var(--line); color: var(--text);
-    padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
-    white-space: nowrap;
+    background: var(--surface); border: 1px solid var(--line-strong); color: var(--text);
+    padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 650;
+    white-space: nowrap; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
   }
-  .btn:hover { border-color: #33465c; background: #1c2836; }
-  .btn:disabled { opacity: .55; cursor: default; }
+  .btn:hover { border-color: #9aa8b8; background: #fbfcfe; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ghost { background: transparent; box-shadow: none; }
 
-  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 12px; }
-  .stat {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 8px 12px; min-width: 92px;
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .summary-item {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 9px 14px; min-width: 100px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
   }
-  .stat b { display: block; font-size: 18px; line-height: 1.1; }
-  .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+  .summary-item b { display: block; font-size: 19px; line-height: 1.15; }
+  .summary-item span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
 
   .toolbar {
     display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto auto auto;
-    margin-bottom: 12px; align-items: center;
+    margin-bottom: 14px; align-items: center;
   }
   .field { position: relative; min-width: 0; }
   .field input, .field select {
-    width: 100%; background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: 9px; padding: 9px 11px; outline: none; min-width: 0;
+    width: 100%; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 10px; padding: 9px 12px; outline: none; min-width: 0;
   }
-  .field input:focus, .field select:focus { border-color: #3d5b7a; box-shadow: 0 0 0 3px rgba(92, 200, 255, .12); }
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, .16);
+  }
   .field select { cursor: pointer; }
-  .hint { color: var(--faint); font-size: 12px; }
+  .result-count { color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
 
-  .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-  .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-    min-width: 0; overflow: hidden;
+  .board { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-width: 0; }
+  .column {
+    flex: 1 1 250px; min-width: 0; max-width: 100%;
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 10px;
   }
-  .panel-head {
+  .column-working { --state-color: var(--state-working); --state-bg: var(--state-working-bg); --state-border: var(--state-working-border); }
+  .column-blocked { --state-color: var(--state-blocked); --state-bg: var(--state-blocked-bg); --state-border: var(--state-blocked-border); }
+  .column-parked { --state-color: var(--state-parked); --state-bg: var(--state-parked-bg); --state-border: var(--state-parked-border); }
+  .column-done { --state-color: var(--state-done); --state-bg: var(--state-done-bg); --state-border: var(--state-done-border); }
+  .column-other { --state-color: var(--state-other); --state-bg: var(--state-other-bg); --state-border: var(--state-other-border); }
+  .column-head {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 11px 13px; border-bottom: 1px solid var(--line-soft); min-width: 0;
+    padding: 2px 4px 10px; min-width: 0;
   }
-  .panel-head h2 { margin: 0; font-size: 13px; letter-spacing: .02em; }
-  .panel-head .count { color: var(--faint); font-size: 12px; white-space: nowrap; }
-
-  .task-list { min-width: 0; }
-  .task-row {
-    display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 10px 12px;
-    padding: 11px 13px; border-bottom: 1px solid var(--line-soft);
-    cursor: pointer; align-items: start; min-width: 0;
+  .column-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .column-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--state-color); flex: 0 0 auto; }
+  .column-title h2 { margin: 0; font-size: 12.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
+  .column-count {
+    background: var(--state-bg); color: var(--state-color); border: 1px solid var(--state-border);
+    border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; white-space: nowrap;
   }
-  .task-row:last-child { border-bottom: 0; }
-  .task-row:hover { background: #131d28; }
-  .task-row.selected { background: #142333; box-shadow: inset 3px 0 0 var(--accent); }
-  .task-main { min-width: 0; }
-  .task-title { font-weight: 650; font-size: 13.5px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .task-id { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-  .task-meta { color: var(--faint); font-size: 11.5px; margin-top: 2px; overflow-wrap: anywhere; }
-  .task-latest { color: var(--muted); font-size: 12px; margin-top: 5px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .task-side { text-align: right; min-width: 0; }
-  .age { color: var(--faint); font-size: 11.5px; white-space: nowrap; }
-
+  .cards { display: grid; gap: 9px; min-width: 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 11px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .card:hover { border-color: #b9c3cf; box-shadow: 0 4px 14px rgba(16, 24, 40, .08); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .project {
+    color: var(--accent); font-size: 10.5px; font-weight: 750; letter-spacing: .07em;
+    text-transform: uppercase; overflow-wrap: anywhere; min-width: 0;
+  }
+  .age { color: var(--muted); font-size: 11.5px; white-space: nowrap; flex: 0 0 auto; }
+  .card-title {
+    margin: 6px 0 5px; font-size: 14px; line-height: 1.35; font-weight: 650;
+    overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card-now {
+    margin: 0 0 9px; color: var(--text-soft); font-size: 12.5px; line-height: 1.45;
+    overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
   .chip {
     display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
-    padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    letter-spacing: .03em; text-transform: uppercase; background: var(--chip-bg);
-    border: 1px solid #2a3a4d; color: var(--muted); white-space: nowrap;
+    padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 750;
+    letter-spacing: .03em; text-transform: uppercase; border: 1px solid transparent; white-space: nowrap;
   }
   .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
-  .chip.working { color: var(--ok); border-color: #245141; background: #0f2820; }
-  .chip.blocked, .chip.failed { color: var(--bad); border-color: #4a2430; background: #261117; }
-  .chip.paused, .chip.parked, .chip.needs-decision, .chip.captain_decision { color: var(--warn); border-color: #4a3a1d; background: #261d0e; }
-  .chip.done { color: #9fb6cc; border-color: #2a3a4d; background: #16202b; }
-  .chip.unknown { color: #c1a5ff; border-color: #3b2f59; background: #1c1729; }
+  .chip.working { color: var(--state-working); background: var(--state-working-bg); border-color: var(--state-working-border); }
+  .chip.blocked { color: var(--state-blocked); background: var(--state-blocked-bg); border-color: var(--state-blocked-border); }
+  .chip.parked { color: var(--state-parked); background: var(--state-parked-bg); border-color: var(--state-parked-border); }
+  .chip.done { color: var(--state-done); background: var(--state-done-bg); border-color: var(--state-done-border); }
+  .chip.other { color: var(--state-other); background: var(--state-other-bg); border-color: var(--state-other-border); }
+  .card-id { font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; text-align: right; min-width: 0; }
+  .card-links {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11px; min-width: 0;
+  }
+  .branch { font-family: var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
 
-  .detail { position: sticky; top: 70px; }
-  .detail-body { padding: 13px; min-width: 0; }
-  .detail-empty { color: var(--muted); padding: 26px 13px; text-align: center; }
-  .kv { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 6px 10px; margin: 10px 0 0; font-size: 12.5px; }
-  .kv dt { color: var(--faint); }
-  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-  .detail h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
-  .detail .sub { color: var(--muted); font-family: var(--mono); font-size: 11.5px; margin-top: 3px; overflow-wrap: anywhere; }
-  .divider { height: 1px; background: var(--line-soft); margin: 12px 0; }
-  .section-label { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 0 0 7px; }
-
-  .history { display: grid; gap: 7px; max-height: 46vh; overflow: auto; padding-right: 2px; }
-  .history-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: start; min-width: 0; }
-  .history-row .chip { justify-self: start; }
-  .history-note { min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; }
-  .history-age { color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .empty-state, .loading-state {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 34px 18px; text-align: center; color: var(--muted);
+  }
+  .loading-state { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .spinner {
+    width: 15px; height: 15px; border: 2px solid var(--line-strong);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .banner.error {
+    background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; overflow-wrap: anywhere;
+  }
 
   .memories { display: grid; gap: 14px; }
-  .memory { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
-  .memory-head { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+  .memory {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04); overflow: hidden; min-width: 0;
+  }
+  .memory-head {
+    padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px;
+    align-items: baseline; flex-wrap: wrap; min-width: 0; background: var(--surface-2);
+  }
   .memory-head h2 { margin: 0; font-size: 14px; }
   .memory-head .path { color: var(--faint); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
   .memory-head .mtime { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
@@ -178,48 +220,55 @@
   .memory-missing { color: var(--muted); font-style: italic; }
   .toc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .toc a {
-    background: var(--bg-3); border: 1px solid var(--line); border-radius: 7px;
-    padding: 4px 9px; font-size: 11.5px; color: var(--muted); max-width: 100%;
-    overflow-wrap: anywhere;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
+    padding: 4px 9px; font-size: 11.5px; color: var(--muted); max-width: 100%; overflow-wrap: anywhere;
   }
-  .toc a:hover { color: var(--text); border-color: #3a4d63; text-decoration: none; }
+  .toc a:hover { color: var(--accent); border-color: #b9c9e8; text-decoration: none; }
+
   .doc { min-width: 0; overflow-wrap: anywhere; }
   .doc section { scroll-margin-top: 74px; margin-bottom: 18px; min-width: 0; }
-  .doc h1, .doc h2, .doc h3, .doc h4 { margin: 0 0 7px; line-height: 1.25; overflow-wrap: anywhere; }
+  .doc h1, .doc h2, .doc h3, .doc h4 { margin: 0 0 7px; line-height: 1.25; overflow-wrap: anywhere; color: var(--text); }
   .doc h1 { font-size: 18px; }
-  .doc h2 { font-size: 15px; color: #cfe3f5; }
-  .doc h3 { font-size: 13.5px; color: #b9d2e8; }
+  .doc h2 { font-size: 15px; }
+  .doc h3 { font-size: 13.5px; }
   .doc h4 { font-size: 12.5px; color: var(--muted); }
-  .doc p { margin: 0 0 8px; color: #c6d5e3; }
-  .doc ul, .doc ol { margin: 0 0 9px; padding-left: 20px; color: #c6d5e3; }
+  .doc p { margin: 0 0 8px; color: var(--text-soft); }
+  .doc ul, .doc ol { margin: 0 0 9px; padding-left: 20px; color: var(--text-soft); }
   .doc li { margin: 2px 0; }
-  .doc code { font-family: var(--mono); font-size: 12px; background: #1a2532; border: 1px solid #26374a; border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
-  .doc pre { background: #0a111a; border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; max-width: 100%; }
+  .doc code {
+    font-family: var(--mono); font-size: 12px; background: #f1f4f8;
+    border: 1px solid #dde4ec; border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere;
+  }
+  .doc pre {
+    background: #f7f9fc; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; overflow: auto; max-width: 100%;
+  }
   .doc pre code { background: none; border: 0; padding: 0; white-space: pre; }
-  .doc blockquote { margin: 0 0 9px; padding: 4px 0 4px 10px; border-left: 2px solid #33506b; color: var(--muted); }
+  .doc blockquote {
+    margin: 0 0 9px; padding: 4px 0 4px 10px; border-left: 3px solid #bfdbfe;
+    color: var(--muted); background: #f8fbff;
+  }
   .doc hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 
-  .empty { padding: 28px 14px; text-align: center; color: var(--muted); }
-  .error { background: #2a1218; border: 1px solid #522430; color: #ffc2c9; padding: 10px 12px; border-radius: 9px; margin-bottom: 12px; overflow-wrap: anywhere; }
-
-  @media (max-width: 980px) {
-    .layout { grid-template-columns: minmax(0, 1fr); }
-    .detail { position: static; }
-    .history { max-height: none; }
-  }
-  @media (max-width: 640px) {
-    .wrap { padding: 12px; }
-    .topbar-inner { padding: 9px 12px; gap: 9px; }
-    .brand h1 { font-size: 14px; }
+  @media (max-width: 820px) {
+    .wrap { padding: 14px; }
+    .topbar-inner { padding: 9px 14px; gap: 10px; }
     .toolbar { grid-template-columns: minmax(0, 1fr); }
-    .stats { gap: 6px; }
-    .stat { flex: 1 1 90px; padding: 7px 9px; }
-    .stat b { font-size: 16px; }
-    .task-row { grid-template-columns: minmax(0, 1fr) auto; }
-    .task-row > .chip-wrap { grid-column: 1 / -1; }
-    .kv { grid-template-columns: 1fr; gap: 2px 0; }
-    .kv dd { margin-bottom: 7px; }
-    .history-row { grid-template-columns: 1fr; gap: 3px; }
+    .toolbar .btn { justify-self: start; }
+    .toolbar .result-count { text-align: left; }
+  }
+  @media (max-width: 620px) {
+    .brand h1 { font-size: 14px; }
+    .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .summary-item { min-width: 0; padding: 8px 10px; }
+    .summary-item b { font-size: 17px; }
+    .toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+    .toolbar .field { grid-column: 1 / -1; }
+    .toolbar .btn { grid-column: 1 / 2; justify-self: start; }
+    .toolbar .result-count { grid-column: 2 / 3; text-align: right; align-self: center; }
+    .board { gap: 11px; }
+    .column { flex-basis: 100%; }
+    .memory-head .mtime { margin-left: 0; }
   }
 </style>
 </head>
@@ -229,33 +278,36 @@
     <div class="topbar-inner">
       <div class="brand">
         <div class="brand-mark">F</div>
-        <h1>Firstmate Fleet<small>read-only ledger view</small></h1>
+        <div>
+          <h1>Firstmate Fleet</h1>
+          <small>read-only board</small>
+        </div>
       </div>
-      <nav class="tabs">
-        <button :class="{ active: view === 'fleet' }" @click="view = 'fleet'">Fleet</button>
-        <button :class="{ active: view === 'memories' }" @click="openMemories()">Memories</button>
+      <nav class="tabs" aria-label="View">
+        <button :class="{ active: view === 'board' }" :aria-pressed="view === 'board'" @click="view = 'board'">Board</button>
+        <button :class="{ active: view === 'memories' }" :aria-pressed="view === 'memories'" @click="openMemories()">Memories</button>
       </nav>
       <div class="topbar-spacer"></div>
-      <div class="refresh" v-if="view === 'fleet'">
+      <div class="refresh" v-if="view === 'board'">
         <span class="dot" :class="{ busy: loading, err: !!snapshotError }"></span>
         <span>{{ updatedLabel }}</span>
       </div>
-      <button class="btn" v-if="view === 'fleet'" :disabled="loading" @click="refreshSnapshot()">Refresh</button>
+      <button class="btn" v-if="view === 'board'" :disabled="loading" @click="refreshSnapshot()">Refresh</button>
       <button class="btn" v-if="view === 'memories'" :disabled="memoriesLoading" @click="loadMemories(true)">Refresh</button>
     </div>
   </header>
 
   <main class="wrap">
-    <div v-if="snapshotError && view === 'fleet'" class="error">
+    <div v-if="snapshotError && view === 'board'" class="banner error">
       Snapshot failed: {{ snapshotError }}
     </div>
 
-    <section v-show="view === 'fleet'">
-      <div class="stats">
-        <div class="stat"><b>{{ tasks.length }}</b><span>tasks</span></div>
-        <div class="stat"><b>{{ counts.working }}</b><span>working</span></div>
-        <div class="stat"><b>{{ counts.attention }}</b><span>needs attention</span></div>
-        <div class="stat"><b>{{ tasks.length ? projectNames.length : 0 }}</b><span>projects</span></div>
+    <section v-show="view === 'board'">
+      <div class="summary">
+        <div class="summary-item"><b>{{ tasks.length }}</b><span>tasks</span></div>
+        <div class="summary-item"><b>{{ counts.working }}</b><span>working</span></div>
+        <div class="summary-item"><b>{{ counts.attention }}</b><span>needs attention</span></div>
+        <div class="summary-item"><b>{{ projectNames.length }}</b><span>projects</span></div>
       </div>
 
       <div class="toolbar">
@@ -263,130 +315,88 @@
           <input v-model="search" type="search" placeholder="Search tasks, projects, branches, latest line" aria-label="Search tasks">
         </div>
         <div class="field">
-          <select v-model="stateFilter" aria-label="Filter by state">
-            <option value="all">All states</option>
-            <option v-for="state in stateNames" :key="state" :value="state">{{ state }}</option>
-          </select>
-        </div>
-        <div class="field">
           <select v-model="projectFilter" aria-label="Filter by project">
             <option value="all">All projects</option>
             <option v-for="project in projectNames" :key="project" :value="project">{{ project }}</option>
           </select>
         </div>
-        <button class="btn" @click="clearFilters()" :disabled="!filtersActive">Clear</button>
+        <button class="btn ghost" @click="clearFilters()" :disabled="!filtersActive">Clear</button>
+        <span class="result-count">{{ filteredTasks.length }} shown</span>
       </div>
 
-      <div class="layout">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Fleet</h2>
-            <span class="count">{{ filteredTasks.length }} of {{ tasks.length }}</span>
-          </div>
-          <div class="task-list" v-if="filteredTasks.length">
-            <div v-for="task in filteredTasks" :key="task.id"
-                 class="task-row" :class="{ selected: selectedId === task.id }"
-                 @click="selectTask(task)" tabindex="0" @keydown.enter="selectTask(task)">
-              <div class="chip-wrap">
-                <span class="chip" :class="stateClass(task.current_state.state)">{{ task.current_state.state || 'unknown' }}</span>
-              </div>
-              <div class="task-main">
-                <div class="task-title">{{ shortTitle(task) }}</div>
-                <div class="task-id">{{ task.id }}</div>
-                <div class="task-meta">
-                  {{ projectName(task) }}
-                  <span v-if="task.branch"> · {{ task.branch }}</span>
-                </div>
-                <div class="task-latest">{{ latestLine(task) }}</div>
-              </div>
-              <div class="task-side">
-                <div class="age">{{ latestAge(task) }}</div>
-              </div>
+      <div v-if="loading && !snapshot" class="loading-state">
+        <span class="spinner" aria-hidden="true"></span>
+        Loading the fleet board...
+      </div>
+      <div v-else-if="!filteredTasks.length" class="empty-state">
+        {{ tasks.length ? 'No tasks match these filters.' : 'No task records in this home yet.' }}
+      </div>
+      <div v-else class="board">
+        <section v-for="column in boardColumns" :key="column.key" class="column" :class="'column-' + column.key">
+          <header class="column-head">
+            <div class="column-title">
+              <span class="column-dot" aria-hidden="true"></span>
+              <h2>{{ column.label }}</h2>
             </div>
-          </div>
-          <div v-else class="empty">
-            {{ tasks.length ? 'No tasks match these filters.' : 'No task records in this home yet.' }}
-          </div>
-        </div>
-
-        <aside class="panel detail">
-          <div class="panel-head">
-            <h2>Task detail</h2>
-            <span class="count" v-if="selectedTask">{{ selectedTask.id }}</span>
-          </div>
-          <div v-if="!selectedTask" class="detail-empty">
-            Select a task to see its state, branch or pull request, and recent status history.
-          </div>
-          <div v-else class="detail-body">
-            <h3>{{ shortTitle(selectedTask) }}</h3>
-            <div class="sub">{{ selectedTask.id }}</div>
-            <div style="margin-top: 9px;">
-              <span class="chip" :class="stateClass(selectedTask.current_state.state)">
-                {{ selectedTask.current_state.state || 'unknown' }}
-              </span>
-            </div>
-            <dl class="kv">
-              <dt>Project</dt><dd>{{ projectName(selectedTask) }}</dd>
-              <dt>Kind</dt><dd>{{ selectedTask.kind || 'unknown' }}</dd>
-              <dt>Current</dt><dd>{{ selectedTask.current_state.detail || selectedTask.current_state.raw || 'unknown' }}</dd>
-              <dt>Branch</dt><dd>{{ selectedTask.branch || 'none' }}</dd>
-              <dt>Pull request</dt>
-              <dd>
-                <a v-if="selectedTask.pr && selectedTask.pr.url" :href="selectedTask.pr.url" target="_blank" rel="noopener noreferrer">{{ selectedTask.pr.url }}</a>
-                <span v-else>none</span>
-              </dd>
-            </dl>
-            <div class="divider"></div>
-            <p class="section-label">Recent status history</p>
-            <div v-if="statusLoading" class="hint">Loading history...</div>
-            <div v-else-if="statusError" class="hint">{{ statusError }}</div>
-            <div v-else-if="!statusLines.length" class="hint">No status lines recorded for this task.</div>
-            <div v-else class="history">
-              <div v-for="(line, index) in statusLines" :key="index" class="history-row">
-                <span class="chip" :class="stateClass(line.state)">{{ line.state || 'note' }}</span>
-                <div class="history-note">
-                  <div>{{ line.note }}</div>
-                  <div class="history-age">{{ lineAge(line) }}</div>
-                </div>
+            <span class="column-count">{{ column.tasks.length }}</span>
+          </header>
+          <div class="cards">
+            <article v-for="task in column.tasks" :key="task.id" class="card">
+              <div class="card-top">
+                <span class="project">{{ projectName(task) }}</span>
+                <span class="age">{{ latestAge(task) }}</span>
               </div>
-            </div>
+              <h3 class="card-title">{{ shortTitle(task) }}</h3>
+              <p class="card-now">{{ latestLine(task) }}</p>
+              <div class="card-foot">
+                <span class="chip" :class="stateTone(task)">{{ stateLabel(task) }}</span>
+                <span class="card-id">{{ task.id }}</span>
+              </div>
+              <div class="card-links" v-if="task.branch || prUrl(task)">
+                <span v-if="task.branch" class="branch" :title="task.branch">{{ task.branch }}</span>
+                <a v-if="prUrl(task)" :href="prUrl(task)" target="_blank" rel="noopener noreferrer">Pull request</a>
+              </div>
+            </article>
           </div>
-        </aside>
+        </section>
       </div>
     </section>
 
     <section v-show="view === 'memories'" class="memories">
-      <div v-if="memoriesError" class="error">Memories failed: {{ memoriesError }}</div>
-      <div v-if="memoriesLoading && !memories" class="empty">Loading captain preferences and learnings...</div>
+      <div v-if="memoriesError" class="banner error">Memories failed: {{ memoriesError }}</div>
+      <div v-if="memoriesLoading && !memories" class="loading-state">
+        <span class="spinner" aria-hidden="true"></span>
+        Loading captain preferences and learnings...
+      </div>
       <template v-else-if="memories">
         <div v-for="file in memoryFiles" :key="file.key" class="memory">
-        <div class="memory-head">
-          <h2>{{ file.label }}</h2>
-          <span class="path">data/{{ file.name }}</span>
-          <span class="mtime">{{ file.present ? 'modified ' + formatDate(file.mtime) : 'not present' }}</span>
-        </div>
-        <div class="memory-body">
-          <div v-if="!file.present" class="memory-missing">
-            This file is not present in this home.
+          <div class="memory-head">
+            <h2>{{ file.label }}</h2>
+            <span class="path">data/{{ file.name }}</span>
+            <span class="mtime">{{ file.present ? 'modified ' + formatDate(file.mtime) : 'not present' }}</span>
           </div>
-          <template v-else>
-            <div class="toc" v-if="sectionsFor(file).length">
-              <a v-for="section in sectionsFor(file)" :key="section.id" :href="'#' + anchor(file, section)"
-                 :style="section.level > 1 ? 'margin-left:' + Math.min(section.level - 1, 2) * 10 + 'px' : ''">
-                {{ section.title }}
-              </a>
+          <div class="memory-body">
+            <div v-if="!file.present" class="memory-missing">
+              This file is not present in this home.
             </div>
-            <div class="doc">
-              <section v-for="section in sectionsFor(file)" :key="section.id" :id="anchor(file, section)">
-                <h1 v-if="section.level === 1">{{ section.title }}</h1>
-                <h2 v-else-if="section.level === 2">{{ section.title }}</h2>
-                <h3 v-else-if="section.level === 3">{{ section.title }}</h3>
-                <h4 v-else>{{ section.title }}</h4>
-                <div v-html="renderMarkdown(section.lines)"></div>
-              </section>
-            </div>
-          </template>
-        </div>
+            <template v-else>
+              <div class="toc" v-if="sectionsFor(file).length">
+                <a v-for="section in sectionsFor(file)" :key="section.id" :href="'#' + anchor(file, section)"
+                   :style="section.level > 1 ? 'margin-left:' + Math.min(section.level - 1, 2) * 10 + 'px' : ''">
+                  {{ section.title }}
+                </a>
+              </div>
+              <div class="doc">
+                <section v-for="section in sectionsFor(file)" :key="section.id" :id="anchor(file, section)">
+                  <h1 v-if="section.level === 1">{{ section.title }}</h1>
+                  <h2 v-else-if="section.level === 2">{{ section.title }}</h2>
+                  <h3 v-else-if="section.level === 3">{{ section.title }}</h3>
+                  <h4 v-else>{{ section.title }}</h4>
+                  <div v-html="renderMarkdown(section.lines)"></div>
+                </section>
+              </div>
+            </template>
+          </div>
         </div>
       </template>
     </section>
@@ -396,15 +406,24 @@
 <script>
 const { createApp } = Vue;
 
-const STATE_ORDER = {
-  working: 0,
-  blocked: 1,
-  'needs-decision': 2,
-  paused: 3,
-  parked: 4,
-  unknown: 5,
-  failed: 6,
-  done: 7,
+const COLUMN_DEFS = [
+  { key: 'working', label: 'Working' },
+  { key: 'blocked', label: 'Blocked / needs decision' },
+  { key: 'parked', label: 'Parked' },
+  { key: 'done', label: 'Done / ready' },
+  { key: 'other', label: 'Other' },
+];
+
+const STATE_LABELS = {
+  working: 'Working',
+  blocked: 'Blocked',
+  'needs-decision': 'Needs decision',
+  'needs_decision': 'Needs decision',
+  paused: 'Paused',
+  parked: 'Parked',
+  done: 'Done',
+  failed: 'Failed',
+  unknown: 'Unknown',
 };
 
 function escapeHtml(value) {
@@ -419,19 +438,14 @@ function escapeHtml(value) {
 createApp({
   data() {
     return {
-      view: 'fleet',
+      view: 'board',
       snapshot: null,
       snapshotError: null,
       loading: false,
       lastUpdated: null,
       now: Date.now(),
       search: '',
-      stateFilter: 'all',
       projectFilter: 'all',
-      selectedId: null,
-      statusLines: [],
-      statusLoading: false,
-      statusError: null,
       memories: null,
       memoriesError: null,
       memoriesLoading: false,
@@ -442,20 +456,11 @@ createApp({
   computed: {
     tasks() {
       if (!this.snapshot || !Array.isArray(this.snapshot.tasks)) return [];
-      return this.snapshot.tasks.slice().sort((a, b) => {
-        const sa = STATE_ORDER[(a.current_state && a.current_state.state) || 'unknown'];
-        const sb = STATE_ORDER[(b.current_state && b.current_state.state) || 'unknown'];
-        const oa = sa == null ? 99 : sa;
-        const ob = sb == null ? 99 : sb;
-        if (oa !== ob) return oa - ob;
-        return String(a.id).localeCompare(String(b.id));
-      });
+      return this.snapshot.tasks.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
     },
     filteredTasks() {
       const search = this.search.trim().toLowerCase();
       return this.tasks.filter((task) => {
-        const state = (task.current_state && task.current_state.state) || 'unknown';
-        if (this.stateFilter !== 'all' && state !== this.stateFilter) return false;
         if (this.projectFilter !== 'all' && this.projectName(task) !== this.projectFilter) return false;
         if (!search) return true;
         const haystack = [
@@ -469,14 +474,21 @@ createApp({
         return haystack.indexOf(search) !== -1;
       });
     },
-    selectedTask() {
-      if (!this.selectedId) return null;
-      return this.tasks.find((task) => task.id === this.selectedId) || null;
-    },
-    stateNames() {
-      const seen = new Set();
-      this.tasks.forEach((task) => seen.add((task.current_state && task.current_state.state) || 'unknown'));
-      return Array.from(seen).sort();
+    boardColumns() {
+      const buckets = new Map(COLUMN_DEFS.map((column) => [column.key, { ...column, tasks: [] }]));
+      this.filteredTasks.forEach((task) => {
+        const bucket = buckets.get(this.columnKey(task)) || buckets.get('other');
+        bucket.tasks.push(task);
+      });
+      for (const bucket of buckets.values()) {
+        bucket.tasks.sort((a, b) => {
+          const aa = this.activitySeconds(a);
+          const ab = this.activitySeconds(b);
+          if (aa !== ab) return aa - ab;
+          return String(a.id).localeCompare(String(b.id));
+        });
+      }
+      return COLUMN_DEFS.map((column) => buckets.get(column.key)).filter((column) => column.tasks.length > 0);
     },
     projectNames() {
       const seen = new Set();
@@ -487,14 +499,14 @@ createApp({
       let working = 0;
       let attention = 0;
       this.tasks.forEach((task) => {
-        const state = (task.current_state && task.current_state.state) || 'unknown';
-        if (state === 'working') working += 1;
-        if (['blocked', 'failed', 'needs-decision', 'paused'].indexOf(state) !== -1) attention += 1;
+        const tone = this.stateTone(task);
+        if (tone === 'working') working += 1;
+        if (tone === 'blocked') attention += 1;
       });
       return { working, attention };
     },
     filtersActive() {
-      return !!this.search.trim() || this.stateFilter !== 'all' || this.projectFilter !== 'all';
+      return !!this.search.trim() || this.projectFilter !== 'all';
     },
     updatedLabel() {
       if (this.loading && !this.lastUpdated) return 'Loading...';
@@ -523,10 +535,6 @@ createApp({
         }
         this.snapshot = await response.json();
         this.lastUpdated = Date.now();
-        if (this.selectedId && !this.tasks.some((task) => task.id === this.selectedId)) {
-          this.selectedId = null;
-          this.statusLines = [];
-        }
       } catch (error) {
         this.snapshotError = error && error.message ? error.message : String(error);
       } finally {
@@ -535,7 +543,7 @@ createApp({
     },
     async openMemories() {
       this.view = 'memories';
-      if (!this.memories) await this.loadMemories(false);
+      await this.loadMemories(true);
     },
     async loadMemories(force) {
       if (this.memoriesLoading) return;
@@ -552,39 +560,24 @@ createApp({
         this.memoriesLoading = false;
       }
     },
-    async selectTask(task) {
-      this.selectedId = task.id;
-      this.statusLines = [];
-      this.statusError = null;
-      this.statusLoading = true;
-      try {
-        const response = await fetch('/api/task-status?id=' + encodeURIComponent(task.id), { cache: 'no-store' });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const payload = await response.json();
-        this.statusLines = payload.lines || [];
-      } catch (error) {
-        this.statusError = 'Could not load status history: ' + (error && error.message ? error.message : String(error));
-      } finally {
-        this.statusLoading = false;
-      }
-    },
     clearFilters() {
       this.search = '';
-      this.stateFilter = 'all';
       this.projectFilter = 'all';
+    },
+    onVisibilityChange() {
+      if (!document.hidden) this.refreshSnapshot();
     },
     projectName(task) {
       if (!task) return '';
       const project = task.project || '';
       const cleaned = project.replace(/[\\/]+$/, '');
       const base = cleaned.split(/[\\/]/).pop();
-      return base || task.backlog && task.backlog.repo || 'unknown';
+      return base || (task.backlog && task.backlog.repo) || 'unknown';
     },
     shortTitle(task) {
       if (!task) return '';
       const raw = (task.backlog && task.backlog.title) || task.id || 'Untitled task';
-      const cut = raw.split(' (repo:')[0];
-      return cut.trim();
+      return raw.split(' (repo:')[0].trim();
     },
     latestLine(task) {
       const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
@@ -600,17 +593,18 @@ createApp({
       }
       return 'no timestamp';
     },
+    activitySeconds(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && typeof last.age_seconds === 'number' && last.age_seconds >= 0) {
+        return last.age_seconds + this.secondsSinceSnapshot();
+      }
+      return Number.POSITIVE_INFINITY;
+    },
     secondsSinceSnapshot() {
       if (!this.snapshot || !this.snapshot.generated) return 0;
       const generated = Date.parse(this.snapshot.generated);
       if (!isFinite(generated)) return 0;
       return Math.max(0, (this.now - generated) / 1000);
-    },
-    lineAge(line) {
-      if (line && typeof line.at === 'number' && line.at > 0) {
-        return this.ageLabel((this.now / 1000) - line.at) + ' · ' + this.formatDate(line.at * 1000);
-      }
-      return 'time unknown';
     },
     ageLabel(seconds) {
       if (!isFinite(seconds)) return 'unknown';
@@ -627,8 +621,10 @@ createApp({
       if (months < 12) return months + 'mo ago';
       return Math.floor(months / 12) + 'y ago';
     },
-    formatDate(epochMs) {
-      if (epochMs == null || !isFinite(epochMs)) return 'unknown';
+    formatDate(epoch) {
+      if (epoch == null || !isFinite(epoch)) return 'unknown';
+      let epochMs = Number(epoch);
+      if (epochMs < 1e12) epochMs *= 1000;
       const date = new Date(epochMs);
       if (!isFinite(date.getTime())) return 'unknown';
       return date.toLocaleString(undefined, {
@@ -636,10 +632,30 @@ createApp({
         hour: '2-digit', minute: '2-digit',
       });
     },
-    stateClass(state) {
-      const value = String(state || 'unknown').toLowerCase();
-      if (value === 'needs_decision') return 'needs-decision';
-      return value;
+    stateRaw(task) {
+      const state = task && task.current_state && task.current_state.state;
+      return String(state || 'unknown').toLowerCase().replace(/_/g, '-');
+    },
+    stateTone(task) {
+      const state = this.stateRaw(task);
+      if (state === 'working') return 'working';
+      if (state === 'blocked' || state === 'needs-decision' || state === 'failed') return 'blocked';
+      if (state === 'parked' || state === 'paused') return 'parked';
+      if (state === 'done') return 'done';
+      return 'other';
+    },
+    columnKey(task) {
+      return this.stateTone(task);
+    },
+    stateLabel(task) {
+      const state = this.stateRaw(task);
+      if (STATE_LABELS[state]) return STATE_LABELS[state];
+      return state.charAt(0).toUpperCase() + state.slice(1).replace(/-/g, ' ');
+    },
+    prUrl(task) {
+      if (task.pr && task.pr.url) return task.pr.url;
+      if (task.backlog && task.backlog.pr_url) return task.backlog.pr_url;
+      return null;
     },
     anchor(file, section) {
       return 'mem-' + file.key + '-' + section.id;
@@ -759,13 +775,12 @@ createApp({
     this.refreshTimer = setInterval(() => {
       if (!document.hidden) this.refreshSnapshot();
     }, 30000);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.refreshSnapshot();
-    });
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   },
   beforeUnmount() {
     if (this.ticker) clearInterval(this.ticker);
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
 }).mount('#app');
 </script>
