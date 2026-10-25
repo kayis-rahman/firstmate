@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firstmate Fleet</title>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b1016;
+    --bg-2: #111821;
+    --bg-3: #17212c;
+    --panel: #0f1620;
+    --line: #223041;
+    --line-soft: #1a2532;
+    --text: #dce7f2;
+    --muted: #8fa3b8;
+    --faint: #64758a;
+    --accent: #5cc8ff;
+    --accent-2: #8b7bff;
+    --ok: #43d39e;
+    --warn: #ffbf5b;
+    --bad: #ff6b7a;
+    --chip-bg: #1b2634;
+    --shadow: 0 18px 50px rgba(0, 0, 0, .35);
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 15% -10%, #142334 0%, transparent 55%),
+                radial-gradient(900px 600px at 100% 0%, #1c1730 0%, transparent 45%),
+                var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  [v-cloak] { display: none; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { width: 100%; max-width: 1480px; margin: 0 auto; padding: 16px; min-width: 0; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(14px);
+    background: rgba(10, 15, 22, .82);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 1480px; margin: 0 auto; padding: 10px 16px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; color: #06121c; font-weight: 800; font-size: 15px;
+  }
+  .brand h1 { font-size: 15px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
+  .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
+  .tabs { display: flex; gap: 4px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tabs button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    padding: 6px 13px; border-radius: 7px; font-weight: 600; font-size: 13px;
+  }
+  .tabs button.active { background: var(--bg-3); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .topbar-spacer { flex: 1 1 auto; }
+  .refresh {
+    display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px;
+    min-width: 0;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: 0 0 auto; }
+  .dot.busy { background: var(--warn); animation: pulse 1s infinite; }
+  .dot.err { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .btn {
+    background: var(--bg-3); border: 1px solid var(--line); color: var(--text);
+    padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: #33465c; background: #1c2836; }
+  .btn:disabled { opacity: .55; cursor: default; }
+
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 12px; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 12px; min-width: 92px;
+  }
+  .stat b { display: block; font-size: 18px; line-height: 1.1; }
+  .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
+
+  .toolbar {
+    display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto auto auto;
+    margin-bottom: 12px; align-items: center;
+  }
+  .field { position: relative; min-width: 0; }
+  .field input, .field select {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 11px; outline: none; min-width: 0;
+  }
+  .field input:focus, .field select:focus { border-color: #3d5b7a; box-shadow: 0 0 0 3px rgba(92, 200, 255, .12); }
+  .field select { cursor: pointer; }
+  .hint { color: var(--faint); font-size: 12px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    min-width: 0; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 13px; border-bottom: 1px solid var(--line-soft); min-width: 0;
+  }
+  .panel-head h2 { margin: 0; font-size: 13px; letter-spacing: .02em; }
+  .panel-head .count { color: var(--faint); font-size: 12px; white-space: nowrap; }
+
+  .task-list { min-width: 0; }
+  .task-row {
+    display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 10px 12px;
+    padding: 11px 13px; border-bottom: 1px solid var(--line-soft);
+    cursor: pointer; align-items: start; min-width: 0;
+  }
+  .task-row:last-child { border-bottom: 0; }
+  .task-row:hover { background: #131d28; }
+  .task-row.selected { background: #142333; box-shadow: inset 3px 0 0 var(--accent); }
+  .task-main { min-width: 0; }
+  .task-title { font-weight: 650; font-size: 13.5px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .task-id { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .task-meta { color: var(--faint); font-size: 11.5px; margin-top: 2px; overflow-wrap: anywhere; }
+  .task-latest { color: var(--muted); font-size: 12px; margin-top: 5px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .task-side { text-align: right; min-width: 0; }
+  .age { color: var(--faint); font-size: 11.5px; white-space: nowrap; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: .03em; text-transform: uppercase; background: var(--chip-bg);
+    border: 1px solid #2a3a4d; color: var(--muted); white-space: nowrap;
+  }
+  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .chip.working { color: var(--ok); border-color: #245141; background: #0f2820; }
+  .chip.blocked, .chip.failed { color: var(--bad); border-color: #4a2430; background: #261117; }
+  .chip.paused, .chip.parked, .chip.needs-decision, .chip.captain_decision { color: var(--warn); border-color: #4a3a1d; background: #261d0e; }
+  .chip.done { color: #9fb6cc; border-color: #2a3a4d; background: #16202b; }
+  .chip.unknown { color: #c1a5ff; border-color: #3b2f59; background: #1c1729; }
+
+  .detail { position: sticky; top: 70px; }
+  .detail-body { padding: 13px; min-width: 0; }
+  .detail-empty { color: var(--muted); padding: 26px 13px; text-align: center; }
+  .kv { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 6px 10px; margin: 10px 0 0; font-size: 12.5px; }
+  .kv dt { color: var(--faint); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .detail h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .detail .sub { color: var(--muted); font-family: var(--mono); font-size: 11.5px; margin-top: 3px; overflow-wrap: anywhere; }
+  .divider { height: 1px; background: var(--line-soft); margin: 12px 0; }
+  .section-label { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 0 0 7px; }
+
+  .history { display: grid; gap: 7px; max-height: 46vh; overflow: auto; padding-right: 2px; }
+  .history-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: start; min-width: 0; }
+  .history-row .chip { justify-self: start; }
+  .history-note { min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; }
+  .history-age { color: var(--faint); font-size: 11px; margin-top: 2px; }
+
+  .memories { display: grid; gap: 14px; }
+  .memory { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
+  .memory-head { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+  .memory-head h2 { margin: 0; font-size: 14px; }
+  .memory-head .path { color: var(--faint); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+  .memory-head .mtime { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .memory-body { padding: 14px; min-width: 0; }
+  .memory-missing { color: var(--muted); font-style: italic; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .toc a {
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 7px;
+    padding: 4px 9px; font-size: 11.5px; color: var(--muted); max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .toc a:hover { color: var(--text); border-color: #3a4d63; text-decoration: none; }
+  .doc { min-width: 0; overflow-wrap: anywhere; }
+  .doc section { scroll-margin-top: 74px; margin-bottom: 18px; min-width: 0; }
+  .doc h1, .doc h2, .doc h3, .doc h4 { margin: 0 0 7px; line-height: 1.25; overflow-wrap: anywhere; }
+  .doc h1 { font-size: 18px; }
+  .doc h2 { font-size: 15px; color: #cfe3f5; }
+  .doc h3 { font-size: 13.5px; color: #b9d2e8; }
+  .doc h4 { font-size: 12.5px; color: var(--muted); }
+  .doc p { margin: 0 0 8px; color: #c6d5e3; }
+  .doc ul, .doc ol { margin: 0 0 9px; padding-left: 20px; color: #c6d5e3; }
+  .doc li { margin: 2px 0; }
+  .doc code { font-family: var(--mono); font-size: 12px; background: #1a2532; border: 1px solid #26374a; border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+  .doc pre { background: #0a111a; border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; max-width: 100%; }
+  .doc pre code { background: none; border: 0; padding: 0; white-space: pre; }
+  .doc blockquote { margin: 0 0 9px; padding: 4px 0 4px 10px; border-left: 2px solid #33506b; color: var(--muted); }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+
+  .empty { padding: 28px 14px; text-align: center; color: var(--muted); }
+  .error { background: #2a1218; border: 1px solid #522430; color: #ffc2c9; padding: 10px 12px; border-radius: 9px; margin-bottom: 12px; overflow-wrap: anywhere; }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .detail { position: static; }
+    .history { max-height: none; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 12px; }
+    .topbar-inner { padding: 9px 12px; gap: 9px; }
+    .brand h1 { font-size: 14px; }
+    .toolbar { grid-template-columns: minmax(0, 1fr); }
+    .stats { gap: 6px; }
+    .stat { flex: 1 1 90px; padding: 7px 9px; }
+    .stat b { font-size: 16px; }
+    .task-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .task-row > .chip-wrap { grid-column: 1 / -1; }
+    .kv { grid-template-columns: 1fr; gap: 2px 0; }
+    .kv dd { margin-bottom: 7px; }
+    .history-row { grid-template-columns: 1fr; gap: 3px; }
+  }
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">F</div>
+        <h1>Firstmate Fleet<small>read-only ledger view</small></h1>
+      </div>
+      <nav class="tabs">
+        <button :class="{ active: view === 'fleet' }" @click="view = 'fleet'">Fleet</button>
+        <button :class="{ active: view === 'memories' }" @click="openMemories()">Memories</button>
+      </nav>
+      <div class="topbar-spacer"></div>
+      <div class="refresh" v-if="view === 'fleet'">
+        <span class="dot" :class="{ busy: loading, err: !!snapshotError }"></span>
+        <span>{{ updatedLabel }}</span>
+      </div>
+      <button class="btn" v-if="view === 'fleet'" :disabled="loading" @click="refreshSnapshot()">Refresh</button>
+      <button class="btn" v-if="view === 'memories'" :disabled="memoriesLoading" @click="loadMemories(true)">Refresh</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div v-if="snapshotError && view === 'fleet'" class="error">
+      Snapshot failed: {{ snapshotError }}
+    </div>
+
+    <section v-show="view === 'fleet'">
+      <div class="stats">
+        <div class="stat"><b>{{ tasks.length }}</b><span>tasks</span></div>
+        <div class="stat"><b>{{ counts.working }}</b><span>working</span></div>
+        <div class="stat"><b>{{ counts.attention }}</b><span>needs attention</span></div>
+        <div class="stat"><b>{{ tasks.length ? projectNames.length : 0 }}</b><span>projects</span></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field">
+          <input v-model="search" type="search" placeholder="Search tasks, projects, branches, latest line" aria-label="Search tasks">
+        </div>
+        <div class="field">
+          <select v-model="stateFilter" aria-label="Filter by state">
+            <option value="all">All states</option>
+            <option v-for="state in stateNames" :key="state" :value="state">{{ state }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <select v-model="projectFilter" aria-label="Filter by project">
+            <option value="all">All projects</option>
+            <option v-for="project in projectNames" :key="project" :value="project">{{ project }}</option>
+          </select>
+        </div>
+        <button class="btn" @click="clearFilters()" :disabled="!filtersActive">Clear</button>
+      </div>
+
+      <div class="layout">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Fleet</h2>
+            <span class="count">{{ filteredTasks.length }} of {{ tasks.length }}</span>
+          </div>
+          <div class="task-list" v-if="filteredTasks.length">
+            <div v-for="task in filteredTasks" :key="task.id"
+                 class="task-row" :class="{ selected: selectedId === task.id }"
+                 @click="selectTask(task)" tabindex="0" @keydown.enter="selectTask(task)">
+              <div class="chip-wrap">
+                <span class="chip" :class="stateClass(task.current_state.state)">{{ task.current_state.state || 'unknown' }}</span>
+              </div>
+              <div class="task-main">
+                <div class="task-title">{{ shortTitle(task) }}</div>
+                <div class="task-id">{{ task.id }}</div>
+                <div class="task-meta">
+                  {{ projectName(task) }}
+                  <span v-if="task.branch"> · {{ task.branch }}</span>
+                </div>
+                <div class="task-latest">{{ latestLine(task) }}</div>
+              </div>
+              <div class="task-side">
+                <div class="age">{{ latestAge(task) }}</div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="empty">
+            {{ tasks.length ? 'No tasks match these filters.' : 'No task records in this home yet.' }}
+          </div>
+        </div>
+
+        <aside class="panel detail">
+          <div class="panel-head">
+            <h2>Task detail</h2>
+            <span class="count" v-if="selectedTask">{{ selectedTask.id }}</span>
+          </div>
+          <div v-if="!selectedTask" class="detail-empty">
+            Select a task to see its state, branch or pull request, and recent status history.
+          </div>
+          <div v-else class="detail-body">
+            <h3>{{ shortTitle(selectedTask) }}</h3>
+            <div class="sub">{{ selectedTask.id }}</div>
+            <div style="margin-top: 9px;">
+              <span class="chip" :class="stateClass(selectedTask.current_state.state)">
+                {{ selectedTask.current_state.state || 'unknown' }}
+              </span>
+            </div>
+            <dl class="kv">
+              <dt>Project</dt><dd>{{ projectName(selectedTask) }}</dd>
+              <dt>Kind</dt><dd>{{ selectedTask.kind || 'unknown' }}</dd>
+              <dt>Current</dt><dd>{{ selectedTask.current_state.detail || selectedTask.current_state.raw || 'unknown' }}</dd>
+              <dt>Branch</dt><dd>{{ selectedTask.branch || 'none' }}</dd>
+              <dt>Pull request</dt>
+              <dd>
+                <a v-if="selectedTask.pr && selectedTask.pr.url" :href="selectedTask.pr.url" target="_blank" rel="noopener noreferrer">{{ selectedTask.pr.url }}</a>
+                <span v-else>none</span>
+              </dd>
+            </dl>
+            <div class="divider"></div>
+            <p class="section-label">Recent status history</p>
+            <div v-if="statusLoading" class="hint">Loading history...</div>
+            <div v-else-if="statusError" class="hint">{{ statusError }}</div>
+            <div v-else-if="!statusLines.length" class="hint">No status lines recorded for this task.</div>
+            <div v-else class="history">
+              <div v-for="(line, index) in statusLines" :key="index" class="history-row">
+                <span class="chip" :class="stateClass(line.state)">{{ line.state || 'note' }}</span>
+                <div class="history-note">
+                  <div>{{ line.note }}</div>
+                  <div class="history-age">{{ lineAge(line) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section v-show="view === 'memories'" class="memories">
+      <div v-if="memoriesError" class="error">Memories failed: {{ memoriesError }}</div>
+      <div v-if="memoriesLoading && !memories" class="empty">Loading captain preferences and learnings...</div>
+      <template v-else-if="memories">
+        <div v-for="file in memoryFiles" :key="file.key" class="memory">
+        <div class="memory-head">
+          <h2>{{ file.label }}</h2>
+          <span class="path">data/{{ file.name }}</span>
+          <span class="mtime">{{ file.present ? 'modified ' + formatDate(file.mtime) : 'not present' }}</span>
+        </div>
+        <div class="memory-body">
+          <div v-if="!file.present" class="memory-missing">
+            This file is not present in this home.
+          </div>
+          <template v-else>
+            <div class="toc" v-if="sectionsFor(file).length">
+              <a v-for="section in sectionsFor(file)" :key="section.id" :href="'#' + anchor(file, section)"
+                 :style="section.level > 1 ? 'margin-left:' + Math.min(section.level - 1, 2) * 10 + 'px' : ''">
+                {{ section.title }}
+              </a>
+            </div>
+            <div class="doc">
+              <section v-for="section in sectionsFor(file)" :key="section.id" :id="anchor(file, section)">
+                <h1 v-if="section.level === 1">{{ section.title }}</h1>
+                <h2 v-else-if="section.level === 2">{{ section.title }}</h2>
+                <h3 v-else-if="section.level === 3">{{ section.title }}</h3>
+                <h4 v-else>{{ section.title }}</h4>
+                <div v-html="renderMarkdown(section.lines)"></div>
+              </section>
+            </div>
+          </template>
+        </div>
+        </div>
+      </template>
+    </section>
+  </main>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+const STATE_ORDER = {
+  working: 0,
+  blocked: 1,
+  'needs-decision': 2,
+  paused: 3,
+  parked: 4,
+  unknown: 5,
+  failed: 6,
+  done: 7,
+};
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+createApp({
+  data() {
+    return {
+      view: 'fleet',
+      snapshot: null,
+      snapshotError: null,
+      loading: false,
+      lastUpdated: null,
+      now: Date.now(),
+      search: '',
+      stateFilter: 'all',
+      projectFilter: 'all',
+      selectedId: null,
+      statusLines: [],
+      statusLoading: false,
+      statusError: null,
+      memories: null,
+      memoriesError: null,
+      memoriesLoading: false,
+      refreshTimer: null,
+      ticker: null,
+    };
+  },
+  computed: {
+    tasks() {
+      if (!this.snapshot || !Array.isArray(this.snapshot.tasks)) return [];
+      return this.snapshot.tasks.slice().sort((a, b) => {
+        const sa = STATE_ORDER[(a.current_state && a.current_state.state) || 'unknown'];
+        const sb = STATE_ORDER[(b.current_state && b.current_state.state) || 'unknown'];
+        const oa = sa == null ? 99 : sa;
+        const ob = sb == null ? 99 : sb;
+        if (oa !== ob) return oa - ob;
+        return String(a.id).localeCompare(String(b.id));
+      });
+    },
+    filteredTasks() {
+      const search = this.search.trim().toLowerCase();
+      return this.tasks.filter((task) => {
+        const state = (task.current_state && task.current_state.state) || 'unknown';
+        if (this.stateFilter !== 'all' && state !== this.stateFilter) return false;
+        if (this.projectFilter !== 'all' && this.projectName(task) !== this.projectFilter) return false;
+        if (!search) return true;
+        const haystack = [
+          task.id,
+          this.shortTitle(task),
+          this.projectName(task),
+          task.branch,
+          this.latestLine(task),
+          task.kind,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.indexOf(search) !== -1;
+      });
+    },
+    selectedTask() {
+      if (!this.selectedId) return null;
+      return this.tasks.find((task) => task.id === this.selectedId) || null;
+    },
+    stateNames() {
+      const seen = new Set();
+      this.tasks.forEach((task) => seen.add((task.current_state && task.current_state.state) || 'unknown'));
+      return Array.from(seen).sort();
+    },
+    projectNames() {
+      const seen = new Set();
+      this.tasks.forEach((task) => seen.add(this.projectName(task)));
+      return Array.from(seen).filter(Boolean).sort();
+    },
+    counts() {
+      let working = 0;
+      let attention = 0;
+      this.tasks.forEach((task) => {
+        const state = (task.current_state && task.current_state.state) || 'unknown';
+        if (state === 'working') working += 1;
+        if (['blocked', 'failed', 'needs-decision', 'paused'].indexOf(state) !== -1) attention += 1;
+      });
+      return { working, attention };
+    },
+    filtersActive() {
+      return !!this.search.trim() || this.stateFilter !== 'all' || this.projectFilter !== 'all';
+    },
+    updatedLabel() {
+      if (this.loading && !this.lastUpdated) return 'Loading...';
+      if (!this.lastUpdated) return 'Not loaded';
+      const seconds = Math.max(0, Math.round((this.now - this.lastUpdated) / 1000));
+      if (seconds < 3) return 'Updated just now';
+      if (seconds < 60) return 'Updated ' + seconds + 's ago';
+      const minutes = Math.floor(seconds / 60);
+      return 'Updated ' + minutes + 'm ago';
+    },
+    memoryFiles() {
+      return (this.memories && this.memories.files) || [];
+    },
+  },
+  methods: {
+    async refreshSnapshot() {
+      if (this.loading) return;
+      this.loading = true;
+      this.snapshotError = null;
+      try {
+        const response = await fetch('/api/snapshot', { cache: 'no-store' });
+        if (!response.ok) {
+          let detail = '';
+          try { detail = (await response.json()).detail || ''; } catch (e) { detail = ''; }
+          throw new Error('HTTP ' + response.status + (detail ? ': ' + detail : ''));
+        }
+        this.snapshot = await response.json();
+        this.lastUpdated = Date.now();
+        if (this.selectedId && !this.tasks.some((task) => task.id === this.selectedId)) {
+          this.selectedId = null;
+          this.statusLines = [];
+        }
+      } catch (error) {
+        this.snapshotError = error && error.message ? error.message : String(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async openMemories() {
+      this.view = 'memories';
+      if (!this.memories) await this.loadMemories(false);
+    },
+    async loadMemories(force) {
+      if (this.memoriesLoading) return;
+      if (this.memories && !force) return;
+      this.memoriesLoading = true;
+      this.memoriesError = null;
+      try {
+        const response = await fetch('/api/memories', { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        this.memories = await response.json();
+      } catch (error) {
+        this.memoriesError = error && error.message ? error.message : String(error);
+      } finally {
+        this.memoriesLoading = false;
+      }
+    },
+    async selectTask(task) {
+      this.selectedId = task.id;
+      this.statusLines = [];
+      this.statusError = null;
+      this.statusLoading = true;
+      try {
+        const response = await fetch('/api/task-status?id=' + encodeURIComponent(task.id), { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const payload = await response.json();
+        this.statusLines = payload.lines || [];
+      } catch (error) {
+        this.statusError = 'Could not load status history: ' + (error && error.message ? error.message : String(error));
+      } finally {
+        this.statusLoading = false;
+      }
+    },
+    clearFilters() {
+      this.search = '';
+      this.stateFilter = 'all';
+      this.projectFilter = 'all';
+    },
+    projectName(task) {
+      if (!task) return '';
+      const project = task.project || '';
+      const cleaned = project.replace(/[\\/]+$/, '');
+      const base = cleaned.split(/[\\/]/).pop();
+      return base || task.backlog && task.backlog.repo || 'unknown';
+    },
+    shortTitle(task) {
+      if (!task) return '';
+      const raw = (task.backlog && task.backlog.title) || task.id || 'Untitled task';
+      const cut = raw.split(' (repo:')[0];
+      return cut.trim();
+    },
+    latestLine(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && last.note) return last.note;
+      if (task.current_state && task.current_state.detail) return task.current_state.detail;
+      if (task.current_state && task.current_state.raw) return task.current_state.raw;
+      return 'No reported activity line.';
+    },
+    latestAge(task) {
+      const last = task.paths && task.paths.status_log && task.paths.status_log.last_event;
+      if (last && typeof last.age_seconds === 'number' && last.age_seconds >= 0) {
+        return this.ageLabel(last.age_seconds + this.secondsSinceSnapshot());
+      }
+      return 'no timestamp';
+    },
+    secondsSinceSnapshot() {
+      if (!this.snapshot || !this.snapshot.generated) return 0;
+      const generated = Date.parse(this.snapshot.generated);
+      if (!isFinite(generated)) return 0;
+      return Math.max(0, (this.now - generated) / 1000);
+    },
+    lineAge(line) {
+      if (line && typeof line.at === 'number' && line.at > 0) {
+        return this.ageLabel((this.now / 1000) - line.at) + ' · ' + this.formatDate(line.at * 1000);
+      }
+      return 'time unknown';
+    },
+    ageLabel(seconds) {
+      if (!isFinite(seconds)) return 'unknown';
+      const value = Math.max(0, Math.round(seconds));
+      if (value < 5) return 'just now';
+      if (value < 60) return value + 's ago';
+      const minutes = Math.floor(value / 60);
+      if (minutes < 60) return minutes + 'm ago';
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      if (days < 30) return days + 'd ago';
+      const months = Math.floor(days / 30);
+      if (months < 12) return months + 'mo ago';
+      return Math.floor(months / 12) + 'y ago';
+    },
+    formatDate(epochMs) {
+      if (epochMs == null || !isFinite(epochMs)) return 'unknown';
+      const date = new Date(epochMs);
+      if (!isFinite(date.getTime())) return 'unknown';
+      return date.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    },
+    stateClass(state) {
+      const value = String(state || 'unknown').toLowerCase();
+      if (value === 'needs_decision') return 'needs-decision';
+      return value;
+    },
+    anchor(file, section) {
+      return 'mem-' + file.key + '-' + section.id;
+    },
+    sectionsFor(file) {
+      if (!file || !file.content) return [];
+      return this.parseSections(file.content);
+    },
+    parseSections(content) {
+      const lines = String(content).split(/\r?\n/);
+      const sections = [];
+      let current = { id: 's0', title: 'Overview', level: 1, lines: [] };
+      let count = 0;
+      lines.forEach((line) => {
+        const match = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+        if (!match) {
+          current.lines.push(line);
+          return;
+        }
+        const keep = current.title !== 'Overview' || current.lines.some((entry) => entry.trim());
+        if (keep) sections.push(current);
+        const level = match[1].length;
+        count += 1;
+        current = { id: 's' + count, title: match[2].trim(), level, lines: [] };
+      });
+      const keepLast = current.title !== 'Overview' || current.lines.some((entry) => entry.trim());
+      if (keepLast) sections.push(current);
+      return sections;
+    },
+    renderMarkdown(lines) {
+      const escape = escapeHtml;
+      const inline = (text) => {
+        let out = escape(text);
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        return out;
+      };
+      let html = '';
+      let paragraph = [];
+      let list = null;
+      let code = null;
+      const flushParagraph = () => {
+        if (paragraph.length) {
+          html += '<p>' + paragraph.map(inline).join('<br>') + '</p>';
+          paragraph = [];
+        }
+      };
+      const closeList = () => {
+        if (list) {
+          html += '</' + list + '>';
+          list = null;
+        }
+      };
+      lines.forEach((raw) => {
+        const text = String(raw).replace(/\s+$/, '');
+        const trimmed = text.trim();
+        if (trimmed.startsWith('```')) {
+          flushParagraph();
+          closeList();
+          if (code === null) {
+            code = [];
+            html += '<pre><code>';
+          } else {
+            html += code.map(escape).join('\n') + '</code></pre>';
+            code = null;
+          }
+          return;
+        }
+        if (code !== null) {
+          code.push(text);
+          return;
+        }
+        if (!trimmed) {
+          flushParagraph();
+          closeList();
+          return;
+        }
+        const bullet = /^[-*+]\s+(.*)$/.exec(trimmed);
+        const numbered = /^\d+[.)]\s+(.*)$/.exec(trimmed);
+        if (bullet || numbered) {
+          flushParagraph();
+          const wanted = bullet ? 'ul' : 'ol';
+          if (list !== wanted) {
+            closeList();
+            html += '<' + wanted + '>';
+            list = wanted;
+          }
+          const content = (bullet || numbered)[1];
+          html += '<li>' + inline(content) + '</li>';
+          return;
+        }
+        if (trimmed.startsWith('>')) {
+          flushParagraph();
+          closeList();
+          html += '<blockquote>' + inline(trimmed.slice(1).trim()) + '</blockquote>';
+          return;
+        }
+        if (/^---+$/.test(trimmed)) {
+          flushParagraph();
+          closeList();
+          html += '<hr>';
+          return;
+        }
+        paragraph.push(trimmed);
+      });
+      if (code !== null) html += code.map(escape).join('\n') + '</code></pre>';
+      flushParagraph();
+      closeList();
+      return html;
+    },
+  },
+  mounted() {
+    this.refreshSnapshot();
+    if (window.location.hash === '#memories') this.openMemories();
+    this.ticker = setInterval(() => { this.now = Date.now(); }, 1000);
+    this.refreshTimer = setInterval(() => {
+      if (!document.hidden) this.refreshSnapshot();
+    }, 30000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.refreshSnapshot();
+    });
+  },
+  beforeUnmount() {
+    if (this.ticker) clearInterval(this.ticker);
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+  },
+}).mount('#app');
+</script>
+</body>
+</html>
