@@ -744,6 +744,7 @@ prefetch_task_current_states() {
 
 task_json_lines() {
   local meta original_meta id kind harness mode yolo project worktree home projects spawn_gen backend target status_log report_path
+  local model effort
   local remote_host remote_root current_file endpoint_file observation_line index=0
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
@@ -765,6 +766,8 @@ task_json_lines() {
     projects=$(meta_value "$meta" projects)
     spawn_gen=$(meta_value "$meta" spawn_gen)
     branch=$(meta_value "$meta" branch)
+    model=$(meta_value "$meta" model)
+    effort=$(meta_value "$meta" effort)
     remote_host=$(meta_value "$meta" remote_host)
     remote_root=$(meta_value "$meta" remote_root)
     if [ -n "$remote_host" ]; then
@@ -862,6 +865,8 @@ task_json_lines() {
       --arg mode "$mode" \
       --arg yolo "$yolo" \
       --arg branch "$branch" \
+      --arg model "$model" \
+      --arg effort "$effort" \
       --arg project "$project" \
       --arg worktree "$worktree" \
       --arg home "$home" \
@@ -894,6 +899,8 @@ task_json_lines() {
         harness:($harness // ""),
         mode:($mode // ""),
         yolo:($yolo // ""),
+        model:($model | if . == "" then null else . end),
+        effort:($effort | if . == "" then null else . end),
         branch:($branch | if . == "" then null else . end),
         project:($project // ""),
         spawn_gen:($spawn_gen | if . == "" then null else . end),
