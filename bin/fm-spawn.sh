@@ -61,7 +61,7 @@
 #   first in the private launch-brief overlay, including the exact task-owned
 #   steering inbox. This never rewrites a project's instruction files or a
 #   secondmate's charter.
-#        fm-spawn.sh <task-id> --relaunch [--harness <name>] [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> --relaunch [--harness <name>] [--model <name>] [--effort <level>] [--fresh-session]
 #   --relaunch launches a replacement agent for an EXISTING task into that
 #   task's own recorded worktree, reusing its recorded endpoint when that
 #   endpoint still exists, instead of creating either from scratch. It is
@@ -903,6 +903,7 @@ UPSTREAM_CONSENT=
 UPSTREAM_CONSENT_SET=0
 TRACEPARENT_SET=0
 RELAUNCH=0
+FRESH_SESSION=0
 # Opt-in only: exact-resume presentation-order lock waits instead of refusing.
 # Absent/unset keeps upstream refuse-on-contention. See header.
 HERDR_RESUME_LOCK_WAIT=0
@@ -975,6 +976,7 @@ for a in "$@"; do
     KIND_SET=1
     ;;
   --relaunch) RELAUNCH=1 ;;
+  --fresh-session) FRESH_SESSION=1 ;;
   --herdr-resume-lock-wait) HERDR_RESUME_LOCK_WAIT=1 ;;
   --harness) want_value=harness ;;
   --harness=*)
@@ -1090,6 +1092,10 @@ esac
 # so every axis this block resolves for a fresh spawn instead comes from that
 # task's own durable record below. Contradicting it on the command line is a
 # refusal rather than a silently-ignored flag.
+[ "$RELAUNCH" -eq 1 ] || [ "$FRESH_SESSION" -eq 0 ] || {
+  echo "error: --fresh-session is a relaunch-only option" >&2
+  exit 1
+}
 if [ "$RELAUNCH" -eq 1 ]; then
   [ "$BACKEND_SET" -eq 0 ] || {
     echo "error: --relaunch reuses the task's recorded backend; --backend cannot override it" >&2
@@ -3258,8 +3264,9 @@ muse_credential_present() {
 # agent, a stale one, a malformed reference - degrades to that same
 # fresh-session launch rather than refusing, because nothing here is a safety
 # property; it preserves a display and supervision signal.
-relaunch_resume_args() {  # <harness> <backend> <target>
-  local harness=${1-} backend=${2-} target=${3-} identity agent ref flag
+relaunch_resume_args() {  # <harness> <backend> <target> [fresh-session 0|1]
+  local harness=${1-} backend=${2-} target=${3-} fresh=${4-${FRESH_SESSION:-0}} identity agent ref flag
+  [ "$fresh" = 1 ] && return 0
   [ "$backend" = herdr ] || return 0
   [ -n "$target" ] || return 0
   fm_backend_herdr_parse_target "$target" || return 0
@@ -6562,7 +6569,7 @@ LAUNCH=${LAUNCH//__EFFORTFLAG__/$EFFORTFLAG}
 # placeholder; an empty value leaves every other launch byte-identical.
 RESUME_ARGS=
 if [ "$RELAUNCH" -eq 1 ]; then
-  RESUME_ARGS=$(relaunch_resume_args "$HARNESS" "$BACKEND" "$T") || RESUME_ARGS=
+  RESUME_ARGS=$(relaunch_resume_args "$HARNESS" "$BACKEND" "$T" "$FRESH_SESSION") || RESUME_ARGS=
 fi
 LAUNCH=${LAUNCH//__PIRESUME__/$RESUME_ARGS}
 LAUNCH=${LAUNCH//__PIGRESUME__/$RESUME_ARGS}

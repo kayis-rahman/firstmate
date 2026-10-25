@@ -27,6 +27,7 @@ set -u
 . "$ROOT/bin/fm-marker-lib.sh"
 
 CONTROL="$ROOT/bin/fm-control.sh"
+SPAWN="$ROOT/bin/fm-spawn.sh"
 SEND="$ROOT/bin/fm-send.sh"
 # fm_test_tmproot's own cleanup trap fires when its command substitution exits,
 # so recreate the root before resolving it and clean it up from this file's trap.
@@ -1346,3 +1347,87 @@ test_grok_interrupt_without_acknowledgement_reports_unconfirmed
 test_grok_idle_footer_does_not_confirm_cancellation
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task
+
+test_unknown_argument_to_fm_control_is_rejected() {
+  local rc
+  set +e
+  "$CONTROL" some-task relaunch --bogus >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "fm-control.sh must reject an unknown argument"
+  pass "fm-control.sh rejects an unknown argument instead of ignoring it"
+}
+
+test_fm_spawn_help_mentions_fresh_session_flag() {
+  "$SPAWN" --help 2>&1 | grep -q -- '--fresh-session' \
+    || fail "fm-spawn.sh help must mention --fresh-session"
+  pass "fm-spawn.sh help mentions the --fresh-session flag"
+}
+
+test_fm_control_help_mentions_fresh_session_flag() {
+  "$CONTROL" --help 2>&1 | grep -q -- '--fresh-session' \
+    || fail "fm-control.sh usage must mention --fresh-session"
+  pass "fm-control.sh usage mentions the --fresh-session flag"
+}
+
+test_unknown_argument_to_fm_control_is_rejected
+test_fm_spawn_help_mentions_fresh_session_flag
+test_fm_control_help_mentions_fresh_session_flag
+
+
+# Stub-backed test of relaunch_resume_args' --fresh-session handling, with no
+# Herdr endpoint: the herdr reference read is canned to a Pi-owned session so
+# the absent case keeps the --session reference and the present case drops it.
+test_relaunch_resume_args_fresh_session_behavior() {
+  local out
+  eval "$(sed -n '/^shell_quote()/,/^}/p' "$ROOT/bin/fm-spawn.sh")"
+  eval "$(sed -n '/^relaunch_resume_args()/,/^}/p' "$ROOT/bin/fm-spawn.sh")"
+  fm_backend_herdr_parse_target() { return 0; }
+  FM_BACKEND_HERDR_SESSION=herdr-session
+  FM_BACKEND_HERDR_PANE=herdr-pane
+  fm_backend_herdr_pane_agent_session_ref() { printf 'pi	ref-session-123'; }
+  out=$(relaunch_resume_args pi herdr some-target)
+  case "$out" in
+    *" --session "*ref-session-123*) : ;;
+    *) fail "absent --fresh-session must retain --session <ref>; got '$out'" ;;
+  esac
+  out=$(relaunch_resume_args pi herdr some-target 1)
+  [ -z "$out" ] || fail "present --fresh-session must drop the resume args; got '$out'"
+  FRESH_SESSION=1
+  out=$(relaunch_resume_args pi herdr some-target)
+  [ -z "$out" ] || fail "FRESH_SESSION=1 must drop the resume args; got '$out'"
+  FRESH_SESSION=0
+  pass "relaunch_resume_args keeps --session without --fresh-session and drops it with it"
+}
+
+test_fm_spawn_fresh_session_refused_outside_relaunch() {
+  local rc out
+  set +e
+  out=$(FM_HOME="$TMP_ROOT" "$SPAWN" some-task --fresh-session 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "fm-spawn.sh --fresh-session without --relaunch must refuse"
+  case "$out" in
+    *"relaunch-only option"*) : ;;
+    *) fail "refusal must say 'relaunch-only option'; got '$out'" ;;
+  esac
+  pass "fm-spawn.sh refuses --fresh-session outside a relaunch"
+}
+
+test_fm_control_exit_fresh_session_refused() {
+  local rc out
+  set +e
+  out=$(FM_HOME="$TMP_ROOT" "$CONTROL" some-task exit --fresh-session 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "fm-control.sh must reject --fresh-session on non-relaunch verbs"
+  case "$out" in
+    *"apply to 'relaunch' only"*) : ;;
+    *) fail "refusal must name relaunch-only; got '$out'" ;;
+  esac
+  pass "fm-control.sh refuses --fresh-session outside the relaunch verb"
+}
+
+test_relaunch_resume_args_fresh_session_behavior
+test_fm_spawn_fresh_session_refused_outside_relaunch
+test_fm_control_exit_fresh_session_refused

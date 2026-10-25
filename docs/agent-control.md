@@ -88,6 +88,9 @@ A relaunch does take one session reference when the endpoint's own runtime recor
    When the recorded endpoint is proven gone rather than merely idle or unreachable - which only Herdr and Rex can establish - the launch owner creates one fresh endpoint in that same worktree and the republished record rebinds the task to it - see [Reclaiming a task whose endpoint is gone](#reclaiming-a-task-whose-endpoint-is-gone).
 6. **Preserve runtime-bound status authority where supported.**
    The endpoint's runtime may bind pane status to one session identity; the launch owner preserves it only when that runtime records a reference the replacement adapter can consume, and otherwise launches the ordinary fresh session.
+   A relaunch launched with `--fresh-session` deliberately skips that preservation and starts a NEW agent session with no `--session <reference>`; the pane then reports a new session identity, so Herdr's per-pane status authority bound to the previous session no longer applies and the pane's displayed status may lag until the new agent reports.
+   Supervision of the worker continues because it keys off the endpoint and its pid, not the session identity, and the endpoint validation and agent-alive postconditions above still hold.
+   Pi's fresh session may show two first-run prompts; answer them with agent name = the task id and remote relay = No.
    This reference is a launch input, never authority to send, close, or act on the pane.
    [`docs/herdr-backend.md`](herdr-backend.md#agent-status-authority-and-relaunch) owns the mechanism and measured behavior.
 
