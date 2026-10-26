@@ -77,3 +77,21 @@ the stale-data warning.
 The dashboard shell is healthy and the Board view works, but 9 of 10 views are non-functional
 due to missing data files on the Pi host. No layout defects were found. The defect is operational
 (missing build artifacts), not in the page markup.
+
+## Addendum - after Pi auto-refresh (~19:27 UTC)
+
+The Pi auto-refreshed its build between the initial audit run and capture of the updated
+screenshots. State now:
+
+- Missing data files (404): `away.json`, `models.json`, `reviews.json` only.
+- Capacity panel is served but reports "Capacity is unavailable." (host metrics missing).
+- Live now: Board, Decisions, Pull requests, Workers, Fleet (secondmates + quota-related
+  content), Backlog, Activity, Health (quota side), Memories.
+- Still unavailable: Review boards (no Lavish sessions hosted on Pi), Health free models,
+  Fleet away posture ("Reading away posture..." never resolves).
+- "Home: unknown home" and the doubled "Nm ago ago" label persist; generated timestamp
+  advanced to 2026-10-26 07:27 PM.
+
+Root cause of the remaining three is environmental on the Pi (missing away record,
+free-model-axi, Lavish) rather than a broken build. Decision on whether to install/configure
+that tooling is with the captain.
