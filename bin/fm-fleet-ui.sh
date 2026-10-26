@@ -3,7 +3,11 @@
 #
 # `build` runs the read-only fleet sources once and writes plain JSON data files
 # plus a copy of assets/fleet-ui/index.html under the output directory.
-# `serve` builds, then serves that directory with python3 -m http.server.
+# `serve` builds, then hands that directory to the Shipcat project's Rust fleet
+# host (`fm-fleet-ui`, built from the Shipcat project's `fleet-host/` crate),
+# which is the only HTTP server for this dashboard. firstmate never vendors,
+# copies, installs, or builds that binary: `serve` uses FM_FLEET_UI_HOST_BIN
+# when it is set and otherwise resolves `fm-fleet-ui` from PATH.
 # The page never calls a live API and never drains, acknowledges, or mutates
 # fleet state.
 #
@@ -46,7 +50,7 @@ usage: fm-fleet-ui.sh <build|refresh|serve|path> [options]
 
   build    run the read-only sources once and write static dashboard files
   refresh  alias for build
-  serve    build, then serve the output directory with python3 -m http.server
+  serve    build, then serve the output directory with the Shipcat Rust fleet host
   path     print the output directory
   install-refresh   write (but do not load) a LaunchAgent that rebuilds every 60s
   uninstall-refresh remove that LaunchAgent file
@@ -58,6 +62,10 @@ options:
   --open        open the dashboard in a browser after serve starts
   --no-build    serve existing files without rebuilding
   --lavish      also open a Lavish review session for each open decision
+
+environment:
+  FM_FLEET_UI_HOST_BIN  path to the Shipcat fleet host binary `fm-fleet-ui`
+                        (default: resolve `fm-fleet-ui` from PATH)
 USAGE
 }
 
@@ -136,6 +144,23 @@ if [ "$HOST_EXPLICIT" -eq 0 ]; then
   HOST="127.0.0.1"
 fi
 
+# `serve` delegates the HTTP server to the Shipcat project's Rust fleet host.
+# firstmate never vendors, copies, installs, or builds that binary, so name the
+# exact thing to build when it is not where we look.
+FLEET_HOST_BIN=""
+if [ "$MODE" = "serve" ]; then
+  if [ -n "${FM_FLEET_UI_HOST_BIN:-}" ]; then
+    FLEET_HOST_BIN=$FM_FLEET_UI_HOST_BIN
+  else
+    FLEET_HOST_BIN=$(command -v fm-fleet-ui 2>/dev/null || true)
+  fi
+  if [ -z "$FLEET_HOST_BIN" ] || [ ! -x "$FLEET_HOST_BIN" ]; then
+    echo "fm-fleet-ui: serve needs the Shipcat fleet host binary 'fm-fleet-ui'." >&2
+    echo "fm-fleet-ui: build it from the Shipcat project's fleet-host/ crate (cargo build --release in fleet-host/) and put the binary on PATH, or set FM_FLEET_UI_HOST_BIN to its path." >&2
+    exit 1
+  fi
+fi
+
 if [ ! -f "$INDEX_FILE" ]; then
   echo "fm-fleet-ui: missing page: $INDEX_FILE" >&2
   exit 1
@@ -154,6 +179,7 @@ export FM_FLEET_UI_PORT="$PORT"
 export FM_FLEET_UI_OPEN="$OPEN"
 export FM_FLEET_UI_LAVISH="$LAVISH"
 export FM_FLEET_UI_HOST_EXPLICIT="$HOST_EXPLICIT"
+export FM_FLEET_UI_HOST_BIN="$FLEET_HOST_BIN"
 
 exec python3 - <<'PY'
 import collections
@@ -166,14 +192,12 @@ import re
 import shutil
 import signal
 import socket
-import socketserver
 import subprocess
 import fcntl
 import threading
 import time
 import urllib.parse
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 FM_ROOT = os.environ["FM_ROOT"]
 FM_HOME = os.environ["FM_HOME"]
@@ -189,6 +213,7 @@ PORT = int(os.environ["FM_FLEET_UI_PORT"])
 OPEN = os.environ["FM_FLEET_UI_OPEN"] == "1"
 LAVISH = os.environ["FM_FLEET_UI_LAVISH"] == "1"
 HOST_EXPLICIT = os.environ["FM_FLEET_UI_HOST_EXPLICIT"] == "1"
+FLEET_HOST_BIN = os.environ["FM_FLEET_UI_HOST_BIN"]
 
 VERSION = "fm-fleet-ui.v3"
 LOOPBACK = {"127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"}
@@ -2264,8 +2289,8 @@ def build_dashboard():
                 flush=True,
             )
     print(
-        "fm-fleet-ui: serve with: python3 -m http.server 8765 --bind 127.0.0.1 "
-        "--directory %s" % OUT,
+        "fm-fleet-ui: serve with: %s serve --out %s --host 127.0.0.1 --port 8765"
+        % (os.path.join(FM_ROOT, "bin", "fm-fleet-ui.sh"), OUT),
         flush=True,
     )
     return 0
@@ -2285,26 +2310,29 @@ def serve_dashboard():
         )
     url = "http://%s:%d/" % (HOST, PORT)
     print("fm-fleet-ui: serving %s at %s" % (OUT, url), flush=True)
+    # The Shipcat Rust fleet host owns the HTTP server. It serves the directory
+    # we just built, so it must not rebuild on startup.
     command = [
-        sys.executable,
-        "-m",
-        "http.server",
-        str(PORT),
-        "--bind",
-        HOST,
-        "--directory",
+        FLEET_HOST_BIN,
+        "serve",
+        "--no-build",
+        "--out",
         OUT,
+        "--host",
+        HOST,
+        "--port",
+        str(PORT),
     ]
     process = subprocess.Popen(command)
 
     def shutdown(signum=None, frame=None):
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        # A signal handler runs on the main thread, which may already be blocked
+        # inside Popen.wait(); any Popen call here re-enters its wait lock and
+        # hangs. Signal the child directly and let the parent exit.
+        try:
+            os.kill(process.pid, signal.SIGTERM)
+        except OSError:
+            pass
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, shutdown)
