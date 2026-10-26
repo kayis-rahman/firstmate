@@ -3,8 +3,10 @@
 #
 # The dashboard is a static screen: bin/fm-fleet-ui.sh build writes plain JSON
 # files plus a copy of assets/fleet-ui/index.html from the firstmate home, and
-# serve hands that directory to python3 -m http.server. This test builds a
-# fixture home, asserts the data files, and serves them on an ephemeral port.
+# serve hands that directory to the Shipcat project's Rust fleet host
+# (`fm-fleet-ui`). This test builds a fixture home, asserts the data files, and
+# checks the host delegation on an ephemeral port with a stand-in host binary,
+# plus the clear failure when that binary is absent.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -116,7 +118,46 @@ sock.close()
 PY
 ) || fail "could not reserve an ephemeral port"
 
-FM_HOME="$HOME_FIXTURE" "$ROOT/bin/fm-fleet-ui.sh" serve --no-build --port "$PORT" --out "$OUT_DIR" \
+# serve must name what to build when the Shipcat fleet host is absent.
+FM_HOME="$HOME_FIXTURE" FM_FLEET_UI_HOST_BIN="$TMP_ROOT/bin/missing-fm-fleet-ui" \
+  "$ROOT/bin/fm-fleet-ui.sh" serve --no-build --port "$PORT" --out "$OUT_DIR" \
+  > "$TMP_ROOT/missing-host.out" 2> "$TMP_ROOT/missing-host.err"
+status=$?
+[ "$status" -eq 1 ] || fail "serve without the fleet host exited $status, expected 1"
+grep -q 'fleet-host/' "$TMP_ROOT/missing-host.err" \
+  || fail "the missing-host error does not name the fleet-host crate"
+grep -q 'FM_FLEET_UI_HOST_BIN' "$TMP_ROOT/missing-host.err" \
+  || fail "the missing-host error does not name the override"
+
+# The stand-in host records the delegation and serves the built directory the
+# way the Shipcat Rust host does.
+mkdir -p "$TMP_ROOT/bin"
+STUB_HOST="$TMP_ROOT/bin/fm-fleet-ui"
+cat > "$STUB_HOST" <<'STUB'
+#!/usr/bin/env bash
+# Test stand-in for the Shipcat fleet host: record argv, then serve the directory.
+set -u
+printf '%s\n' "$@" > "$STUB_ARGS_FILE"
+mode=$1
+shift
+[ "$mode" = "serve" ] || { echo "stub host: unexpected mode: $mode" >&2; exit 2; }
+out=
+host=127.0.0.1
+port=8765
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --out) out=$2; shift 2 ;;
+    --host) host=$2; shift 2 ;;
+    --port) port=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+exec python3 -m http.server "$port" --bind "$host" --directory "$out"
+STUB
+chmod +x "$STUB_HOST"
+
+FM_HOME="$HOME_FIXTURE" FM_FLEET_UI_HOST_BIN="$STUB_HOST" STUB_ARGS_FILE="$TMP_ROOT/host-args.txt" \
+  "$ROOT/bin/fm-fleet-ui.sh" serve --no-build --port "$PORT" --out "$OUT_DIR" \
   > "$SERVER_OUT" 2> "$SERVER_ERR" &
 SERVER_PID=$!
 
@@ -127,7 +168,9 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 
-curl -fsS "$BASE/" | grep -q 'Firstmate Fleet' || fail "GET / did not return the fleet page"
+curl -fsS "$BASE/" -o "$TMP_ROOT/served-page.html" \
+  || fail "GET / did not return the fleet page"
+grep -q 'Firstmate Fleet' "$TMP_ROOT/served-page.html" || fail "GET / did not return the fleet page"
 
 curl -fsS "$BASE/data/snapshot.json" > "$TMP_ROOT/served-snapshot.json" \
   || fail "GET /data/snapshot.json failed"
@@ -151,4 +194,15 @@ if decisions.get("count") != 1:
     sys.exit("served decisions count: %r" % (decisions.get("count"),))
 PY
 
-pass "fleet UI builds static data and serves the page and its JSON read-only"
+# The wrapper hands the host the built directory and bind address, and never
+# asks it to rebuild what was just built.
+grep -qx 'serve' "$TMP_ROOT/host-args.txt" || fail "the fleet host was not invoked with serve"
+grep -qx -- '--no-build' "$TMP_ROOT/host-args.txt" || fail "the fleet host was told to rebuild"
+grep -qx -- "$OUT_DIR" "$TMP_ROOT/host-args.txt" || fail "the fleet host was not given the built directory"
+grep -qx '127.0.0.1' "$TMP_ROOT/host-args.txt" || fail "the fleet host was not given the loopback bind address"
+grep -qx -- "$PORT" "$TMP_ROOT/host-args.txt" || fail "the fleet host was not given the serve port"
+
+grep -q 'python3 -m http.server' "$TMP_ROOT/build.out" \
+  && fail "build still advertises the Python server"
+
+pass "fleet UI builds static data and serves it through the Shipcat fleet host"
