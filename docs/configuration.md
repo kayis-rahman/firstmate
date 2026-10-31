@@ -3041,3 +3041,12 @@ A live lock, a missing `lsof`, any failed check, or any other fetch failure keep
 Every wait, retry, and removal is printed to stderr, and a successful recovery also prints one `recovered:` summary line to stdout so a session-start refresh - which discards fleet-sync stderr and relays only stdout - still surfaces it.
 
 The shared staleness proof lives in `bin/fm-lock-lib.sh`, which both `fm-teardown.sh` and `fm-fleet-sync.sh` use.
+
+## Shadow typed-decision API (config/decision-api-shadow)
+
+Phase 1 runs the local MLX Serve typed-decision API (`/v1/systemone`) in shadow mode for wake classification.
+
+- Off by default. Create `config/decision-api-shadow` (empty file) to enable it.
+- When enabled, `bin/fm-classify-lib.sh` still decides locally; `bin/fm-decision-api.sh` asks one fixed-choice question and compares the answer, appending one line per disagreement or low-confidence answer to `state/decision-shadow.log`.
+- `bin/fm-decision-api.sh` is fail-open: MLX Serve being down or slow (hard timeout 3 seconds) makes it print nothing and do nothing.
+- Exact request, response, timeout, and logging mechanics live in the header of `bin/fm-decision-api.sh`.

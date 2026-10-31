@@ -2827,3 +2827,44 @@ stale_is_terminal() {  # <window> <state>
   last=$(last_status_line "$state/$(window_to_task "$win" "$state").status")
   [ -n "$last" ] && status_is_captain_relevant "$last"
 }
+
+# --- shadow typed-decision API (phase 1) ------------------------------------
+# Off by default. When config/decision-api-shadow exists, status_is_captain_relevant
+# consults bin/fm-decision-api.sh (local MLX Serve only) and records one line in
+# state/decision-shadow.log for each disagreement or low-confidence answer.
+# The existing local verdict is always the one returned; the helper is fail-open.
+_fm_classify_decision_shadow() {  # <local_rc> <status-line>
+  local local_rc=${1:-1} line=${2:-}
+  local cfg state_dir log helper out choice conf local_verdict low=0
+  cfg="${FM_CONFIG_OVERRIDE:-${FM_HOME:-.}/config}/decision-api-shadow"
+  [ -f "$cfg" ] || return 0
+  helper="${_FM_CLASSIFY_LIB_DIR:-.}/fm-decision-api.sh"
+  [ -x "$helper" ] || return 0
+  state_dir="${FM_STATE_OVERRIDE:-${FM_HOME:-.}/state}"
+  log="$state_dir/decision-shadow.log"
+  mkdir -p "$state_dir" 2>/dev/null || return 0
+  out=$("$helper" --context "$line" 2>/dev/null) || return 0
+  [ -n "$out" ] || return 0
+  choice=$(printf '%s' "$out" | jq -r '.choice // empty' 2>/dev/null) || return 0
+  conf=$(printf '%s' "$out" | jq -r '.confidence // empty' 2>/dev/null) || return 0
+  [ -n "$choice" ] || return 0
+  if [ "$local_rc" -eq 0 ]; then local_verdict='captain-relevant'; else local_verdict='not-captain-relevant'; fi
+  awk -v c="$conf" 'BEGIN{exit !(c+0 < 0.7)}' 2>/dev/null && low=1
+  if [ "$choice" != "$local_verdict" ] || [ "$low" -eq 1 ]; then
+    printf '%s local=%s api=%s confidence=%s line=%s\n' "$(date +%s)" "$local_verdict" "$choice" "$conf" "$line" >>"$log" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# Wrap status_is_captain_relevant so the shadow consult happens on every verdict
+# without altering its return value. The original definition is preserved under a
+# private name.
+if ! declare -F _fm_status_is_captain_relevant_base >/dev/null 2>&1; then
+  eval "$(declare -f status_is_captain_relevant | sed '1s/^status_is_captain_relevant/_fm_status_is_captain_relevant_base/')"
+fi
+status_is_captain_relevant() {  # <status-line>
+  _fm_status_is_captain_relevant_base "$@"
+  local rc=$?
+  _fm_classify_decision_shadow "$rc" "${1:-}"
+  return "$rc"
+}
