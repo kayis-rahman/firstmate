@@ -882,26 +882,22 @@ cmd_ready() {
   fi
 
   # The supervision model belongs to the INSPECTED home, not to whoever ran
-  # this command. A PiG lock owner is always unverified; for other harnesses,
-  # an explicit FM_SUPERVISION_MODEL wins; otherwise classify the lock-holder pid
-  # through fm-harness.sh ancestry. No holder or empty walk is honest unknown -
-  # never the caller's own harness, and never a durable per-home model record.
+  # this command. An explicit FM_SUPERVISION_MODEL still wins; otherwise
+  # classify the lock-holder pid through fm-harness.sh ancestry. No holder,
+  # or a walk that names nothing, is honest unknown - never the caller's
+  # own harness, and never a durable per-home model record.
   local resolved_model harness anc
   resolved_model=${FM_SUPERVISION_MODEL:-}
-  if [ "$lock_state" = held ] && [ -n "$lock_pid" ]; then
+  if [ -z "$resolved_model" ] && [ "$lock_state" = held ] && [ -n "$lock_pid" ]; then
     anc=$("$SELF_DIR/fm-harness.sh" ancestry "$lock_pid" 2>/dev/null || true)
     harness=${anc#* }
-    if [ "$harness" = pig ]; then
-      resolved_model=unverified
-    elif [ -z "$resolved_model" ]; then
-      case "$harness" in
-        claude|cursor) resolved_model=autoarm ;;
-        pi|pi-signed|omp) resolved_model=extension ;;
-        '') ;;
-        unknown) ;;
-        *) resolved_model=persistent ;;
-      esac
-    fi
+    case "$harness" in
+      claude|cursor|agy) resolved_model=autoarm ;;
+      pi|pi-signed|omp) resolved_model=extension ;;
+      '') ;;
+      unknown) ;;
+      *) resolved_model=persistent ;;
+    esac
   fi
   if [ -z "$resolved_model" ]; then
     consumer_state=unknown
@@ -910,14 +906,12 @@ cmd_ready() {
     consumer_state=unknown
     consumer_reason="no-wake-lib"
   else
-    fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
-      "$FM_HOME" "$FM_ROOT" "$resolved_model"
+    FM_SUPERVISION_MODEL=$resolved_model \
+      fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
+        "$FM_HOME" "$FM_ROOT"
     if [ "$FM_WATCHER_VERDICT_OK" = true ]; then
       consumer_state=healthy
       consumer_reason="supervised"
-    elif [ "$FM_WATCHER_VERDICT_REASON" = unverified-supervision ]; then
-      consumer_state=unknown
-      consumer_reason="supervision-unverified"
     elif [ "$FM_WATCHER_VERDICT_REASON" = no-watcher ]; then
       consumer_state=unknown
       consumer_reason="no-watcher"

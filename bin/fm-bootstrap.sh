@@ -17,20 +17,6 @@
 #                 <stamp>>; <n> failed attempt(s) ... last: <recorded failure>",
 #                 "BACKLOG_RECONCILE: <id>: <what this home could not reconcile>",
 #                 "BACKLOG_RECONCILE: code-root <file> is not this home's <file>; ...",
-#                 "COLLISION: <path> is recorded by <id>/<field>(<state-dir>) and
-#                 <id>/<field>(<state-dir>)" - two task records claim one live
-#                 working copy (bin/fm-slot-claim-lib.sh owns the scan); detect
-#                 and report only, never a repair - reconcile the stale record
-#                 with bin/fm-crew-state.sh: a spawn into that copy warns with
-#                 the same pair and teardown refuses it. The variant
-#                 "COLLISION: local task records could not be enumerated ..."
-#                 means the pair set is unverified this session start,
-#                 "HOOK_LAST_ERROR: task <id> busy-state hook last error: <line>"
-#                 - a worker's busy-state hook (bin/fm-busy-event.sh) recorded a
-#                 failure that every harness wrapper otherwise discards
-#                 silently; the record clears on the task's next successful arm
-#                 or retirement, so a line that persists names a hook still
-#                 failing on every use,
 #                 "TANGLE: <remediation>",
 #                 "SECONDMATE_SYNC: secondmate <id>: skipped: <reason>",
 #                 "NUDGE_SECONDMATES: secondmate <id>: send failed: <reason>",
@@ -225,6 +211,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
 # shellcheck source=bin/fm-timeout-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
+# shellcheck source=bin/fm-credential-source-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-credential-source-lib.sh"
 # Shared secondmate endpoint probe + guarded relaunch; the watcher's poll tick
 # drives the same library so session start and ordinary supervision recover
 # from identical evidence through an identical path.
@@ -836,7 +824,7 @@ secondmate_liveness_one() {  # <meta> <id>
       ;;
     relaunchable)
       if fm_secondmate_liveness_relaunch "$meta" "$id"; then
-        secondmate_note_respawned "$id"
+        [ "$FM_SM_LIVE_RESUME" = 1 ] || secondmate_note_respawned "$id"
         report_relaunch "$id" "$FM_SM_LIVE_CAUSE" "$FM_SM_LIVE_WHERE"
       elif [ "$FM_SM_LIVE_STATUS" = skipped ]; then
         echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $FM_SM_LIVE_REASON"
@@ -903,6 +891,7 @@ manual_install_url() {
     herdr) echo "https://herdr.dev" ;;
     paseo) echo "https://paseo.sh" ;;
     rex) echo "https://www.superlogical.com/rex" ;;
+    tern) echo "https://stencil.so/tern" ;;
     cursor-agent) echo "https://cursor.com/cli" ;;
     *) return 1 ;;
   esac
@@ -919,7 +908,7 @@ missing_tool_diagnostic() {
 
 # Required-tool detection follows the RESOLVED backend, not a one-size default:
 # a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). So a herdr/zellij/cmux home is
+# fm_backend_required_tools (bin/fm-backend.sh). So a herdr/zellij/cmux/tern home is
 # never told tmux is missing, and only orca drops treehouse. A backend value with
 # no verified dependency set is reported before the universal checks continue.
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi tasks-axi quota-axi"
@@ -1161,7 +1150,7 @@ EOF
 }
 
 crew_dispatch_validate() {
-  local file err verified_harnesses typed_key typed_active=false
+  local file cred err verified_harnesses typed_key typed_active=false
   file="$CONFIG/crew-dispatch.json"
   [ -f "$file" ] || return 0
   if ! command -v jq >/dev/null 2>&1; then
@@ -1174,11 +1163,17 @@ crew_dispatch_validate() {
   fi
   typed_key=$TYPESAFE_API_KEY_PRIVATE
   [ -n "$typed_key" ] || typed_key=$(fmx_env_get TYPESAFE_API_KEY "$FM_HOME/.env")
-  [ -z "$typed_key" ] || typed_active=true
+  cred="$CONFIG/dispatch-credential-sources.json"
+  if [ -n "$typed_key" ]; then
+    typed_active=true
+  elif [ -f "$cred" ] && fm_credsrc_check "$cred" typesafe openrouter >/dev/null &&
+    fm_credsrc_declares "$cred" typesafe; then
+    typed_active=true
+  fi
   if $typed_active; then
     verified_harnesses=$(fm_control_harnesses | jq -Rsc 'split("\n") | map(select(length > 0))')
   else
-    verified_harnesses='["claude","codex","opencode","pi","pi-signed","pig","grok","kimi","cursor","gemini","agy","muse","rovo","omp","devin","commandcode","polytoken"]'
+    verified_harnesses='["claude","codex","opencode","pi","pi-signed","grok","kimi","cursor","agy","muse","rovo","omp","devin","commandcode","polytoken","cortex","kiro"]'
   fi
   err=$(jq -r --argjson typed "$typed_active" --argjson verified_harnesses "$verified_harnesses" --arg provider_re "$FM_QUOTA_PROVIDER_ID_RE" '
     def verified($h): $verified_harnesses | index($h);
@@ -1191,6 +1186,7 @@ crew_dispatch_validate() {
       elif $h == "codex" then ((["low","medium","high","xhigh"] | index($e)) != null or ($e == "max" and $m == "gpt-5.6-luna"))
       elif $h == "grok" then (["low","medium","high"] | index($e))
       elif $h == "agy" then (["low","medium","high"] | index($e))
+      elif $h == "kiro" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "pi" or $h == "pi-signed" or $h == "omp" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "muse" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "rovo" then (["low","medium","high","max"] | index($e))
@@ -1222,6 +1218,8 @@ crew_dispatch_validate() {
           end);
     def malformed_profile_floors($items):
       ($items | any(has("floor") and floor_bad(.floor; false)));
+    def malformed_quota_scopes($items):
+      ($items | any(has("quota_scope") and (((.quota_scope | type) != "string") or (.quota_scope | length) == 0)));
     def bad_efforts:
       configured_profiles
       | map({h: .harness, m: .model, e: .effort})
@@ -1231,6 +1229,7 @@ crew_dispatch_validate() {
       | map("\(.h):\(.e)")
       | unique;
     if type != "object" then "top-level value must be an object"
+    elif has("preferred_provider") and (provider_id(.preferred_provider) | not) then "preferred_provider must be a lowercase provider ID (for example codex)"
     elif has("rules") and (.rules | type) != "array" then "rules must be an array"
     elif [(.rules // [])[]? | select(type != "object")] | length > 0 then "each rule must be an object"
     elif [(.rules // [])[]? | select((.when? | type) != "string" or (.when | length) == 0)] | length > 0 then "each rule needs non-empty when"
@@ -1242,6 +1241,7 @@ crew_dispatch_validate() {
       if $typed then "use profile model and effort must be non-empty strings, and provider must match ^[a-z0-9]+(-[a-z0-9]+)*\\z when present"
       else "use profile model and effort must be non-empty strings when present"
       end
+    elif $typed and malformed_quota_scopes([(.rules // [])[]? | profiles(.use?)[]?]) then "use profile quota_scope must be a non-empty string when present"
     elif $typed and malformed_profile_floors([(.rules // [])[]? | profiles(.use?)[]?]) then "use profile floor needs scope and min_percent 0..100"
     elif $typed and ([(.rules // [])[]? | select(has("approval") and .approval != "captain")] | length > 0) then "approval must be \"captain\" when present"
     elif $typed and ([(.rules // [])[]? | select(has("floor") and floor_bad(.floor; true))] | length > 0) then "rule floor needs scope, min_percent 0..100, and provider matching ^[a-z0-9]+(-[a-z0-9]+)*\\z"
@@ -1249,6 +1249,7 @@ crew_dispatch_validate() {
     elif [(.rules // [])[]? | select(has("select") and ((.select? | type) != "string" or (.select | length) == 0))] | length > 0 then "select must be a non-empty string"
     elif [(.rules // [])[]? | .select? // empty | select(. != "quota-balanced")] | length > 0 then
       "unknown select: " + ([ (.rules // [])[]? | .select? // empty | select(. != "quota-balanced") ] | unique | join(", "))
+    elif has("shared_quota") and (.shared_quota | type) != "boolean" then "shared_quota must be true or false when present"
     elif has("default") and ((.default | type) != "object" and (.default | type) != "array") then "default must be a profile object or non-empty profile array"
     elif has("default") and ((.default | type) == "array" and (.default | length) == 0) then "default needs at least one profile"
     elif has("default") and ([profiles(.default)[]? | select(type != "object")] | length) > 0 then "each default profile must be an object"
@@ -1257,6 +1258,7 @@ crew_dispatch_validate() {
       if $typed then "default profile model and effort must be non-empty strings, and provider must match ^[a-z0-9]+(-[a-z0-9]+)*\\z when present"
       else "default profile model and effort must be non-empty strings when present"
       end
+    elif $typed and has("default") and malformed_quota_scopes([profiles(.default)[]?]) then "default profile quota_scope must be a non-empty string when present"
     elif $typed and has("default") and malformed_profile_floors([profiles(.default)[]?]) then "default profile floor needs scope and min_percent 0..100"
     else
       (configured_profiles
@@ -1589,58 +1591,6 @@ detect_local_config() {
   detect_home_summary_publication
 }
 
-# Two task records naming one live working copy (the scan itself is
-# bin/fm-slot-claim-lib.sh's). The pair used to surface only as a teardown
-# refusal after the work was done; session start reports it plainly at once,
-# read-only - repairing a wrong record is bin/fm-crew-state.sh's operator
-# action, never this sweep's. The wake library carries a source-time state
-# mkdir, so it is sourced only once a state directory already exists; a fresh
-# home with no records creates nothing and reports nothing.
-detect_shared_copy_claims() {
-  local rc=0 line path claimants
-  [ -d "$STATE" ] || return 0
-  # shellcheck source=bin/fm-wake-lib.sh disable=SC1091
-  . "$SCRIPT_DIR/fm-wake-lib.sh"
-  # shellcheck source=bin/fm-slot-claim-lib.sh disable=SC1091
-  . "$SCRIPT_DIR/fm-slot-claim-lib.sh"
-  fm_slot_shared_rows "$STATE" || rc=$?
-  if [ "$rc" -eq 2 ]; then
-    echo "COLLISION: local task records could not be enumerated ($FM_SLOT_CLAIM_ERROR); shared working-copy pairs are unverified this session start"
-    return 0
-  fi
-  [ "$rc" -eq 0 ] || return 0
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    path=${line%%$'\t'*}
-    claimants=${line#*$'\t'}
-    claimants=${claimants//$'\t'/ and }
-    echo "COLLISION: $path is recorded by $claimants; reconcile the stale record (bin/fm-crew-state.sh) before cleanup refuses it"
-  done <<EOF
-$FM_SLOT_CLAIM_SHARED_ROWS
-EOF
-  return 0
-}
-
-# Surface the last error a worker's busy-state hook recorded. Every harness
-# wrapper around bin/fm-busy-event.sh deliberately swallows its exit status
-# (`|| true` in shell hooks, an ignoring callback in the Pi/OpenCode/omp
-# extensions), so without this record a hook that fails on every use produces
-# no named cause anywhere - its busy state simply stops moving (gap: environment
-# failures read as ordinary blockers). Read-only: prints one line per existing
-# record and touches nothing.
-detect_hook_last_errors() {
-  local record id content
-  [ -d "$STATE" ] || return 0
-  for record in "$STATE"/*.busy-event-last-error; do
-    [ -f "$record" ] && [ ! -L "$record" ] || continue
-    content=$(head -n 1 "$record" 2>/dev/null || true)
-    [ -n "$content" ] || continue
-    id=$(basename "$record" .busy-event-last-error)
-    echo "HOOK_LAST_ERROR: task $id busy-state hook last error: $content"
-  done
-  return 0
-}
-
 # Shadow-backlog check. When this home's data directory is not the code root's,
 # a code-root data/backlog.md or data/done-archive.md that is not this home's
 # own file is a queue a cwd-relative tasks-axi write has already forked; a link
@@ -1788,6 +1738,4 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   fi
 fi
 local_phase && secondmate_handoff_detect
-local_phase && detect_shared_copy_claims
-local_phase && detect_hook_last_errors
 exit 0

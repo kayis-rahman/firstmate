@@ -2,7 +2,7 @@
 name: afk
 description: >-
   Enter the away posture when the captain invokes /afk, says they are going afk, `state/.afk-contract` or `state/.afk` exists, an incoming message starts with `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
-  Load it at once in the /afk turn, before any other work. It writes the durable away-posture record with the captain's away words verbatim as the whole mandate in the same turn as /afk, reads the words back in plain sentences after entry, announces hold-for-return only at entry, and keeps the one supervision session in the away posture. Pi uses its supervision branch for this posture; PiG is configured to route through the same branch, but wake delivery, branch processing, and lifecycle recovery remain unverified. The daemon still delivers batched digests elsewhere for now. On the first unmarked message, render the return brief from durable records before ordinary work resumes.
+  Load it at once in the /afk turn, before any other work, and on the first unmarked message while away to render the return brief.
 user-invocable: true
 metadata:
   internal: true
@@ -28,8 +28,10 @@ Hold-for-return is the default and the only reach profile this release records: 
    Plain `/afk` with no words is a valid entry with no mandate; the announcement says no instructions were recorded.
    Re-invoking `/afk` while already away with no new words is a refresh and leaves the standing record untouched; new words replace the mandate at once, preserve the original session entry, and archive the superseded words for the return brief.
 2. **Per harness, after the record exists:**
-   - **Pi and pi-signed**: nothing to launch; go on to the announcement. The away daemon is not launched; the supervision session runs the posture through the branch.
-   - **PiG**: the configured route also skips the away daemon and points `/afk` and `/quiet` at the Pi branch. This routing is configured, not lifecycle-verified: watcher restoration, wake delivery, branch processing, background coverage, and direct TUI behavior remain unverified, so do not assume the branch has received or acted on a wake.
+   - **Pi and pi-signed**: nothing to launch; go on to the announcement.
+     The away daemon is no longer launched on Pi; the ordinary supervision session (`docs/pi-supervision-branch.md`) keeps running with the record present, and `bin/fm-afk-launch.sh start` refuses on these harnesses.
+     With the record present main is parked: the supervision branch takes every safe actionable wake, captain outcomes accumulate for the return brief, and main's standing authority relocates to the branch through the guarded scripts (`docs/pi-supervision-branch.md` "Postures"); only a wake the branch declines (including a broken branch or unsafe scan) or a watcher failure wakes main.
+     `/quiet` needs nothing extra on Pi: the attended branch already keeps routine wakes out of this conversation, so quiet-while-present is the attended posture's own shape there.
    - **A home that runs the supervision host** (a Claude home unless `config/supervision-host-off` opts it out, or a Cursor, OpenCode, omp, Grok, or Codex home with `config/supervision-host` and no opt-out; `docs/configuration.md` "Supervision host"): nothing to launch for `/afk`; go on to the announcement.
      The supervision host (`docs/supervision-host.md`) is the away session there: it runs the branch's contract on a headless engine under the record while main is parked, and `bin/fm-afk-launch.sh start` and `start-native` refuse the away daemon on that home.
      If `enter` printed a `Supervision host: no engine ...` line, every away wake reaches this conversation instead; say so in the announcement.
@@ -39,7 +41,8 @@ Hold-for-return is the default and the only reach profile this release records: 
      If the native launch fails, run `bin/fm-afk-launch.sh stop` to roll back the prepared lifecycle.
      Do not wrap it in `nohup ... &` (Codex/herdr can reap fire-and-forget shell children after a tool call returns).
    - **Every other harness** (codex, opencode, omp, and cursor on a home that does not run the supervision host, and kimi): run `bin/fm-afk-launch.sh start`.
-     It is the single owner of the daemon terminal: it creates a NON-VISIBLE tracked terminal for the current backend and passes the captain pane in as `FM_SUPERVISOR_TARGET` so the daemon injects into the captain, not its own new pane (docs/herdr-backend.md "Away-mode supervisor support").
+     It is the single owner of the daemon terminal: on pane backends it creates a NON-VISIBLE tracked terminal and passes the captain endpoint as `FM_SUPERVISOR_TARGET` so the daemon injects into the captain, not its own new pane (docs/herdr-backend.md "Away-mode supervisor support").
+     On the t3code backend there is no terminal to create, so `start` refuses and only the native path above works; a Codex captain hosted by T3 Code has no away daemon (docs/t3code-backend.md "Active limits").
    Both daemon paths require the record `enter` wrote and share `bin/fm-afk-start.sh` as the daemon entry.
    The daemon is **presence-gated**: it injects escalations only while `state/.afk` exists, and stays quiet otherwise.
 3. **Announce, then read back after entry.**
@@ -48,7 +51,7 @@ Hold-for-return is the default and the only reach profile this release records: 
    Say plainly which sentence, if any, you could not act on while away (a red merge, a discard, anything on the never-set, local-only landing); it waits for their return.
    This read-back is informational: the record already stands, so never ask for a go or wait for a reply; a captain who wants a different reading sends `/afk` again with new words.
 4. **Do not separately arm `fm-watch.sh` where the daemon runs.** The daemon manages the watcher as its child; the singleton lock no-ops a stray arm harmlessly.
-   Pi keeps its established extension-owned arm cycle. PiG's watcher arm and restoration remain unverified; do not infer that its configured extension path proves continuity.
+   On Pi nothing changes about arming: the supervision session's own cycle continues.
 
 ## While away
 
@@ -57,7 +60,8 @@ Hold-for-return is the default and the only reach profile this release records: 
 - The away session acts on the captain's words.
   It reads them at the tail of every wake, decides by its own judgment whether the event in front of it is the moment they name, acts on them only through the guarded scripts under standing authority, never by analogy, holds with verdict captain on doubt, and opens every outcome summary for an action taken under the words with "per your away instructions:" (`bin/fm-branch-prompt.sh` "Postures" owns the execution rules).
   Destructive, irreversible, and security-sensitive actions are never pre-authorizable whatever the words say, and ask-user findings keep the `ask-user-authority` policy unless the words pre-answer the exact decision; anything else that needs the captain holds for their return.
-- On Pi, main is parked and the supervision branch handles safe actionable wakes under main's standing authority through the guarded scripts. PiG is configured to use the same away-posture route, but its wake delivery, branch processing, and lifecycle are unverified; do not claim that it handles these actions or wakes main on branch declines. Where the branch does act, anything outside the away mandate holds for the return, a red merge never proceeds, and local-only landing waits for the captain (`docs/pi-supervision-branch.md` "Postures").
+- On Pi, main is parked and the supervision branch handles every safe actionable wake under main's standing authority, through the same guarded scripts main would use: any pull request green at its live head may merge (which one the words meant is the branch's reading), queued work whose blockers cleared - already queued, or filed by the branch because the words explicitly call for it - dispatches within the spend cap, and a decision is answered with the captain's own pre-stated answer or under `ask-user-authority`.
+  Anything else holds for the return, a red merge never proceeds while away, local-only landing always waits for the captain, and only a wake the branch declines (including a broken branch or unsafe scan) or a watcher failure wakes main (`docs/pi-supervision-branch.md` "Postures").
 - On a non-Pi home that runs the supervision host, the host's engine is that branch under the same rules, and a wake it hands back reaches main through that harness's own wake path (`Stop hook feedback` on Claude, a `watcher` follow-up on Cursor, OpenCode, and omp, the arm's background-task-completed notification on Grok, the checkpoint's output on Codex) with a `supervision-host:` line: that is automatic supervision, never the captain's return, so handle it under the away posture ([supervision protocol](../../../docs/supervision-protocols/supervision-host.md)).
 - The session-start digest reports the posture under its AFK subsection, so a restart re-enters the posture from the record, not from memory.
 
@@ -94,13 +98,14 @@ While the away-posture record exists, any pull request green at its live head ma
 Away authority never releases a captain hold, and it expires when the away record is archived.
 `--allow-red`, `--allow-missing`, and `--allow-no-pipeline` remain attended-only and are refused while the away record exists.
 A merge under away authority must be synchronous; `fm-pr-merge.sh` refuses auto-merge and any GitHub queue state that cannot prove an immediate merge while the away record exists.
-The same gates bind whichever actor performs the action. Pi relocates parked main's standing authority to its supervision branch, which meets these rules. PiG's configured branch route is not lifecycle-verified, so do not infer that it receives the away mandate or enforces the spend cap; `fm-spawn.sh` enforces the cap for launches while the away record exists.
+The same gates bind whichever actor performs the action: on Pi the parked main's standing authority relocates to the supervision branch, which meets exactly these rules, and the spend cap recorded at entry is enforced by `fm-spawn.sh` for both actors while the away record exists.
 The captain's away words are their explicit instruction given before leaving, recorded verbatim and acted on by the away session's judgment at the moment an event makes them relevant; the words cover nothing they do not say, are never applied by analogy, and die at archive.
 Destructive, irreversible, and security-sensitive actions are never pre-authorizable whatever the words say.
 
 ## The daemon, where it still runs
 
-On harnesses that launch the daemon (all except Pi, pi-signed, and the configured PiG branch route, and except away mode on a home that runs the supervision host), the mechanics below are unchanged. PiG's branch route does not establish verified watcher or wake lifecycle support.
+On the harness and backend combinations that still launch the daemon, the mechanics below are unchanged.
+Pi, pi-signed, a home that runs the supervision host, and the T3 Code limits above remain outside this section.
 
 ### Operational prefix contract
 
@@ -114,9 +119,11 @@ For other harnesses, the operational prefix travels with the message text; neith
 
 ### Busy-guard and composer guard
 
-The daemon never injects into an in-use pane. Two checks run before every
-injection, dispatched through `bin/fm-backend.sh` for the supervisor's own
-backend (see [supervisor backend configuration](../../../docs/configuration.md#away-mode-supervisor-backend-fm_supervisor_backend--fm_supervisor_target)):
+The daemon never injects into an in-use pane. T3 Code has no composer and uses
+the native status and turn transport owned by
+[`docs/t3code-backend.md`](../../../docs/t3code-backend.md#away-mode). Two
+checks run before every pane injection, dispatched through `bin/fm-backend.sh`
+for the supervisor's own backend (see [supervisor backend configuration](../../../docs/configuration.md#away-mode-supervisor-backend-fm_supervisor_backend--fm_supervisor_target)):
 
 - **Primary-pane busy guard** - `pane_is_busy` trusts the backend's native `busy` when available, otherwise matches rendered output against only the detected primary harness's signature.
   This narrow delivery guard never classifies a recorded worker task and never uses a global union of vendor patterns.
@@ -130,8 +137,7 @@ A busy primary pane, or any composer verdict other than `empty`, defers the inje
 In afk mode the composer guard is belt-and-suspenders (no human is typing), but it protects against the race window between the captain returning and their message landing, a dead shell, and the daemon's own previous injection sitting unsent.
 
 **Max-defer escape (the daemon must never silently wedge).**
-If anything stays buffered past `FM_MAX_DEFER_SECS` (default 300), the daemon
-attempts one normal flush, which still requires an idle pane and an affirmatively empty composer.
+If anything stays buffered past `FM_MAX_DEFER_SECS` (default 300), the daemon attempts one normal flush, which still requires an idle endpoint and, on pane backends, an affirmatively empty composer.
 The alarm is defense in depth rather than a substitute for keeping every genuinely idle supported composer injectable.
 If that submit cannot be confirmed, it raises a loud, rate-limited wedge alarm:
 an ERROR in the daemon log naming the last delivery failure, a durable
@@ -141,9 +147,8 @@ So a guard false-positive becomes a visible stall, never an unbounded silent no-
 
 ### Submit model
 
-The digest is typed **once** (`send-keys -l` on tmux, `pane send-text` on
-herdr - both literal, non-submitting sends), then submitted with Enter and
-**verified** through the selected backend's submit primitive.
+On tmux and Herdr, the digest is typed **once** with a literal, non-submitting send (`send-keys -l` on tmux, `pane send-text` on Herdr).
+Enter submits it, and the selected backend's submit primitive verifies delivery.
 Enter is retried (Enter only, never a retype) until the backend confirms the
 submit landed.
 A failed delivery is logged with its stage (initial send or Enter delivery, where no confirmation retry ran and the text may already be typed on backends such as herdr whose Enter could not be sent, or Enter confirmation), the payload's byte count, and the transport's own error output.
@@ -154,7 +159,7 @@ A bordered-empty or ghost-only composer is recognized as empty where that backen
 `fm-send.sh` uses the same primitive only on its typed plane and exits non-zero when that plane's Enter is positively swallowed; ordinary local text steers use the durable inbox and do not treat doorbell submission as delivery proof.
 
 **Busy-queued Enter exception (opencode).** OpenCode keeps queued text visible while it is mid-turn, so the supported supervisor adapters delegate the final delivery decision to `fm_composer_queued_enter_verdict` in `bin/fm-composer-lib.sh` rather than treating visible text alone as a swallowed Enter.
-The daemon still clears its buffer only on the backend's `empty` success verdict; [`docs/tmux-backend.md`](../../../docs/tmux-backend.md), [`docs/herdr-backend.md`](../../../docs/herdr-backend.md), and [`docs/rex-backend.md`](../../../docs/rex-backend.md#current-operation-and-safety) own the backend-specific confirmation signals.
+The daemon still clears its buffer only on the backend's `empty` success verdict; [`docs/tmux-backend.md`](../../../docs/tmux-backend.md), [`docs/herdr-backend.md`](../../../docs/herdr-backend.md), [`docs/rex-backend.md`](../../../docs/rex-backend.md#current-operation-and-safety), and [`docs/t3code-backend.md`](../../../docs/t3code-backend.md#away-mode) own the backend-specific confirmation signals.
 
 ### Classification policy
 
@@ -181,6 +186,7 @@ Classify each wake this way, applying the steering-inbox exception before status
 - `stale` with a terminal status, a bare legacy captain-relevant line, or an unrecognized status prefix such as `parked:` -> escalate.
   Nonterminal progress remains transient even when its prose contains a legacy free-text token or its seen-status marker already matches, so record a marker and self-handle.
   If the pane is still idle past `FM_STALE_ESCALATE_SECS` (default 240s), housekeeping escalates it as a possible wedge.
+  For T3 native uncertainty, follow the [stale-alert retention contract](../../../docs/t3code-backend.md#away-mode).
   This bounds wedge-detection latency to the threshold plus a tick: a delay, never a loss.
   A stale detail that ends with `blocked-on-prompt:` and a dialog name means the pane shows that dialog, so the worker cannot continue until someone answers it.
   An escalation this path already sends keeps that name, whether it comes from the status log or from housekeeping.
@@ -203,30 +209,18 @@ The single-line format makes submission unambiguous across harnesses; the carrie
 - **Single-line digest** - embedded newlines are collapsed to a literal
   separator before injection, so submission is unambiguous regardless of
   harness.
-- **Busy and composer guards on the supervisor pane** - before injecting, the daemon runs the detected-primary-harness rendered busy guard and reads `fm_backend_composer_state` directly.
-  Only `empty` permits injection; `pending` protects half-typed or swallowed input, and `unknown` protects unreadable panes and bare dead-shell prompts.
-  Every other result preserves the buffer for retry, so the daemon never merges its digest into the captain's half-typed line or types it into a shell.
-- The active backend passes its capture plus declarative styled, cursor, identity, and row capabilities to the shared screen classifier; all structural recognition and verdict logic remains in `bin/fm-composer-lib.sh`.
+- **Busy and composer guards on the supervisor endpoint** - before injecting, the daemon runs the backend's busy guard and reads `fm_backend_composer_state` directly.
+  On pane backends, only `empty` permits injection; `pending` protects half-typed or swallowed input, and `unknown` protects unreadable panes and bare dead-shell prompts.
+  For T3 Code, follow the [native injection contract](../../../docs/t3code-backend.md#away-mode).
+  Every other pane verdict preserves the buffer for retry, so the daemon never merges its digest into the captain's half-typed line or types it into a shell.
+- Pane backends pass their capture plus declarative styled, cursor, identity, and row capabilities to the shared screen classifier; all structural recognition and verdict logic remains in `bin/fm-composer-lib.sh`.
   Styled captures let that owner remove dim/faint and dark-TRUECOLOR ghost or placeholder text while shape detection uses the ANSI-stripped screen, so a dark border is not lost with ghost content.
   A ghost-only or idle bordered composer such as claude's `│ > ... │` therefore reads empty without allowing an unbordered shell prompt to do the same.
   `FM_COMPOSER_IDLE_RE` overrides the shared idle-placeholder regex, but a match alone never bypasses the classifier's shape-specific position and ANSI de-emphasis safety gates.
   `FM_BUSY_REGEX` overrides the rendered delivery guards plus Grok's isolated task-state fallback.
   A blank or otherwise unidentified input row carries no positive container proof and defers injection, so a modal dialog or a mid-redraw pane is never an injection target.
-- **Max-defer escape** - the daemon must never silently wedge. If anything stays
-  buffered past `FM_MAX_DEFER_SECS` (default 300s), the daemon attempts one
-  normal flush, which still requires an idle pane and an affirmatively empty composer. If that
-  cannot confirm a submit, it raises a loud, rate-limited wedge alarm: ERROR log,
-  durable `state/.subsuper-inject-wedged` marker, a tmux status-line flash when
-  applicable, and a backend-independent active alert. A
-  composer false-positive surfaces as a visible stall, never an unbounded silent
-  no-op.
-- **Verified type-once submit model** - the digest is typed once (`send-keys -l`
-  on tmux, `pane send-text` on herdr), then submitted with Enter and verified.
-  Enter is retried, Enter only and never a retype, until the backend submit
-  primitive reports `empty` as its caller-facing success verdict.
-  For tmux that verdict normally means the shared classifier proved the composer cleared; a baseline-gated idle-to-busy transition may instead prove this Enter started the turn.
-  For herdr's idle-baseline path it means native agent-state observed a turn start, the shared classifier proved the composer cleared, or the shared queued-Enter verdict proved delivery while busy.
-  This lets ghost-only or bordered-empty composers count as empty where a composer read is the active confirmation signal.
+- **Max-defer escape** - follow the [bounded flush and alarm contract above](#busy-guard-and-composer-guard) and the [alert setup guide](../../../docs/wedge-alarm.md).
+- **Verified submit model** - follow the [submit model](#submit-model) and its linked backend confirmation contracts.
 - **Marker strip** - `strip_injection_marker` removes the current operational
   prefix or legacy bare marker before classification or relay, so the digest
   text firstmate sees is clean; `open` prints a record-backed doorbell's digest
@@ -243,7 +237,7 @@ The single-line format makes submission unambiguous across harnesses; the carrie
 Treat `state/.subsuper-escalations`, its `.since` sidecar, `state/.subsuper-inject-wedged`, and `state/.subsuper-unknown-acked` as session-scoped delivery artifacts, not as the durable work record.
 Always enter through `bin/fm-afk-launch.sh`, which clears prior-session artifacts only for a fresh entry and preserves the current session's buffer on refresh.
 Always exit through `bin/fm-afk-launch.sh stop`, which keeps `state/.afk` present through the daemon's shutdown flush, clears it, and archives the posture record last.
-`docs/herdr-backend.md` "Away-mode supervisor support" owns the current mechanism, and `docs/verification/runtime-backends.md` "Away-mode transport" owns active evidence.
+`docs/herdr-backend.md` "Away-mode supervisor support" and `docs/t3code-backend.md` "Away mode" own the backend mechanisms, and `docs/verification/runtime-backends.md` "Away-mode transport" owns active evidence.
 
 ### Reliability properties
 
