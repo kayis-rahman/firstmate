@@ -604,7 +604,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
-test_pig_worker_dispatch_preserves_primary_and_secondmate_boundaries() {
+test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
   for kind in ship scout secondmate; do
@@ -648,24 +648,12 @@ test_pig_worker_dispatch_preserves_primary_and_secondmate_boundaries() {
         out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "${invocation[@]}")
       fi
       status=$?
-      case "$kind:$route" in
-        ship:explicit|ship:positional|ship:config|scout:explicit|scout:positional|scout:config)
-          expect_code 0 "$status" "$kind $route PiG worker dispatch should succeed: $out"
-          assert_contains "$out" "spawned $id harness=pig" "$kind $route did not preserve PiG worker identity"
-          launch=$(cat "$LAUNCH_LOG")
-          assert_contains "$launch" "-e '$HOME_DIR/state/$id.pi-ext.ts'" "$kind $route did not load the PiG worker lifecycle extension"
-          continue
-          ;;
+      expect_code 1 "$status" "$kind $route shell/PiG selection must refuse"
+      case "$route" in
+        bash-*) assert_contains "$out" "raw shell -c launches cannot be safely classified" "$kind $route refusal must identify the raw-shell boundary" ;;
+        *) assert_contains "$out" "PiG is verified as a primary-only harness" "$kind $route refusal must identify PiG's dispatch boundary" ;;
       esac
-      expect_code 1 "$status" "$kind $route unsupported PiG route must refuse"
-      case "$kind:$route" in
-        *:bash-*) assert_contains "$out" "raw shell -c launches cannot be safely classified" "$kind $route refusal must identify the raw-shell boundary" ;;
-        secondmate:*)
-          case "$out" in *[Pp][Ii][Gg]*) ;; *) fail "secondmate refusal did not identify the PiG boundary: $out" ;; esac
-          ;;
-        *) assert_contains "$out" "raw PiG launch commands are not verified" "$kind $route refusal must identify the unsupported raw launch boundary" ;;
-      esac
-      [ ! -s "$LAUNCH_LOG" ] || fail "$kind $route unsupported PiG selection delivered a launch command: $(cat "$LAUNCH_LOG")"
+      [ ! -s "$LAUNCH_LOG" ] || fail "$kind $route PiG selection delivered a launch command: $(cat "$LAUNCH_LOG")"
     done
   done
 
@@ -703,7 +691,7 @@ test_pig_worker_dispatch_preserves_primary_and_secondmate_boundaries() {
     assert_contains "$out" "raw shell -c launches cannot be safely classified" "$kind shell refusal missing"
     [ ! -s "$LAUNCH_LOG" ] || fail "$kind raw shell launch reached the launcher"
   done
-  pass "PiG worker dispatch supports canonical crew/scout routes and preserves raw-command and secondmate boundaries"
+  pass "PiG and raw shell dispatch are refused while verified harness dispatch remains available"
 }
 
 test_chained_raw_launch_strips_ai_trailer_in_every_step() {
@@ -2852,7 +2840,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
-test_pig_worker_dispatch_preserves_primary_and_secondmate_boundaries
+test_pig_primary_only_dispatch_refuses_every_worker_route
 test_chained_raw_launch_strips_ai_trailer_in_every_step
 test_claude_threads_model_and_effort
 test_codex_threads_model_and_effort

@@ -30,7 +30,7 @@ set -u
 
 # This suite states the markers it means to test in every case. Drop the ambient
 # ones so a verdict never depends on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS FM_PIG_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS AI_AGENT \
+unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS FM_PIG_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
   FM_SUPERVISION_ACTOR FM_SUPERVISION_PRIMARY_HARNESS
 
 HARNESS="$ROOT/bin/fm-harness.sh"
@@ -124,8 +124,7 @@ with_blind_ancestry() {  # <fakebin> [VAR=VAL ...]
 named_bin() {  # <dir> <name>
   mkdir -p "$1"
   # A symlink preserves the harness name in process metadata without copying
-  # the platform-signed system shell to an untrusted path; macOS reports the
-  # invoked symlink name as comm, which is the ancestry signal this test exercises.
+  # the platform-signed system shell to an untrusted path.
   ln -sf "$(command -v bash)" "$1/$2"
   printf '%s\n' "$1/$2"
 }
@@ -242,8 +241,9 @@ test_pig_primary_marker_requires_real_ancestry() {
   home="$TMP_ROOT/pig-worker-home"
   mkdir -p "$home/config"
   # shellcheck disable=SC2016
-  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew); printf "%s" "$r"' _ "$HARNESS")
-  [ "$got" = pig ] || fail "default worker resolution under PiG returned '$got', expected pig"
+  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
+  assert_contains "$got" "PiG is verified as a primary-only harness" "default crew resolution must not silently dispatch through PiG"
+  assert_contains "$got" "rc=2" "default crew resolution under PiG must return an actionable refusal"
   printf 'pi\n' > "$home/config/crew-harness"
   # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew); printf "%s" "$r"' _ "$HARNESS")
@@ -251,12 +251,13 @@ test_pig_primary_marker_requires_real_ancestry() {
 
   printf 'pig\n' > "$home/config/crew-harness"
   # shellcheck disable=SC2016
-  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew); printf "%s" "$r"' _ "$HARNESS")
-  [ "$got" = pig ] || fail "an explicit PiG worker selection resolved '$got', expected pig"
+  got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" crew 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
+  assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG crew selection must refuse"
+  assert_contains "$got" "rc=2" "an explicit PiG crew selection must return refusal status"
   printf 'pig\n' > "$home/config/secondmate-harness"
   # shellcheck disable=SC2016
   got=$(FM_HOME="$home" "$bin" -c 'r=$("$1" secondmate 2>&1); rc=$?; printf "%s\nrc=%s" "$r" "$rc"' _ "$HARNESS")
-  assert_contains "$got" "PiG's worker adapter is not verified for secondmate supervision" "an explicit PiG secondmate selection must refuse"
+  assert_contains "$got" "PiG is verified as a primary-only harness" "an explicit PiG secondmate selection must refuse"
   assert_contains "$got" "rc=2" "an explicit PiG secondmate selection must return refusal status"
 
   . "$ROOT/bin/fm-session-lock-lib.sh"
@@ -264,7 +265,7 @@ test_pig_primary_marker_requires_real_ancestry() {
   ! fm_harness_process_matches piglet '' || fail "the primary session lock must not accept a piglet decoy"
   . "$ROOT/bin/fm-agent-process-lib.sh"
   [ "$(fm_agent_process_classify_name pig)" = agent ] || fail "tmux liveness must classify the PiG primary as an agent"
-  pass "PiG primary detection is ancestry-bound, and its worker harness resolves for crews but not secondmates"
+  pass "PiG detection is ancestry-bound, primary-only, and leaves worker harness selection explicit"
 }
 
 # --- 3. Pi keeps the marker's more specific identity ------------------------

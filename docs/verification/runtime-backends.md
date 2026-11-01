@@ -3003,7 +3003,9 @@ FM_PIG_EXTENSION_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-pig-primary-live-e2e.tes
 ok - PiG 0.4.1+1.0.3 validates and registers the Firstmate Go extension without a model prompt
 ```
 
-The token-free guard runs by default wherever PiG, jq, and Go are installed, verifies the exact PiG release and Go extension definition, and does not submit a prompt.
+The token-free guard runs by default wherever PiG, jq, and Go are installed, verifies a supported PiG release and the Go extension definition, and does not submit a prompt.
+On 2026-11-01, PiG `0.5.3+1.4.0.74f46864` also accepted and registered the same Go extension with `pig install --validate-only --json .pig/extensions/firstmate`; the returned JSON reported `valid: true`, `registered: true`, and `language: go`.
+This token-free check does not verify the supervision lifecycle on 0.5.3.
 The credentialed primary E2E passed on 2026-10-17 with PiG 0.4.1+1.0.3 and `openai-codex/gpt-6-luna` at medium effort, in isolated Herdr and Firstmate homes:
 
 ```sh

@@ -131,7 +131,6 @@ type watcher struct {
 	armRetireTimeout              time.Duration
 	coord                         *replacementCoordinator
 	bus                           *eventBus
-	branchBridge                  *branchBridge
 
 	host          watchHost
 	generation    *watchGeneration
@@ -650,7 +649,7 @@ func (w *watcher) confirmHandlingDeliveryWithRetry(owner *watchGeneration, recov
 	return w.confirmHandlingDelivery(snapshot())
 }
 
-func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, pending *pendingActionable, recovery *armRecovery, branchEligible bool) (bool, error) {
+func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, pending *pendingActionable, recovery *armRecovery) (bool, error) {
 	if !w.generationIsLive(owner) {
 		return false, nil
 	}
@@ -664,17 +663,6 @@ func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, 
 				w.retireArm(child)
 			}
 			return w.sendWake(owner, message+"\n\n"+confirmed.detail, pending)
-		}
-	}
-	if branchEligible {
-		if offer := w.branchBridge.announce(message); offer != nil {
-			if w.branchBridge.settle(w, offer) {
-				// The branch handled and acknowledged the wake; main sees nothing,
-				// exactly as an accepted in-process offer on Pi.
-				return true, nil
-			}
-			// A rejected settlement falls through to main delivery, exactly as
-			// the Pi watch extension's catch does.
 		}
 	}
 	return w.sendWake(owner, message, pending)
@@ -873,7 +861,7 @@ func (w *watcher) processPendingActionables(owner *watchGeneration) {
 		if restoration.failure != "" {
 			message += "\n\n" + restoration.failure
 		}
-		delivered, err := w.deliverActionableWake(owner, message, pending, restoration.recovery, restoration.failure == "")
+		delivered, err := w.deliverActionableWake(owner, message, pending, restoration.recovery)
 		if err != nil {
 			claim.settle("failed")
 			release()
