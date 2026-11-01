@@ -214,6 +214,9 @@ test_ship_modes_generate_clean_briefs() {
     assert_grep "## Captain's intent" "$brief" "$id: brief missing Captain's intent subsection"
     assert_grep "## Firstmate spec" "$brief" "$id: brief missing Firstmate spec subsection"
     assert_grep 'never a bare number such as "PR 108"' "$brief" "$id: brief missing the full-PR-URL rule"
+    # shellcheck disable=SC2016 # Match literal generated brief text.
+    assert_grep 'For local image generation, use `bin/fm-image-gen.sh` instead of invoking an image engine directly.' "$brief" \
+      "$id: brief missing the local image-generation wrapper rule"
     assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
       "$id: brief missing nonterminal working:/setup-complete gate protection"
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"

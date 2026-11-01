@@ -146,6 +146,10 @@ The shared orchestrator behavior lives in [`AGENTS.md`](../AGENTS.md).
 Edit it like any prompt when the fleet is empty.
 While tasks are in flight, dispatch shared-repo edits to a crewmate.
 
+## Local image generation (config/image-engine)
+
+See [`local-image-generation.md`](local-image-generation.md) for the two-line local engine setting, guards, and supported worker command.
+
 ## Calm preference (config/calm)
 
 The Pi Calm extension and the Claude Code Calm mod share the local, gitignored `config/calm` preference under the effective Firstmate home.

@@ -374,6 +374,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/local-image-generation.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/captain-hold-lifecycle.md",
       "audience": "maintainer-architecture"
     },
