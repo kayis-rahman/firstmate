@@ -41,7 +41,21 @@ func (systemRunner) Output(name string, args ...string) ([]byte, error) {
 
 func (systemRunner) Run(command, environment []string) error {
 	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Env = append(os.Environ(), environment...)
+	overridden := make(map[string]bool, len(environment))
+	for _, entry := range environment {
+		if key, _, ok := strings.Cut(entry, "="); ok {
+			overridden[key] = true
+		}
+	}
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		if key, _, ok := strings.Cut(entry, "="); ok && overridden[key] {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	cmd.Env = append(filtered, environment...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
