@@ -1,0 +1,1 @@
+Usage: fm-image-gen.sh --prompt <text> --out <png> [--reference <png>]... [--width N] [--height N] [--seed N] [--engine mflux|mlx-serve|auto]
