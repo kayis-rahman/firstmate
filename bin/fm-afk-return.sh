@@ -551,7 +551,7 @@ render_return_brief() {  # <evidence-file> <blockers-file> <since-epoch> <drain-
   else
     pointer="awaiting a successful drain: this return's drain failed before its BRANCH OUTCOMES section recorded the visible outcomes, and bin/fm-afk-return.sh check drains again"
   fi
-  printf '=== Return brief'
+  printf '=== Return brief' || return 1
   if [ -n "$since" ]; then
     printf ' (away %s -> %s, %s)' "$(epoch_to_iso "$since")" "$(epoch_to_iso "$now")" "$(format_duration $((now - since)))"
   fi
@@ -849,7 +849,12 @@ EOF
     append_evidence lifecycle "status file unreadable: $STATUS_SCAN_ERROR; catch-up stays gated" "$evidence"
     lifecycle_ok=0
   fi
-  render_return_brief "$evidence" "$blockers" "$since" "$drain_ok"
+  if ! render_return_brief "$evidence" "$blockers" "$since" "$drain_ok"; then
+    append_evidence lifecycle 'recovery evidence publication failed; retry catch-up before ordinary work' "$evidence"
+    write_gate "$evidence" "$blockers" || { rm -f "$evidence" "$blockers" "$drain_err"; return 1; }
+    rm -f "$evidence" "$blockers" "$drain_err"
+    return 3
+  fi
   if [ "$HELD_READ_FAILED" -eq 1 ]; then
     append_evidence lifecycle "held set unreadable: $HELD_READ_PATH; catch-up stays gated" "$evidence"
     lifecycle_ok=0
