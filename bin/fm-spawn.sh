@@ -1313,7 +1313,7 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$id")
   fi
   case "$harness" in
-  claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | omp) ;;
+  claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | omp) ;;
   *)
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -2295,6 +2295,14 @@ PROJ=
 ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
+RAW_SHELL_C=0
+raw_shell_has_c_flag() {  # <shell-option>
+  case "$1" in
+    --*) return 1 ;;
+    -c|-?*c*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2471,7 +2479,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-  '' | claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken | cortex | kiro)
+  '' | claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | polytoken | cortex | kiro)
     ARG3=${POS[1]:-}
     ;;
   *' '*)
@@ -2773,7 +2781,7 @@ launch_template() {
     fi
     ;;
   opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}__EFFORTFLAG__}'\'' __OPENCODEBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
-  pi | pi-signed)
+  pi | pi-signed | pig)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
       # The two primary extensions supervise the mate's own home. __PIEXT__ is
@@ -3014,11 +3022,20 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
+  env_skip_next=0
   for word in $LAUNCH; do
-    case "$word" in [A-Za-z_]*=*) continue ;; *)
-      HARNESS=$(basename "$word")
-      break
-      ;;
+    if [ "$env_skip_next" -eq 1 ]; then
+      env_skip_next=0
+      continue
+    fi
+    case "$word" in
+      env) continue ;;
+      -u|--unset|-C|--chdir|-S|--split-string) env_skip_next=1; continue ;;
+      [A-Za-z_]*=*) continue ;;
+      *)
+        HARNESS=$(basename "$word")
+        break
+        ;;
     esac
   done
   ;;
@@ -3133,7 +3150,7 @@ cortex)
     exit 1
   }
   ;;
-pi | pi-signed)
+pi | pi-signed | pig)
   PI_BIN=$(resolve_pi_executable "$HARNESS") || {
     echo "error: $HARNESS executable not found on PATH; install it or select a different verified harness" >&2
     exit 1
@@ -3224,6 +3241,56 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
       esac
     fi
   fi
+fi
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$HARNESS" in
+    bash|sh|dash|zsh|ksh)
+      shell_seen=0
+      raw_shell_skip_next=0
+      for word in $LAUNCH; do
+        if [ "$raw_shell_skip_next" -eq 1 ]; then
+          raw_shell_skip_next=0
+          continue
+        fi
+        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
+          RAW_SHELL_C=1
+          break
+        fi
+        case "$word" in
+          -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
+        esac
+        case "$(basename -- "$word")" in
+          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
+        esac
+      done
+      ;;
+  esac
+fi
+
+# raw_launch_has_pig() -- any raw worker launch that actually invokes the PiG
+# executable. env -S/--split-string payloads must be unfolded rather than
+# discarded, otherwise PiG slips past the primary-only boundary.
+raw_launch_has_pig=0
+case "$LAUNCH" in
+  *pig*) raw_launch_has_pig=1 ;;
+esac
+
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$KIND:$HARNESS:$RAW_SHELL_C" in
+    ship:*:1|scout:*:1|secondmate:*:1)
+      echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if [ "$KIND" = secondmate ] && [ "$HARNESS" = "pig" ]; then
+  echo "error: PiG is verified as a primary-only harness and cannot be dispatched for secondmate work; select a separately verified harness" >&2
+  exit 1
+fi
+if [ "$RAW_LAUNCH" -eq 1 ] && [ "$raw_launch_has_pig" -eq 1 ]; then
+  echo "error: raw PiG launch commands are not verified for worker dispatch; select a separately verified harness" >&2
+  exit 1
 fi
 fm_backend_validate_harness "$BACKEND" "$HARNESS" || exit 1
 # Ultra is an explicit native capability, never a Pi thinking-level alias.
@@ -3486,7 +3553,7 @@ model_flag_for_harness() {
     [ "$oc_major" = 1 ] || return 0
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
-  claude | codex | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro)
+  claude | codex | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro)
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
   # polytoken encodes reasoning effort inside the model reference, so the
@@ -3565,7 +3632,7 @@ effort_flag_for_harness() {
       ;;
     esac
     ;;
-  pi | pi-signed)
+  pi | pi-signed | pig)
     # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
     # its --thinking flag.
     case "$effort" in
@@ -6535,7 +6602,7 @@ EOF
     fi
     exclude_path '.opencode/plugins/fm-busy-state.js'
     ;;
-  pi | pi-signed)
+  pi | pi-signed | pig)
     # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
     # loaded from inside the project (verified live), but an explicit -e path
     # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
@@ -7219,7 +7286,7 @@ LAUNCH=${LAUNCH//__OMPEXT__/$sq_ompext}
 LAUNCH=${LAUNCH//__OMPWORKERCFG__/$sq_ompcfg}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
-pi | pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
+pi | pi-signed | pig) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
 cursor) LAUNCH=${LAUNCH//__CURSORBIN__/"$(shell_quote "$CURSOR_BIN")"} ;;
 gemini) LAUNCH=${LAUNCH//__GEMINISETTINGS__/"$(shell_quote "$STATE_REAL/$ID.gemini-settings.json")"} ;;
 omp)
@@ -7325,7 +7392,7 @@ if [ -n "$WORKER_ACCOUNT" ]; then
       LAUNCH="$(fm_worker_account_claude_shed) -u CLAUDE_CONFIG_DIR $LAUNCH"
     fi
     ;;
-  pi | pi-signed)
+  pi | pi-signed | pig)
     LAUNCH="PI_CODING_AGENT_DIR=$(shell_quote "$WORKER_ACCOUNT_ROOT") $LAUNCH"
     ;;
   esac
