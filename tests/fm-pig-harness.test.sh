@@ -20,8 +20,11 @@ actual=$(AI_AGENT=pig PATH="$fakebin:$PATH" "$ROOT/bin/fm-harness.sh")
 [ "$actual" = pig ] || fail "AI_AGENT=pig resolved '$actual', expected pig"
 mkdir -p "$home/config"
 printf '%s\n' pig >"$home/config/crew-harness"
-actual=$(FM_HOME="$home" "$ROOT/bin/fm-harness.sh" crew)
-[ "$actual" = pig ] || fail "config/crew-harness=pig resolved '$actual', expected pig"
+if FM_HOME="$home" "$ROOT/bin/fm-harness.sh" crew >/dev/null 2>"$home/pig-crew.err"; then
+  fail "config/crew-harness=pig resolved a worker harness, expected primary-only refusal"
+else
+  grep -q "PiG is verified as a primary-only harness" "$home/pig-crew.err" || fail "config/crew-harness=pig did not report the primary-only boundary"
+fi
 
 # Pin the documented CLI switches in a portable fake, without requiring PiG in CI.
 cat >"$fakebin/pig" <<'SH'
