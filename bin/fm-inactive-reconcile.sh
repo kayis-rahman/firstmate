@@ -67,16 +67,6 @@
 # PR for a status-log state, and never a separately recorded task PR; a scout
 # delivers no PR on either path, so it carries none. Together they
 # prevent one captain-facing record from combining claims from different runs.
-# A live agent withholds that verdict only while it is busy, or while its
-# incarnation postdates the terminal evidence (the spawn epoch in spawn_gen is
-# later than the last status line's [at=] epoch). An idle agent on the same
-# incarnation is a finished worker and keeps its record. The endpoint must read
-# `alive` through fm_backend_agent_state (bin/fm-backend.sh) and then `busy`
-# through fm_busy_classify_meta (bin/fm-busy-lib.sh); an unreadable or unknown
-# answer is never read as proof the agent is gone or idle and leaves the
-# verdict unchanged. Both reads share the scan budget left after the state
-# read (at least one second, like the first visit above), and hitting that
-# bound ends the visit like a state-read timeout.
 # Working, paused, parked, blocked, unknown, persistent secondmates, and
 # captain-held work retain their existing supervision semantics.
 #
@@ -361,13 +351,10 @@ state_line_source() { # <state-line>
   printf '%s' "$rest"
 }
 
-# Read the optional pull request published in the canonical state line. The
-# clause ends at the next separator: the detail's last field is `pr=<url>`, while
-# the reader may append its own `steer:` clause after it.
+# Read the optional pull request published in the canonical state line.
 state_line_pr() { # <state-line>
   local rest=${1##*"$STATE_LINE_SEP"pr=}
   [ "$rest" != "$1" ] || return 0
-  case "$rest" in *"$STATE_LINE_SEP"*) rest=${rest%%"$STATE_LINE_SEP"*} ;; esac
   printf '%s' "$rest"
 }
 
@@ -659,10 +646,6 @@ reconcile_direct_child_locked() { # <id> <meta> <secondmate-id-or-empty> <timeou
     'state: failed '*) state='failed' ;;
     *) return 0 ;;
   esac
-  left=$((timeout - ($(date +%s) - started)))
-  [ "$left" -ge 1 ] || left=1
-  task_holds_live_work "$id" "$meta" "$left" "$last" && return 0
-  [ "$?" -ne 3 ] || return 3
   terminal_outcome_corroborated "$state" "$last" "$state_line" || return 0
   pr=$(terminal_outcome_pr "$state_line" "$kind")
   incarnation=$(meta_incarnation "$meta")
