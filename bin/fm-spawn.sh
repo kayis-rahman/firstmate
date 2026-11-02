@@ -1313,7 +1313,7 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$id")
   fi
   case "$harness" in
-  claude | codex | opencode | pi | pi-signed | pig | grok | kimi | cursor | omp) ;;
+  claude | codex | opencode | pi | pi-signed | grok | kimi | cursor | omp) ;;
   *)
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -2299,7 +2299,7 @@ RAW_SHELL_C=0
 raw_shell_has_c_flag() {  # <shell-option>
   case "$1" in
     --*) return 1 ;;
-    -c|-?*c*) return 0 ;;
+    -*c*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -3022,22 +3022,32 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
-  env_skip_next=0
-  for word in $LAUNCH; do
-    if [ "$env_skip_next" -eq 1 ]; then
-      env_skip_next=0
+  LAUNCH_WORDS=()
+  _expect_payload=0
+  _env_arg_skip=0
+  for __w in $LAUNCH; do
+    if [ "$_env_arg_skip" -eq 1 ]; then _env_arg_skip=0; continue; fi
+    if [ "$_expect_payload" -eq 1 ]; then
+      _expect_payload=0
+      _p=$__w
+      case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac
+      # shellcheck disable=SC2086
+      for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done
       continue
     fi
-    case "$word" in
+    case "$__w" in
       env) continue ;;
-      -u|--unset|-C|--chdir|-S|--split-string) env_skip_next=1; continue ;;
       [A-Za-z_]*=*) continue ;;
-      *)
-        HARNESS=$(basename "$word")
-        break
-        ;;
+      -u|--unset|-C|--chdir) _env_arg_skip=1; continue ;;
+      -S|--split-string) _expect_payload=1; continue ;;
+      --split-string=*) _p=${__w#--split-string=}; case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac; for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done; continue ;;
+      -S*) _p=${__w#-S}; if [ -n "$_p" ]; then case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac; for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done; else _expect_payload=1; fi; continue ;;
+      *) LAUNCH_WORDS+=("$__w") ;;
     esac
   done
+  if [ "${#LAUNCH_WORDS[@]}" -gt 0 ]; then
+    HARNESS=${LAUNCH_WORDS[0]##*/}
+  fi
   ;;
 '')
   # No explicit harness: resolve from config. A secondmate AGENT launches on the
@@ -3247,7 +3257,7 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
     bash|sh|dash|zsh|ksh)
       shell_seen=0
       raw_shell_skip_next=0
-      for word in $LAUNCH; do
+      for word in "${LAUNCH_WORDS[@]}"; do
         if [ "$raw_shell_skip_next" -eq 1 ]; then
           raw_shell_skip_next=0
           continue
@@ -3259,7 +3269,7 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
         case "$word" in
           -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
         esac
-        case "$(basename -- "$word")" in
+        case "${word##*/}" in
           bash|sh|dash|zsh|ksh) shell_seen=1 ;;
         esac
       done
