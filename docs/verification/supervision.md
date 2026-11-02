@@ -997,7 +997,7 @@ Go unit tests in `.pig/extensions/firstmate/branch_bridge_test.go` cover accept,
 
 A later isolated worker smoke verified PiG worker spawn, extension loading, busy and turn-end events, and trivial-task completion.
 Worker steering inbox delivery, interrupt, exit, and relaunch remain unverified.
-Remaining unverified for the primary integration: watcher restoration in a second home, wake-drain acknowledgement, dispatch intake, ship-ready landing, section 9 escalation wording, and `/afk`/`/quiet` posture behavior.
+Remaining unverified for the primary integration: watcher restoration in a second home, wake-drain acknowledgement, dispatch intake, ship-ready landing, section 9 escalation wording, and `/afk`/`quiet` posture behavior.
 
 ## Codex native model-free park (2026-10-19)
 
