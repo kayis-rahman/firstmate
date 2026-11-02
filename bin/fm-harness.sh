@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|pig|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate [id]  print the harness the PRIMARY uses to launch
@@ -155,6 +155,9 @@ harness_marker() {
   # subprocesses is unverified (verified: muse 0.1.0-R708.1). Do NOT promote it
   # to a marker without verifying it reaches children AND that it cannot survive
   # in a multiplexer's stored environment.
+  # PiG (0.5.1+) reports AI_AGENT=pig to its child processes (distinct from
+  # the Claude-inherited guard above), so treat that exact value as identity.
+  [ "${AI_AGENT:-}" = "pig" ] && { echo pig; return; }
   return 0
 }
 
@@ -223,6 +226,7 @@ harness_process_verdict() {  # <pid>
     # is why detect_own keeps a marker that agrees on the family.
     pi-signed) echo "comm pi"; return ;;
     pi) echo "comm pi"; return ;;
+    pig) echo "comm pig"; return ;;
     # omp is a Bun-compiled single binary whose process name is exactly `omp`
     # (verified, omp 18.1.11: `ps -o comm=` reports omp from both its `!`
     # bash path and the model's bash tool). Anchored, never *omp*, so ompd,
@@ -436,7 +440,7 @@ supervision_primary_pin() {
   local pin=${FM_SUPERVISION_PRIMARY_HARNESS:-}
   [ "${FM_SUPERVISION_ACTOR:-}" = branch ] && [ -n "$pin" ] || return 0
   case "$pin" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex)
+    claude|codex|opencode|pi|pi-signed|pig|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex)
       printf '%s\n' "$pin"
       ;;
     *)
@@ -636,6 +640,10 @@ resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1 "${1:-}") || return 1
   if [ -z "$sm" ] || [ "$sm" = "default" ]; then sm=$(resolve_crew) || exit; fi
+  if [ "$sm" = "pig" ]; then
+    echo "error: PiG's worker adapter is not verified for secondmate supervision" >&2
+    return 2
+  fi
   echo "$sm"
 }
 
