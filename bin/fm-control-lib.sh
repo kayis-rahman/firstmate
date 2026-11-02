@@ -64,7 +64,7 @@ fm_control_verb_allowed() {  # <verb>
 # section 4's verified-adapter list; an unverified adapter is refused rather
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harnesses() {
-  printf '%s\n' claude codex opencode pi pi-signed grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken cortex kiro
+  printf '%s\n' claude codex opencode pi pi-signed pig grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken cortex kiro
 }
 
 fm_control_harness_supported() {  # <harness>
@@ -88,6 +88,7 @@ fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
+    pig) printf 'pig' ;;
     omp) printf 'omp' ;;
     agy) printf 'agy' ;;
     devin) printf 'devin' ;;
@@ -118,7 +119,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
-    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro) [ "$kind" != secondmate ] || return 1 ;;
+    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|pig) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }

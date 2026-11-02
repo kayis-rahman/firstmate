@@ -3281,9 +3281,14 @@ fi
 # executable. env -S/--split-string payloads must be unfolded rather than
 # discarded, otherwise PiG slips past the primary-only boundary.
 raw_launch_has_pig=0
-case "$LAUNCH" in
-  *pig*) raw_launch_has_pig=1 ;;
-esac
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  for _w in "${LAUNCH_WORDS[@]}"; do
+    if [ "${_w##*/}" = pig ]; then
+      raw_launch_has_pig=1
+      break
+    fi
+  done
+fi
 
 if [ "$RAW_LAUNCH" -eq 1 ]; then
   case "$KIND:$HARNESS:$RAW_SHELL_C" in
