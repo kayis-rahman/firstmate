@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tests/fm-decision-api-shadow.test.sh - portable shadow helper check.
 set -u
+# shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-decision-api-shadow-tests)

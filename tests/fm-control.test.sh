@@ -1398,7 +1398,9 @@ test_relaunch_resume_args_fresh_session_behavior() {
   eval "$(sed -n '/^shell_quote()/,/^}/p' "$ROOT/bin/fm-spawn.sh")"
   eval "$(sed -n '/^relaunch_resume_args()/,/^}/p' "$ROOT/bin/fm-spawn.sh")"
   fm_backend_herdr_parse_target() { return 0; }
+  # shellcheck disable=SC2034
   FM_BACKEND_HERDR_SESSION=herdr-session
+  # shellcheck disable=SC2034
   FM_BACKEND_HERDR_PANE=herdr-pane
   fm_backend_herdr_pane_agent_session_ref() { printf 'pi	ref-session-123'; }
   out=$(relaunch_resume_args pi herdr some-target)
@@ -1408,9 +1410,11 @@ test_relaunch_resume_args_fresh_session_behavior() {
   esac
   out=$(relaunch_resume_args pi herdr some-target 1)
   [ -z "$out" ] || fail "present --fresh-session must drop the resume args; got '$out'"
+  # shellcheck disable=SC2034
   FRESH_SESSION=1
   out=$(relaunch_resume_args pi herdr some-target)
   [ -z "$out" ] || fail "FRESH_SESSION=1 must drop the resume args; got '$out'"
+  # shellcheck disable=SC2034
   FRESH_SESSION=0
   pass "relaunch_resume_args keeps --session without --fresh-session and drops it with it"
 }
