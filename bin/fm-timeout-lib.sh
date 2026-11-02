@@ -145,7 +145,13 @@ fm_run_bash_timeout() {
   deadline_status="${command_status}.deadline"
   case $- in *m*) monitor_was_on=1 ;; esac
   set -m
-  fm_timeout_background fm_bash_timeout_child "$command_status" "$@"
+  (
+    set +m
+    "$@"
+    command_rc=$?
+    printf '%s\n' "$command_rc" > "$command_status"
+    exit "$command_rc"
+  ) <&0 &
   child_pid=$!
   (
     set +m
@@ -197,7 +203,7 @@ fm_run_external_timeout() {
     command_rc=$?
     printf "%s\n" "$command_rc" > "$status_file"
     exit "$command_rc"
-  ' _ "$status_file" "$@"
+  ' _ "$status_file" "$@" <&0 &
   runner_pid=$!
   if wait "$runner_pid"; then
     runner_rc=0
