@@ -1,0 +1,6 @@
+base: 40fc4746
+target: 1f3add64
+tests:
+all inactive reconciliation tests passed
+ok - PiG marker and CLI launch surface
+not ok - NUL argv identity lost when names/ps args are blind
