@@ -1243,7 +1243,7 @@ A local standalone-clone home cannot receive a primary-local commit through that
 
 ## Harness support
 
-PiG is primary-only and is deliberately absent from every worker-adapter set while its full supervision lifecycle remains under verification; its Go command handoffs are verified over RPC. See the [PiG harness reference](../.agents/skills/harness-adapters/references/harness/pig.md).
+PiG provides primary supervision plus an unverified worker/scout adapter; secondmate dispatch remains unavailable while its full supervision lifecycle is under verification, and its Go command handoffs are verified over RPC. See the [PiG harness reference](../.agents/skills/harness-adapters/references/harness/pig.md).
 
 claude, codex, opencode, pi, pi-signed, grok, kimi, cursor, and omp are empirically verified for crewmate and secondmate launches; gemini is verified for crewmate and scout launches only, and [README requirements](../README.md#requirements) own the set supported for the primary session.
 

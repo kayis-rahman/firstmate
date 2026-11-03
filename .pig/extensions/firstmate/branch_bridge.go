@@ -32,6 +32,8 @@ import (
 	"github.com/MichaelKinsy/PiG/extensions/sdk"
 )
 
+type EventBusHandler func(sdk.Context, any) error
+
 const (
 	pigBridgeReadyEvent   = "fm-pig-watch:bridge-ready"
 	pigBridgeCloseEvent   = "fm-pig-watch:actionable-close"
@@ -49,7 +51,7 @@ const (
 // implements it; tests substitute a synchronous fake of the same shape.
 type branchBus interface {
 	Emit(channel string, data any) error
-	On(channel string, handler sdk.EventBusHandler) (func(), error)
+	On(channel string, handler EventBusHandler) (func(), error)
 }
 
 // branchOffer is one in-flight cross-realm offer. verdict is answered inside

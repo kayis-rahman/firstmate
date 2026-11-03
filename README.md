@@ -79,7 +79,7 @@ Cursor Agent CLI is verified as a primary too, using a tracked project-scope `.c
 Launch it with `--trust`, or none of its project hooks load; it also has no turn-end hook in headless `cursor-agent -p`, so run the primary session interactively.
 Antigravity CLI (`agy`) is verified as a primary too, using a tracked project-local `.agents/hooks.json` whose Stop hook parks on the watcher between turns like Cursor's.
 
-PiG is primary-only; it cannot be used for crew, scout, or secondmate dispatch.
+PiG supports primary supervision plus an unverified worker/scout adapter; secondmate dispatch remains unavailable.
 Its Go command callbacks and skill handoffs passed an installed-runtime RPC check, but its full watcher lifecycle and direct TUI invocation remain under verification.
 
 ### Install and launch
@@ -122,7 +122,7 @@ FM_OMP_HARNESS=omp omp
 
 Start `omp` with this checkout as its working directory: it auto-discovers the tracked `.omp/extensions/*.ts` files with no trust dialog, and naming them with `-e` as well would load each twice.
 
-**PiG (primary-only, verification incomplete)**
+**PiG (primary plus unverified worker adapter, verification incomplete)**
 
 ```sh
 FM_PIG_HARNESS=pig pig --approve \

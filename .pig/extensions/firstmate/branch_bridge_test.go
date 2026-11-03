@@ -23,15 +23,15 @@ import (
 // from inside a handler (the Node realm's verdict reply) runs immediately.
 type fakeBus struct {
 	mu        sync.Mutex
-	handlers  map[string][]sdk.EventBusHandler
+	handlers  map[string][]EventBusHandler
 	announces []string
 }
 
 func newFakeBus() *fakeBus {
-	return &fakeBus{handlers: map[string][]sdk.EventBusHandler{}}
+	return &fakeBus{handlers: map[string][]EventBusHandler{}}
 }
 
-func (b *fakeBus) On(channel string, handler sdk.EventBusHandler) (func(), error) {
+func (b *fakeBus) On(channel string, handler EventBusHandler) (func(), error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.handlers[channel] = append(b.handlers[channel], handler)
@@ -45,7 +45,7 @@ func (b *fakeBus) Emit(channel string, data any) error {
 		id, _ := fields["id"].(string)
 		b.announces = append(b.announces, id)
 	}
-	handlers := append([]sdk.EventBusHandler(nil), b.handlers[channel]...)
+	handlers := append([]EventBusHandler(nil), b.handlers[channel]...)
 	b.mu.Unlock()
 	for _, handler := range handlers {
 		if err := handler(sdk.Context{}, data); err != nil {

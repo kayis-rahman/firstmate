@@ -24,6 +24,7 @@ The primary live verification on 2026-10-17 used PiG 0.4.1+1.0.3, macOS arm64, a
 
 The primary verification exercised session-start delivery, both pre-tool denials, watcher continuity across tested turns, actionable wake delivery, and healthy and unhealthy turn-end behavior on 2026-10-17.
 A cross-realm live run on 2026-10-19 additionally verified managed-branch delivery over the shared event bus, including accepting an eligible wake and declining a decision-owned wake.
+PiG 0.5.3+1.4.0.74f46864 passed token-free extension registration validation only; its supervision lifecycle (watcher arm and recovery, wake delivery to the primary) has not been verified live on the released SDK, and background wake delivery remains limited to the idle main TUI conversation.
 The Go extension synthesizes a next-turn user message directing PiG to follow the already-loaded `ahoy` or `bearings` skill; it does not reimplement either skill.
 PiG auto-discovers the top-level `.pig/extensions/fm-firstmate` resource in the Firstmate repository, while the Pi supervision files are explicitly loaded with `-e`.
 Run the credentialed end-to-end verification only in a throwaway `FM_HOME` and named Herdr lab, using `openai-codex/gpt-6-luna` at medium effort:

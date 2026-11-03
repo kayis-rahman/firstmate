@@ -77,8 +77,7 @@ That refusal is expected safety behavior, not an exit failure.
 
 Background delivery to a separate managed supervision branch and filtering host transcript rows remain unverified because PiG's released SDK cannot create managed agent sessions or filter host rows.
 The live wake was verified only in the main TUI conversation, and no workaround is claimed for the upstream SDK limits.
-PiG remains intentionally unavailable as a worker, scout, or secondmate adapter.
-The exact current boundary is in [the PiG harness reference](../../.agents/skills/harness-adapters/references/harness/pig.md).
+PiG now also has an unverified worker/scout adapter; secondmate dispatch remains unavailable. See [the PiG harness reference](../../.agents/skills/harness-adapters/references/harness/pig.md).
 The Go runtime extension's SDK compatibility and installed-runtime validation are recorded in [`runtime-backends.md`](runtime-backends.md#pig-v041-go-extension).
 
 ### PiG primary recheck, live verification, 2026-10-19

@@ -19,7 +19,7 @@ func registerWatcher(ext *sdk.Extension, root string, bus *eventBus) *watcher {
 	// The cross-realm branch offer bridge (branch_bridge.go) rides the shared
 	// pi.events bus; without a listening Node branch it stays inert and every
 	// wake takes today's main path.
-	w.branchBridge = newBranchBridge(ext.Events())
+	w.branchBridge = newBranchBridge(nil)
 	// Publish this generation while the lock is absent so that session-start can
 	// tell a loaded extension from a missing one.
 	if err := w.bindInitialMarker(); err != nil {
