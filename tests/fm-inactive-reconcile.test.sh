@@ -33,11 +33,13 @@ make_tools() { # <world>
   fake="$world/fakebin"
   mkdir -p "$fake"
   # Mirrors bin/fm-crew-state.sh's one canonical line, including the source and
-  # detail fields a terminal outcome must take its PR identity from.
+  # detail fields a terminal outcome must take its PR identity from, and the
+  # reader's trailing steering clause.
   cat > "$fake/fm-crew-state.sh" <<'SH'
 #!/usr/bin/env bash
-printf 'state: %s · source: %s%s\n' "${FM_FAKE_CREW_STATE:-unknown}" \
-  "${FM_FAKE_CREW_SOURCE:-fake}" "${FM_FAKE_CREW_DETAIL:+ · $FM_FAKE_CREW_DETAIL}"
+printf 'state: %s · source: %s%s%s\n' "${FM_FAKE_CREW_STATE:-unknown}" \
+  "${FM_FAKE_CREW_SOURCE:-fake}" "${FM_FAKE_CREW_DETAIL:+ · $FM_FAKE_CREW_DETAIL}" \
+  "${FM_FAKE_CREW_STEER:+ · steer: $FM_FAKE_CREW_STEER}"
 SH
   cat > "$fake/tmux" <<'SH'
 #!/usr/bin/env bash
@@ -1199,6 +1201,30 @@ test_terminal_outcome_takes_the_pr_its_run_opened() {
   pass "a terminal outcome names the pull request its own run opened"
 }
 
+# The reader appends its own `steer:` clause after the detail, so a state line's
+# `pr=<url>` is the detail's last field rather than the line's. A queued outcome
+# must name exactly that URL, and an unread age that advances between scans must
+# not mint a fresh receipt - and so a fresh captain event - on every pass.
+test_run_step_pr_field_ends_before_the_steering_clause() {
+  local payload cycle
+  make_world outcome-pr-steer; write_child "$MAIN" child 'working: still validating'
+  for cycle in 1 2; do
+    FM_FAKE_CREW_STATE='done' FM_FAKE_CREW_SOURCE='run-step' \
+      FM_FAKE_CREW_DETAIL='run: 01ABC · pr=https://example.test/owner/repo/pull/42' \
+      FM_FAKE_CREW_STEER="unread age=${cycle}42s" run_reconcile "$MAIN" --startup
+  done
+  payload=$(queued_payload "$MAIN" 'inactive-outcome:')
+  [ -n "$payload" ] || fail "no terminal outcome was queued"
+  case "$payload" in
+    *'pr=https://example.test/owner/repo/pull/42 '*) fail "the terminal outcome kept the reader's steering clause in its pull request: $payload" ;;
+    *'pr=https://example.test/owner/repo/pull/42') ;;
+    *) fail "the terminal outcome did not name the run's own pull request: $payload" ;;
+  esac
+  [ "$(wake_count "$MAIN" 'inactive-outcome:')" = 1 ] \
+    || fail "an advancing steering age re-queued the same terminal outcome"
+  pass "a run-step pull request ends where the detail does and survives the steering clause"
+}
+
 # A state-log-sourced terminal state keeps taking its PR from that same line.
 test_status_log_sourced_outcome_keeps_its_own_pr() {
   local payload
@@ -1464,6 +1490,7 @@ test_reconciliation_never_calls_forge
 test_reconciliation_sets_no_forge_mode_for_state_read
 test_terminal_outcome_never_names_a_pr_the_run_did_not_open
 test_terminal_outcome_takes_the_pr_its_run_opened
+test_run_step_pr_field_ends_before_the_steering_clause
 test_status_log_sourced_outcome_keeps_its_own_pr
 test_status_log_outcome_keeps_gitlab_and_gerrit_reviews
 test_status_log_outcome_never_borrows_an_earlier_pr

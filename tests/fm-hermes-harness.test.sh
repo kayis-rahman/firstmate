@@ -68,6 +68,8 @@ chmod +x "$TMP_ROOT/bin/hermes" "$TMP_ROOT/bin/systemctl"
 export FM_TEST_HERMES_HOME="$TMP_ROOT/profile" HERMES_GATEWAY_LOCK_DIR="$TMP_ROOT/gateway-locks"
 PATH="$TMP_ROOT/bin:$PATH"
 [ "$(fm_hermes_profile_home "$TMP_ROOT/bin/hermes" example)" = "$TMP_ROOT/profile" ] || fail 'profile path'
+# The empty profile is the native default every fresh spawn and relaunch uses.
+[ "$(fm_hermes_profile_home "$TMP_ROOT/bin/hermes" '')" = "$TMP_ROOT/profile" ] || fail 'default profile path'
 ! fm_hermes_profile_home "$TMP_ROOT/bin/hermes" '../escape' >/dev/null 2>&1 || fail 'path traversal profile accepted'
 ! fm_hermes_profile_home "$TMP_ROOT/bin/hermes" $'\ninvalid' >/dev/null 2>&1 || fail 'newline profile accepted'
 fm_hermes_gateway_check "$TMP_ROOT/profile" worker || fail 'stopped profile refused'
