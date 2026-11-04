@@ -3138,7 +3138,7 @@ case "$ARG3" in
   # The launch_template lookup below is the unverified-adapter guard for both
   # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID")
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID") || exit 1
     harness_src='config/secondmate-harness (falling back to config/crew-harness)'
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
@@ -3345,9 +3345,14 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
           RAW_SHELL_C=1
           break
         fi
-        case "$word" in
-          -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
-        esac
+        # Wrapper-option skipping applies only before the shell executable is
+        # identified; once the shell is seen, its own flags (such as -u, which
+        # takes no argument) must not consume the following -c.
+        if [ "$shell_seen" -eq 0 ]; then
+          case "$word" in
+            -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
+          esac
+        fi
         case "${word##*/}" in
           bash|sh|dash|zsh|ksh) shell_seen=1 ;;
         esac
