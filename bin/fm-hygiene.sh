@@ -67,7 +67,7 @@ TASK_IS_DONE() {
   local st
   st="$("$SCRIPT_DIR/fm-crew-state.sh" "$id" 2>/dev/null || true)"
   printf '%s' "$st" | grep -qi 'state: done\|state: failed' && return 0
-  [ -f "$STATE/$id.status" ] && grep -qi 'done ' "$STATE/$id.status" && return 0
+  [ -f "$STATE/$id.status" ] && grep -qi 'done' "$STATE/$id.status" && return 0
   # backlog fallback
   if [ -f "$DATA/backlog.md" ]; then grep -Eq "^\- \[[xX]\].*\b$id\b" "$DATA/backlog.md" && return 0; fi
   return 1
