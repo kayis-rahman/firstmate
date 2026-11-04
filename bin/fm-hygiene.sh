@@ -38,8 +38,12 @@ parse_thresholds() {
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"; line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [ -z "$line" ] && continue
-# shellcheck disable=SC2086
-    set -- $line
+    set -f
+    if ! eval "set -- $line" >/dev/null 2>&1; then
+      set +f
+      continue
+    fi
+    set +f
     case "$1" in
       internal)
         if [ "$#" -eq 2 ]; then THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$2")
@@ -67,7 +71,7 @@ TASK_IS_DONE() {
   local st
   st="$("$SCRIPT_DIR/fm-crew-state.sh" "$id" 2>/dev/null || true)"
   printf '%s' "$st" | grep -qi 'state: done\|state: failed' && return 0
-  [ -f "$STATE/$id.status" ] && grep -qi 'done' "$STATE/$id.status" && return 0
+  [ -f "$STATE/$id.status" ] && grep -Eiq 'state:[[:space:]]*done|^[[:space:]]*done[[:space:]]*$' "$STATE/$id.status" && return 0
   # backlog fallback
   if [ -f "$DATA/backlog.md" ]; then grep -Eq "^\- \[[xX]\].*\b$id\b" "$DATA/backlog.md" && return 0; fi
   return 1
@@ -97,11 +101,6 @@ PR_MERGED_FOR_BRANCH() {
   fi
   if printf '%s' "$pr_json" | grep -qi '"mergedAt":[[:space:]]*"[^"]*"'; then return 0; fi
   if printf '%s' "$pr_json" | grep -qi '"state":[[:space:]]*"MERGED"'; then return 0; fi
-  # closed PR + remote branch or HEAD reachable
-  if printf '%s' "$pr_json" | grep -qi '"state":[[:space:]]*"CLOSED"'; then
-    [ "$remote_exists" -eq 1 ] && return 0
-    [ "$head_reachable" -eq 1 ] && return 0
-  fi
   # fallback HEAD reachable from default
   [ "$head_reachable" -eq 1 ] && return 0
   return 1
@@ -120,6 +119,17 @@ slot_lines() {
 }
 
 report() {
+  local tr_override=""
+  local args=("$@")
+  local i=0
+  while [ $i -lt ${#args[@]} ]; do
+    case "${args[$i]}" in
+      --treehouse-root) i=$((i+1)); tr_override="${args[$i]}" ;;
+    esac
+    i=$((i+1))
+  done
+  [ -n "$tr_override" ] && TREEHOUSE_ROOT_OVERRIDE="$tr_override"
+  [ -n "$TREEHOUSE_ROOT_OVERRIDE" ] && export TREEHOUSE_ROOT="$TREEHOUSE_ROOT_OVERRIDE"
   parse_thresholds
   echo "=== fm-hygiene report ==="
   echo "-- disk --"
@@ -215,6 +225,7 @@ sweep() {
     i=$((i+1))
   done
   [ -n "$tr_override" ] && TREEHOUSE_ROOT_OVERRIDE="$tr_override"
+  [ -n "$TREEHOUSE_ROOT_OVERRIDE" ] && export TREEHOUSE_ROOT="$TREEHOUSE_ROOT_OVERRIDE"
   parse_thresholds
 
   echo "=== fm-hygiene sweep$([ $yes -eq 1 ] && echo " (execute)" || echo " (dry run)") ==="
