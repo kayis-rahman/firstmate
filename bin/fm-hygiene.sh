@@ -9,8 +9,8 @@
 # sweep:  dry run by default; --yes executes.
 #
 # Config: $FM_HOME/config/disk-thresholds (optional):
-#   internal <mount-path> <gb>        (defaults: / 15)
-#   external <mount-path> <gb>        (defaults: none)
+#   internal <mount-path> <gb>        (defaults when config is absent: / 15)
+#   external <mount-path> <gb>        (defaults when config is absent: /Volumes/Mac Extended 5)
 #   internal-threshold-gb <n>         (compat: threshold for /)
 #   external-volumes: <path> <gb>     (compat)
 # Auto sweep opt-in: $FM_HOME/config/hygiene-auto-sweep contains "yes".

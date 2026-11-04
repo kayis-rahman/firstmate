@@ -3542,6 +3542,7 @@ external /Volumes/Mac\ Extended 5
 ```
 
 Fields: each non-comment line is `<role> <mount-path> <gb>` where role is `internal` or `external`.
+Compatibility aliases and quoting rules are documented in the header of `bin/fm-hygiene.sh`.
 Defaults when absent: internal `/` at 15 GB, external `/Volumes/Mac Extended` at 5 GB.
 
 Automatic sweep (still dry-run reporting by default) is turned on by creating `config/hygiene-auto-sweep` containing `yes`:
