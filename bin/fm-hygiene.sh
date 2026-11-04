@@ -34,30 +34,64 @@ parse_thresholds() {
   THRESHOLD_MOUNT=(); THRESHOLD_GB=(); THRESHOLD_ROLE=()
   local f="$CONFIG/disk-thresholds"
   [ -f "$f" ] || { THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15); THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("/Volumes/Mac Extended"); THRESHOLD_GB+=(5); return 0; }
-  local line
+  local line first rest mount_raw gb mount
   while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%%#*}"; line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [ -z "$line" ] && continue
-    set -f
-    if ! eval "set -- $line" >/dev/null 2>&1; then
-      set +f
-      continue
-    fi
-    set +f
-    case "$1" in
+    read -r first rest <<< "$line"
+
+    # helper inline: split a "rest" into mount_raw + gb using last whitespace run
+    split_rest() {
+      if [[ "$rest" =~ ^(.*)[[:space:]]+([^[:space:]]+)$ ]]; then
+        mount_raw="${BASH_REMATCH[1]}"
+        gb="${BASH_REMATCH[2]}"
+      else
+        mount_raw=""
+        gb="$rest"
+      fi
+    }
+    unescape_mount() {
+      local m="$1"
+      m="$(printf '%s' "$m" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+      printf '%s' "$m" | sed 's/\\ / /g'
+    }
+
+    case "$first" in
       internal)
-        if [ "$#" -eq 2 ]; then THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$2")
-        elif [ "$#" -ge 3 ]; then THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=("$2"); THRESHOLD_GB+=("$3"); fi ;;
+        if [ -z "$rest" ]; then continue; fi
+        if [[ "$rest" =~ ^[0-9]+$ ]]; then
+          mount="/"; gb="$rest"
+        else
+          split_rest
+          mount="$(unescape_mount "$mount_raw")"
+        fi
+        [[ "$gb" =~ ^[0-9]+$ ]] || continue
+        [ -n "$mount" ] || mount="/"
+        THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       external)
-        if [ "$#" -ge 3 ]; then THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$2"); THRESHOLD_GB+=("$3"); fi ;;
+        if [ -z "$rest" ]; then continue; fi
+        split_rest
+        [ -n "$mount_raw" ] || continue
+        mount="$(unescape_mount "$mount_raw")"
+        [[ "$gb" =~ ^[0-9]+$ ]] || continue
+        [ -n "$mount" ] || continue
+        THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       internal-threshold-gb|internal_threshold_gb)
-        THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$2") ;;
+        gb="$rest"
+        [[ "$gb" =~ ^[0-9]+$ ]] || continue
+        THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$gb") ;;
       external-volumes|external_volumes)
-        if [ "$#" -ge 3 ]; then THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$2"); THRESHOLD_GB+=("$3"); fi ;;
+        if [ -z "$rest" ]; then continue; fi
+        split_rest
+        [ -n "$mount_raw" ] || continue
+        mount="$(unescape_mount "$mount_raw")"
+        [[ "$gb" =~ ^[0-9]+$ ]] || continue
+        [ -n "$mount" ] || continue
+        THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       *)
-        # allow "<path> <gb>" where first token is a path
-        if [ "$#" -eq 2 ] && [[ "$1" == /* ]]; then
-          THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$1"); THRESHOLD_GB+=("$2")
+        if [[ "$first" == /* ]] && [[ "$rest" =~ ^[0-9]+$ ]]; then
+          THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$first"); THRESHOLD_GB+=("$rest")
         fi ;;
     esac
   done < "$f"
@@ -70,8 +104,8 @@ TASK_IS_DONE() {
   local id="$1"
   local st
   st="$("$SCRIPT_DIR/fm-crew-state.sh" "$id" 2>/dev/null || true)"
-  printf '%s' "$st" | grep -qi 'state: done\|state: failed' && return 0
-  [ -f "$STATE/$id.status" ] && grep -Eiq 'state:[[:space:]]*done|^[[:space:]]*done[[:space:]]*$' "$STATE/$id.status" && return 0
+  printf '%s' "$st" | grep -Eiq 'state:[[:space:]]*(done|failed)([[:space:]]|$)' && return 0
+  [ -f "$STATE/$id.status" ] && grep -Eiq 'state:[[:space:]]*done([[:space:]]|$)|^[[:space:]]*done[[:space:]]*$' "$STATE/$id.status" && return 0
   # backlog fallback
   if [ -f "$DATA/backlog.md" ]; then grep -Eq "^\- \[[xX]\].*\b$id\b" "$DATA/backlog.md" && return 0; fi
   return 1
@@ -175,13 +209,13 @@ report() {
       # classification
       class="unknown"
       case "$st" in
-        idle) class="idle/unleased" ;;
+        idle|available) class="idle/unleased" ;;
         in-use) class="held-live (in-use)" ;;
         leased) class="held-live (leased)" ;;
         *) class="$st" ;;
       esac
       # never-touch checks for idle
-      if [ "$st" = "idle" ]; then
+      if [ "$st" = "idle" ] || [ "$st" = "available" ]; then
         # uncommitted?
         if ! git -C "$path" diff --quiet 2>/dev/null || ! git -C "$path" diff --cached --quiet 2>/dev/null; then class="idle but uncommitted (NEVER TOUCH)"; 
         elif [ -n "$(git -C "$path" stash list 2>/dev/null)" ]; then class="idle but stashed (NEVER TOUCH)";
@@ -249,7 +283,7 @@ sweep() {
       path="${1/#\~/$HOME}"; shift || true
       [ -d "$path" ] || continue
       # only consider idle (unleased/unheld)
-      [ "$st" = "idle" ] || { echo "skip slot $num $path: $st (held live)"; continue; }
+      [ "$st" = "idle" ] || [ "$st" = "available" ] || { echo "skip slot $num $path: $st (held live)"; continue; }
       # held by meta?
       case " $held_paths " in *" $path "*) echo "skip slot $num $path: held by live task"; continue ;; esac
       # never-touch checks
@@ -263,9 +297,8 @@ sweep() {
           # commits not on remote?
           remote_sha="$(git -C "$path" rev-parse "origin/$branch" 2>/dev/null || true)"
           head_sha="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
-          if ! git -C "$path" merge-base --is-ancestor "$head_sha" "origin/$branch" 2>/dev/null && [ "$remote_sha" != "$head_sha" ]; then
-            # HEAD may have local commits
-            if ! git -C "$path" ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then reason="branch not on remote"; fi
+          if ! git -C "$path" merge-base --is-ancestor "$head_sha" "origin/$branch" 2>/dev/null; then
+            if ! git -C "$path" ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then reason="branch not on remote"; else reason="local commits not on remote"; fi
           fi
         fi
       fi
