@@ -81,7 +81,7 @@ parse_thresholds() {
         gb="$rest"
         [[ "$gb" =~ ^[0-9]+$ ]] || continue
         THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$gb") ;;
-      external-volumes|external_volumes)
+      external-volumes|external-volumes:|external_volumes|external_volumes:)
         if [ -z "$rest" ]; then continue; fi
         split_rest
         [ -n "$mount_raw" ] || continue
