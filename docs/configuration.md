@@ -3541,7 +3541,7 @@ internal / 15
 external /Volumes/Mac\ Extended 5
 ```
 
-Fields: each non-comment line is `<role> <mount-path> <gb>` where role is `internal` or `external`.
+Fields: a line is usually `<role> <mount-path> <gb>`, where role is `internal` or `external`; compatible aliases and a bare `<mount-path> <gb>` line (with no role) are also accepted.
 Compatibility aliases and quoting rules are documented in the header of `bin/fm-hygiene.sh`.
 Defaults when absent: internal `/` at 15 GB, external `/Volumes/Mac Extended` at 5 GB.
 
