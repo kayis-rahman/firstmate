@@ -31,9 +31,9 @@ human() { awk -v b="$1" 'BEGIN{ if(b>=1073741824) printf "%.1fGB",b/1073741824; 
 
 parse_thresholds() {
   # global arrays THRESHOLD_MOUNT[], THRESHOLD_GB[]
-  THRESHOLD_MOUNT=(); THRESHOLD_GB=(); THRESHOLD_ROLE=()
+  THRESHOLD_MOUNT=(); THRESHOLD_GB=()
   local f="$CONFIG/disk-thresholds"
-  [ -f "$f" ] || { THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15); THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("/Volumes/Mac Extended"); THRESHOLD_GB+=(5); return 0; }
+  [ -f "$f" ] || { THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15); THRESHOLD_MOUNT+=("/Volumes/Mac Extended"); THRESHOLD_GB+=(5); return 0; }
   local line first rest mount_raw gb mount
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"
@@ -68,7 +68,7 @@ parse_thresholds() {
         fi
         [[ "$gb" =~ ^[0-9]+$ ]] || continue
         [ -n "$mount" ] || mount="/"
-        THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
+        THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       external)
         if [ -z "$rest" ]; then continue; fi
         split_rest
@@ -76,11 +76,11 @@ parse_thresholds() {
         mount="$(unescape_mount "$mount_raw")"
         [[ "$gb" =~ ^[0-9]+$ ]] || continue
         [ -n "$mount" ] || continue
-        THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
+        THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       internal-threshold-gb|internal_threshold_gb)
         gb="$rest"
         [[ "$gb" =~ ^[0-9]+$ ]] || continue
-        THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$gb") ;;
+        THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=("$gb") ;;
       external-volumes|external-volumes:|external_volumes|external_volumes:)
         if [ -z "$rest" ]; then continue; fi
         split_rest
@@ -88,15 +88,15 @@ parse_thresholds() {
         mount="$(unescape_mount "$mount_raw")"
         [[ "$gb" =~ ^[0-9]+$ ]] || continue
         [ -n "$mount" ] || continue
-        THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
+        THRESHOLD_MOUNT+=("$mount"); THRESHOLD_GB+=("$gb") ;;
       *)
         if [[ "$first" == /* ]] && [[ "$rest" =~ ^[0-9]+$ ]]; then
-          THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("$first"); THRESHOLD_GB+=("$rest")
+        THRESHOLD_MOUNT+=("$first"); THRESHOLD_GB+=("$rest")
         fi ;;
     esac
   done < "$f"
   if [ "${#THRESHOLD_MOUNT[@]}" -eq 0 ]; then
-    THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15)
+        THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15)
   fi
 }
 
@@ -117,9 +117,6 @@ PR_MERGED_FOR_BRANCH() {
   local default_branch
   default_branch="$(git -C "$wtpath" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#^refs/remotes/origin/##')"
   [ -z "$default_branch" ] && default_branch=main
-  # remote branch exists?
-  local remote_exists=0
-  git -C "$wtpath" ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1 && remote_exists=1
   # HEAD reachable from origin default
   local head_reachable=0
   git -C "$wtpath" fetch origin --quiet 2>/dev/null || true
@@ -138,18 +135,6 @@ PR_MERGED_FOR_BRANCH() {
   # fallback HEAD reachable from default
   [ "$head_reachable" -eq 1 ] && return 0
   return 1
-}
-
-TREEHOUSE_ROOT() {
-  if [ -n "$TREEHOUSE_ROOT_OVERRIDE" ]; then echo "$TREEHOUSE_ROOT_OVERRIDE"; return; fi
-  if [ -n "${TREEHOUSE_ROOT:-}" ]; then echo "$TREEHOUSE_ROOT"; return; fi
-  echo "$HOME/.treehouse"
-}
-
-slot_lines() {
-  if command -v treehouse >/dev/null 2>&1; then
-    treehouse status 2>/dev/null
-  fi
 }
 
 report() {
@@ -338,7 +323,7 @@ sweep() {
       if [ "$sz" -gt 204800 ]; then
         if [ $yes -eq 1 ]; then rm -f "$f"; echo "removed media $f size=$(human "$sz")"; removed_bytes=$((removed_bytes+sz)); else echo "would remove media $f size=$(human "$sz")"; fi
       fi
-    done < <(find "$d" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.mp4' -o -iname '*.mov' -o -iname '*.webm' -o -iname '*.gif' -o -iname '*.zip' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' -o -iname '*.gz' -o -iname '*.aab' -o -iname '*.apk' \) -print0 2>/dev/null)
+    done < <(find "$d" -type d \( -name 'selected*' -o -name 'final*' \) -prune -o -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.mp4' -o -iname '*.mov' -o -iname '*.webm' -o -iname '*.gif' -o -iname '*.zip' -o -iname '*.tar' -o -iname '*.tar.gz' -o -iname '*.tgz' -o -iname '*.gz' -o -iname '*.aab' -o -iname '*.apk' \) -print0 2>/dev/null)
     # disposable dirs
     for sub in "$d"*; do
       [ -d "$sub" ] || continue
