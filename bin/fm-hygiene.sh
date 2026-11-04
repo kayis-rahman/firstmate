@@ -217,7 +217,8 @@ report() {
       # never-touch checks for idle
       if [ "$st" = "idle" ] || [ "$st" = "available" ]; then
         # uncommitted?
-        if ! git -C "$path" diff --quiet 2>/dev/null || ! git -C "$path" diff --cached --quiet 2>/dev/null; then class="idle but uncommitted (NEVER TOUCH)"; 
+        if ! git -C "$path" diff --quiet 2>/dev/null || ! git -C "$path" diff --cached --quiet 2>/dev/null; then class="idle but uncommitted (NEVER TOUCH)";
+        elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then class="idle but untracked (NEVER TOUCH)";
         elif [ -n "$(git -C "$path" stash list 2>/dev/null)" ]; then class="idle but stashed (NEVER TOUCH)";
         else
           branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
@@ -288,7 +289,8 @@ sweep() {
       case " $held_paths " in *" $path "*) echo "skip slot $num $path: held by live task"; continue ;; esac
       # never-touch checks
       reason=""
-      if ! git -C "$path" diff --quiet 2>/dev/null || ! git -C "$path" diff --cached --quiet 2>/dev/null; then reason="uncommitted changes"; 
+      if ! git -C "$path" diff --quiet 2>/dev/null || ! git -C "$path" diff --cached --quiet 2>/dev/null; then reason="uncommitted changes";
+      elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then reason="untracked files";
       elif [ -n "$(git -C "$path" stash list 2>/dev/null)" ]; then reason="stash present";
       else
         branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
