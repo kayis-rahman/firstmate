@@ -33,7 +33,7 @@ parse_thresholds() {
   # global arrays THRESHOLD_MOUNT[], THRESHOLD_GB[]
   THRESHOLD_MOUNT=(); THRESHOLD_GB=(); THRESHOLD_ROLE=()
   local f="$CONFIG/disk-thresholds"
-  [ -f "$f" ] || { THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15); return 0; }
+  [ -f "$f" ] || { THRESHOLD_ROLE+=(internal); THRESHOLD_MOUNT+=(/); THRESHOLD_GB+=(15); THRESHOLD_ROLE+=(external); THRESHOLD_MOUNT+=("/Volumes/Mac Extended"); THRESHOLD_GB+=(5); return 0; }
   local line
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"; line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
