@@ -3531,3 +3531,22 @@ Phase 1 runs the local MLX Serve typed-decision API (`/v1/systemone`) in shadow 
 - When enabled, `bin/fm-classify-lib.sh` still decides locally; `bin/fm-decision-api.sh` asks one fixed-choice question and compares the answer, appending one line per disagreement or low-confidence answer to `state/decision-shadow.log`.
 - `bin/fm-decision-api.sh` is fail-open: MLX Serve being down or slow (hard timeout 3 seconds) makes it print nothing and do nothing.
 - Exact request, response, timeout, and logging mechanics live in the header of `bin/fm-decision-api.sh`.
+
+## Disk hygiene thresholds
+
+`config/disk-thresholds` is an optional local, gitignored file controlling `bin/fm-hygiene.sh` alarms:
+
+```
+internal / 15
+external /Volumes/Mac\ Extended 5
+```
+
+Fields: a line is usually `<role> <mount-path> <gb>`, where role is `internal` or `external`; compatible aliases and a bare `<mount-path> <gb>` line (with no role) are also accepted.
+Compatibility aliases and quoting rules are documented in the header of `bin/fm-hygiene.sh`.
+Defaults when absent: internal `/` at 15 GB, external `/Volumes/Mac Extended` at 5 GB.
+
+Automatic sweep (still dry-run reporting by default) is turned on by creating `config/hygiene-auto-sweep` containing `yes`:
+
+```
+mkdir -p config && printf 'yes\n' > config/hygiene-auto-sweep
+```
