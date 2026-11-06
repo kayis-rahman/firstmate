@@ -720,6 +720,58 @@
     {
       "path": ".agents/skills/validation-supervision/SKILL.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": ".agents/skills/apple-design/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "docs/firstmate-migration.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/pi-fleet-ui-audit-v1.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "reports/Best value cheap VPS hosting.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "reports/Free VPS servers for CI hosting.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "research_notes/Best value cheap VPS hosting/budget_vps_under_5.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Best value cheap VPS hosting/hidden_costs_and_gotchas.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Best value cheap VPS hosting/performance_per_dollar.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Best value cheap VPS hosting/value_vps_5_to_20.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Free VPS servers for CI hosting/alternative_free_hosting.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Free VPS servers for CI hosting/aws_gcp_azure_free_tiers.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Free VPS servers for CI hosting/oracle_cloud_free_tier.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "research_notes/Free VPS servers for CI hosting/self_hosted_runners.md",
+      "audience": "maintainer-verification"
     }
   ]
 }
