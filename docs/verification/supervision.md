@@ -1009,7 +1009,7 @@ The safe command-channel contract is covered without a notification by `tests/fm
 
 The installed PiG 0.4.1+1.0.3 runtime was exercised on macOS arm64 with `openai-codex/gpt-6-luna` at medium effort in a named Herdr lab and throwaway Firstmate homes.
 The primary-only build at that time also passed `bin/fm-control.sh` interrupt and clean-state exit, and verified that worker relaunch was refused before stopping the live agent.
-Background delivery to a separate managed supervision branch and filtering host transcript rows were unverified in this run; the later cross-realm run below records the subsequent shared-bus bridge verification.
+Background delivery to a separate managed supervision branch and filtering host transcript rows were unverified in this run; this build retains no managed background branch for PiG.
 
 ### Primary recheck, live verification, 2026-10-19
 
@@ -1022,15 +1022,10 @@ This is an unresolved recovery result, not evidence that automatic recovery work
 The probe did not exercise dispatch intake, worker briefing or spawn, ship-ready landing, section 9 escalation wording, or wake-drain acknowledgement.
 The exact output and SDK/API research for this run are in the private task report; the managed background branch was not yet verified at this point.
 
-### Cross-realm branch dispatch, live verification, 2026-10-19
+### Branch dispatch status, current build
 
-A live run in a real Firstmate checkout (not the linked worktree) loaded the real Go `firstmate` extension and the real Node `fm-branch-supervision` plus a passive bus observer, with a pre-seeded eligible status wake.
-The observer recorded, in order: `fm-pig-watch:bridge-ready {}`, `fm-pig-watch:dispatch-result {"id":"pig-offer-1","accepted":true}`, then `fm-pig-watch:actionable-close {"id":"pig-offer-1",...}`.
-The branch session file was created, the branch ran the wake as a real agent turn (`fm-branch-prompt` system prompt, `bash` tool, drain and acknowledgement), and reported `fm-pig-watch:handled {"id":"pig-offer-1"}` 33 seconds later.
-Main received no `FIRSTMATE WATCHER WAKE` envelope for that wake; the durable outcome store gained no duplicate for the declined path.
-A later stale-endpoint wake was declined (`accepted:false`) and delivered to main exactly as before the bridge.
-The transport is therefore verified end to end: ready, verdict, settlement, and the declined fallback, with no new process.
-Go unit tests in `.pig/extensions/firstmate/branch_bridge_test.go` cover accept, decline, rejected settlement, timeout, no-readiness, nil-bridge, and the cross-language channel-name contract.
+PiG has no managed background branch in this build: its Go runtime extension does not bridge watcher offers to the Node supervision extension, and PiG cannot create managed agent sessions with the released SDK.
+Earlier cross-realm experiments and the now-removed `branch_bridge.go` bridge are not part of this adapter.
 
 A later isolated worker smoke verified PiG worker spawn, extension loading, busy and turn-end events, and trivial-task completion.
 Worker steering inbox delivery, interrupt, exit, and relaunch remain unverified.
