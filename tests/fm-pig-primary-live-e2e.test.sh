@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Token-free live validation that PiG v0.4.1 accepts the Firstmate Go extension.
+# Token-free live validation that supported PiG releases accept the Firstmate Go extension.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -19,8 +19,8 @@ pass() { printf 'ok - %s\n' "$1"; }
 
 version=$(pig --version 2>/dev/null | head -1)
 case "$version" in
-  0.4.1+*) ;;
-  *) fail "expected PiG v0.4.1, found '${version:-no version output}'" ;;
+  0.4.1+*|0.5.3+*) ;;
+  *) fail "expected PiG v0.4.1 or v0.5.3, found '${version:-no version output}'" ;;
 esac
 
 result=$(pig install --validate-only --json "$ROOT/.pig/extensions/firstmate" 2>&1) || \
