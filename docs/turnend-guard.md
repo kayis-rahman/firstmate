@@ -97,7 +97,7 @@ The guard cooperates with that arm rather than trusting a beacon left by the cyc
 
 ### Foreign session-lock owner
 
-When an active home instead has a live session lock held by a verified harness that the current session does not own, the Claude guard emits a read-only ownership diagnostic and allows the turn to end safely.
+When an active home instead has a session lock that the current session does not own and the shared `fm_session_lock_pid_blocks_reclaim` verdict refuses to reclaim, the Claude guard emits a read-only ownership diagnostic and allows the turn to end safely.
 
 Ownership is the shared `fm_session_lock_owned_by_self` verdict in `bin/fm-session-lock-lib.sh`.
 The current session owns the lock when either of these holds:
@@ -139,7 +139,7 @@ Without that proof a stale or absent beacon is a genuine lapse and alarms.
 
 Under the extension model (Pi, pi-signed, and omp) a live identity-matched watcher is the ordinary healthy state.
 A genuinely unheld lock with a beacon fresh within grace is also healthy while a live Pi or omp session provably owns continuity.
-That hand-off is benign because `.pi/extensions/fm-primary-pi-watch.ts` and `.omp/extensions/fm-primary-omp-watch.ts` tear the watcher down on every actionable wake and spawn the replacement themselves. PiG's primary run verified actionable wake delivery and healthy-cycle turn-end behavior, but not watcher restoration; it does not inherit the Pi or omp continuity proof.
+That hand-off is benign because `.pi/extensions/fm-primary-pi-watch.ts` and `.omp/extensions/fm-primary-omp-watch.ts` tear the watcher down on every actionable wake and spawn the replacement themselves. PiG readiness is always unknown until live lifecycle verification; its configured Pi extension path does not establish watcher restoration or wake delivery.
 
 A lock is genuinely unheld only in one of these cases:
 
@@ -160,7 +160,7 @@ omp never inherits the Pi tolerance because its proof is keyed on its own two fi
 Requiring the turn-end guard extension as well as the watch extension is deliberate, because a home without that structural backstop has no benign hand-off to tolerate.
 
 Without that proof an unheld lock alarms exactly as it did before.
-An unloaded, version-drifted, or exited Pi or omp session is therefore loud immediately. PiG's watcher-restoration and lifecycle-recovery paths remain unverified.
+An unloaded, version-drifted, or exited Pi or omp session is therefore loud immediately. PiG's lifecycle recovery remains unverified.
 A cycle the extension never restores is loud once the beacon passes grace.
 
 #### Persistent-watcher harnesses
@@ -272,7 +272,10 @@ The registrations in detail:
   It records idle when it allows the Stop and busy when its exit 2 blocks it into a continuation, because Claude runs Stop hooks in parallel and that continuation fires no `UserPromptSubmit`.
   A home whose guard predates `.fm-busy-stop` cannot close the turn, so that launch keeps the ordinary `Stop` idle hook instead.
   [Runtime backend verification](verification/runtime-backends.md#secondmate-busy-contract) owns the live evidence.
-- Codex registers a `Stop` hook in `.codex/hooks.json`, anchors the executable to the hook process working directory, verifies a Firstmate-shaped hook-bearing root, and passes the original payload to the shared guard.
+- Codex registers a synchronous `Stop` hook in `.codex/hooks.json`, anchors the executable to the hook process working directory, verifies a Firstmate-shaped hook-bearing root, and passes the original payload to the shared guard through `bin/fm-codex-stop-park.sh --guard` when that script is present.
+  Its inner wrapper uses non-login Bash with the inherited PATH to avoid login/logout output contaminating the hook response.
+  Allowed stops return one literal `{}` object; nonzero exits and stderr retain the shared guard's error or bounded-continuation behavior.
+  [Runtime backend verification](verification/runtime-backends.md#stop-response-parsing) owns the parser evidence and its portable and token-free live regression entry points.
 - OpenCode subscribes to the terminal `session.execution.succeeded`, `session.execution.failed`, and `session.execution.interrupted` events through `ctx.event.subscribe` in `.opencode/plugins/fm-primary-turnend-guard.js`, latched to the root worker session so child-session turns do not trip it, lets the watcher coordinator act first, and calls `ctx.session.prompt` once when the guard returns 2. The legacy OpenCode 1 `session.idle` + `client.session.promptAsync` path is retained in the plugin's `server` export.
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
 - omp answers its blocking `session_stop` hook in `.omp/extensions/fm-primary-turnend-guard.ts`, passing the payload's own `stop_hook_active` to the shared guard.
@@ -426,7 +429,7 @@ The block budget is charged by two rules:
 That second rule still bounds an inert auto-arm when a hook never fires or fails before its generation claim and therefore leaves the ledger frozen at its last outcome.
 Charging only epoch changes let the count freeze with that ledger, so the remaining inert-hook cases could re-block without limit and make the attended fail-open unreachable.
 `budget_account_current_epoch` in `bin/fm-turnend-guard.sh` owns the rule.
-A verified live foreign session-lock owner takes the earlier diagnostic safe exit instead and never reaches this budget path.
+A live foreign session-lock owner takes the earlier diagnostic safe exit instead and never reaches this budget path.
 Whenever both coordination locks are needed, positive auto-arm recovery, the terminal check, and the auto-arm's attended-alarm commit acquire the auto-arm owner lock before the budget lock.
 
 #### Attended fail-open
@@ -620,7 +623,7 @@ It proves that a live foreign owner still prevents arming while repeated non-own
 
 - The persistent model's fresh-leftover-beacon negative control.
 - The auto-arm model's healthy fresh-beacon-without-a-watcher case, session-and-recovery-bound long-turn rewake tolerance, independently broken tolerance signals, open-claim negative control, stale-beacon alarm, and isolation from other models.
-- The extension model's live-watcher path, ownership-qualified fresh hand-off, held-lock failures, independently broken ownership signals, stale-beacon alarm, queued-wake warning, and Pi/pi-signed harness routing; PiG's live wake and turn-end evidence does not prove watcher restoration or full lifecycle readiness.
+- The extension model's live-watcher path, ownership-qualified fresh hand-off, held-lock failures, independently broken ownership signals, stale-beacon alarm, queued-wake warning, and Pi/pi-signed harness routing; PiG's unverified readiness behavior.
 
 It also covers true-reason banner wording and reason-keyed episode dedup surviving a beacon mtime change.
 

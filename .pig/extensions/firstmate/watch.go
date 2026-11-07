@@ -131,7 +131,6 @@ type watcher struct {
 	armRetireTimeout              time.Duration
 	coord                         *replacementCoordinator
 	bus                           *eventBus
-	branchBridge                  *branchBridge
 
 	host          watchHost
 	generation    *watchGeneration
@@ -270,7 +269,25 @@ func (w *watcher) persistReplacementHandoff(pending []*pendingActionable) error 
 	if len(pending) == 0 {
 		return nil
 	}
-	return w.writeReplacementHandoff(pending)
+	w.coord.handoffMu.Lock()
+	defer w.coord.handoffMu.Unlock()
+	stored, err := w.readStoredHandoff()
+	if err != nil && errorCode(err) != "ENOENT" {
+		return err
+	}
+	for _, item := range pending {
+		found := false
+		for _, existing := range stored {
+			if item.Token == existing.Token {
+				found = true
+				break
+			}
+		}
+		if !found {
+			stored = append(stored, item)
+		}
+	}
+	return w.writeReplacementHandoff(stored)
 }
 
 func (w *watcher) readStoredHandoff() ([]*pendingActionable, error) {
@@ -282,6 +299,8 @@ func (w *watcher) readStoredHandoff() ([]*pendingActionable, error) {
 }
 
 func (w *watcher) loadReplacementHandoff() ([]*pendingActionable, error) {
+	w.coord.handoffMu.Lock()
+	defer w.coord.handoffMu.Unlock()
 	pending, err := w.readStoredHandoff()
 	if err != nil {
 		if errorCode(err) == "ENOENT" {
@@ -293,6 +312,8 @@ func (w *watcher) loadReplacementHandoff() ([]*pendingActionable, error) {
 }
 
 func (w *watcher) mergeReplacementHandoff(pending *pendingActionable) error {
+	w.coord.handoffMu.Lock()
+	defer w.coord.handoffMu.Unlock()
 	stored, err := w.readStoredHandoff()
 	if err != nil && errorCode(err) != "ENOENT" {
 		return err
@@ -306,6 +327,8 @@ func (w *watcher) mergeReplacementHandoff(pending *pendingActionable) error {
 }
 
 func (w *watcher) clearReplacementHandoff(pending *pendingActionable) error {
+	w.coord.handoffMu.Lock()
+	defer w.coord.handoffMu.Unlock()
 	stored, err := w.readStoredHandoff()
 	if err != nil {
 		if errorCode(err) == "ENOENT" {
@@ -650,7 +673,7 @@ func (w *watcher) confirmHandlingDeliveryWithRetry(owner *watchGeneration, recov
 	return w.confirmHandlingDelivery(snapshot())
 }
 
-func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, pending *pendingActionable, recovery *armRecovery, branchEligible bool) (bool, error) {
+func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, pending *pendingActionable, recovery *armRecovery) (bool, error) {
 	if !w.generationIsLive(owner) {
 		return false, nil
 	}
@@ -664,17 +687,6 @@ func (w *watcher) deliverActionableWake(owner *watchGeneration, message string, 
 				w.retireArm(child)
 			}
 			return w.sendWake(owner, message+"\n\n"+confirmed.detail, pending)
-		}
-	}
-	if branchEligible {
-		if offer := w.branchBridge.announce(message); offer != nil {
-			if w.branchBridge.settle(w, offer) {
-				// The branch handled and acknowledged the wake; main sees nothing,
-				// exactly as an accepted in-process offer on Pi.
-				return true, nil
-			}
-			// A rejected settlement falls through to main delivery, exactly as
-			// the Pi watch extension's catch does.
 		}
 	}
 	return w.sendWake(owner, message, pending)
@@ -873,7 +885,7 @@ func (w *watcher) processPendingActionables(owner *watchGeneration) {
 		if restoration.failure != "" {
 			message += "\n\n" + restoration.failure
 		}
-		delivered, err := w.deliverActionableWake(owner, message, pending, restoration.recovery, restoration.failure == "")
+		delivered, err := w.deliverActionableWake(owner, message, pending, restoration.recovery)
 		if err != nil {
 			claim.settle("failed")
 			release()
@@ -1088,6 +1100,10 @@ func (w *watcher) startArm(owner *watchGeneration, predecessorArmPid string) (ar
 		return armResult{}, err
 	}
 	watchMu.Lock()
+	if !generationIsLiveLocked(owner) {
+		watchMu.Unlock()
+		return armResult{Message: shuttingDownMessage}, nil
+	}
 	if owner.child != nil {
 		watchMu.Unlock()
 		return armResult{OK: true, Message: "watcher: unchanged - Pi extension already owns an arm child; no manual re-arm needed; " + repairOnlyHint}, nil
@@ -1098,8 +1114,9 @@ func (w *watcher) startArm(owner *watchGeneration, predecessorArmPid string) (ar
 	}
 	owner.seq++
 	id := owner.seq
-	watchMu.Unlock()
 
+	// Keep the ownership lock until Start and child registration are complete.
+	// Concurrent starts and shutdown cannot observe an untracked arm.
 	cmd := exec.Command("bash", "-lc", armLoginScript)
 	cmd.Dir = w.fmRoot
 	cmd.Env = append(os.Environ(),
@@ -1123,14 +1140,12 @@ func (w *watcher) startArm(owner *watchGeneration, predecessorArmPid string) (ar
 	if startErr != nil {
 		// Like a Node spawn error, a launch failure arrives as the child's own
 		// error event after startArm already reported the child as started.
-		watchMu.Lock()
 		owner.child = child
 		watchMu.Unlock()
 		go w.armErrored(owner, child, id, startErr)
 		return armResult{OK: true, Message: fmt.Sprintf("watcher: started Pi extension arm child %d; future ordinary re-arms are automatic; %s", id, repairOnlyHint)}, nil
 	}
 	child.pid = strconv.Itoa(cmd.Process.Pid)
-	watchMu.Lock()
 	owner.child = child
 	watchMu.Unlock()
 

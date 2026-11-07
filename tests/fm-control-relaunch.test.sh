@@ -48,7 +48,6 @@ relaunch_cleanup() {
     [ -n "$d" ] && fm_test_remove_tree "$d"
   done
   fm_test_cleanup
-  fm_test_remove_tree "$TMP_ROOT"
 }
 trap relaunch_cleanup EXIT
 
@@ -1571,44 +1570,25 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   pass "fm-control relaunch: invalid configured effort is ignored before stop"
 }
 
-# PiG is verified for crewmate/scout work but has no secondmate supervision
-# protocol, so control refuses the unsupported task kind before touching it.
-test_pig_secondmate_relaunch_refuses_before_stop() {
-  local dir home smhome out rc
-  dir=$(new_case pig-secondmate pigmate)
-  home="$dir/home"
-  smhome="$dir/smhome"
-  mkdir -p "$home/config" "$home/data/pigmate"
-  printf 'pig\n' > "$home/config/secondmate-harness"
-  fm_git_worktree "$dir/proj" "$smhome" sm-branch
-  mkdir -p "$smhome/state" "$smhome/data" "$smhome/bin"
-  printf 'pigmate\n' > "$smhome/.fm-secondmate-home"
-  printf '# agents\n' > "$smhome/AGENTS.md"
-  printf '# secondmate brief\n' > "$home/data/pigmate/brief.md"
-  {
-    echo "window=fmses:fm-pigmate"
-    echo "endpoint_task_id=pigmate"
-    echo "worktree=$smhome"
-    echo "project=$smhome"
-    echo "harness=pig"
-    echo "kind=secondmate"
-    echo "mode=secondmate"
-    echo "yolo=off"
-    echo "model=default"
-    echo "effort=default"
-    echo "home=$smhome"
-  } > "$home/state/pigmate.meta"
-  printf '%s\n' "fm-pigmate" > "$dir/fake/windows"
-  printf '%s' "$smhome" > "$dir/fake/cwd"
-  out=$(run_control "$dir" pigmate relaunch --note "preserve the primary task"); rc=$?
-  expect_code 1 "$rc" "PiG must refuse a secondmate relaunch: $out"
-  assert_contains "$out" "PiG's worker adapter is not verified for secondmate supervision" \
-    "the refusal should name the unsupported PiG secondmate boundary"
-  [ "$(meta_field "$dir" pigmate harness)" = pig ] \
+# muse is a verified adapter, but only for crewmates and scouts: it has no
+# primary supervision protocol, so bin/fm-spawn.sh refuses it for a secondmate.
+# That refusal alone is not enough here, because the launch owner is reached
+# only AFTER the running agent has been stopped - a secondmate would be left
+# with no agent at all. The control plane asks the same capability question
+# before it touches anything, so the refusal lands while the agent is still up.
+test_primary_only_adapter_relaunch_refuses_before_stop() {
+  local dir out rc
+  dir=$(new_case primary-only pigship)
+  add_ship_task "$dir" pigship pig
+  out=$(run_control "$dir" pigship relaunch --note "preserve the primary task"); rc=$?
+  expect_code 1 "$rc" "a primary-only adapter should refuse a worker-task relaunch"
+  assert_contains "$out" "not verified to run a ship task" \
+    "the refusal should name the unsupported worker task kind"
+  [ "$(meta_field "$dir" pigship harness)" = pig ] \
     || fail "the refused relaunch must leave the durable record on PiG"
   assert_no_grep "/exit" "$dir/fake/literal" \
-    "a PiG secondmate relaunch refusal must preserve the running agent"
-  pass "fm-control relaunch: PiG secondmate relaunch refuses before stopping the agent"
+    "a primary-only relaunch refusal must preserve the running agent"
+  pass "fm-control relaunch: PiG primary-only worker relaunch refuses before stopping the agent"
 }
 
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop() {
@@ -1897,6 +1877,51 @@ test_missing_worktree_refuses_before_stopping_anything() {
   [ "$(cat "$dir/fake/command")" = claude ] || fail "a refused relaunch must not stop the agent"
   [ -z "$(cat "$dir/fake/literal")" ] || fail "a refused relaunch must send nothing"
   pass "fm-control relaunch: an unaccountable local copy refuses before the agent is touched"
+}
+
+# A restart must never put a worker back in a primary home or a
+# repository's primary checkout; the recorded worktree is the only launch cwd.
+test_relaunch_refuses_a_recorded_worktree_that_is_the_primary_home() {
+  local dir out rc
+  dir=$(new_case homewt rl11)
+  add_ship_task "$dir" rl11 claude
+  sed -i.bak "s#^worktree=.*#worktree=$dir/home#" "$dir/home/state/rl11.meta"
+  printf 'zsh' > "$dir/fake/command"
+  out=$(run_spawn "$dir" rl11 --relaunch 2>&1); rc=$?
+  expect_code 1 "$rc" "a worktree that is the primary home should refuse"
+  assert_contains "$out" "primary home or checkout" "the refusal should name the primary home"
+  [ -z "$(cat "$dir/fake/literal")" ] || fail "a refused relaunch must launch nothing"
+  pass "fm-spawn --relaunch: a recorded worktree that is the primary home refuses"
+}
+
+test_relaunch_refuses_a_recorded_worktree_that_is_the_project_primary_checkout() {
+  local dir out rc
+  dir=$(new_case projwt rl12)
+  add_ship_task "$dir" rl12 claude
+  sed -i.bak "s#^worktree=.*#worktree=$dir/proj#" "$dir/home/state/rl12.meta"
+  printf 'zsh' > "$dir/fake/command"
+  out=$(run_spawn "$dir" rl12 --relaunch 2>&1); rc=$?
+  expect_code 1 "$rc" "a worktree that is the project primary checkout should refuse"
+  assert_contains "$out" "primary home or checkout" "the refusal should name the primary checkout"
+  [ -z "$(cat "$dir/fake/literal")" ] || fail "a refused relaunch must launch nothing"
+  pass "fm-spawn --relaunch: a recorded worktree that is the project primary checkout refuses"
+}
+
+# Inherited Git location overrides must not disguise the primary checkout:
+# a linked worktree's GIT_DIR plus the primary checkout as GIT_WORK_TREE would
+# make the git-dir and common-dir probes disagree.
+test_relaunch_refuses_the_primary_checkout_under_inherited_git_overrides() {
+  local dir out rc linked_gd
+  dir=$(new_case projwtenv rl13)
+  add_ship_task "$dir" rl13 claude
+  linked_gd=$(git -C "$dir/wt" rev-parse --absolute-git-dir)
+  sed -i.bak "s#^worktree=.*#worktree=$dir/proj#" "$dir/home/state/rl13.meta"
+  printf 'zsh' > "$dir/fake/command"
+  out=$(GIT_DIR="$linked_gd" GIT_WORK_TREE="$dir/proj" run_spawn "$dir" rl13 --relaunch 2>&1); rc=$?
+  expect_code 1 "$rc" "the primary checkout should refuse even under inherited GIT_DIR/GIT_WORK_TREE"
+  assert_contains "$out" "primary home or checkout" "the refusal should name the primary checkout"
+  [ -z "$(cat "$dir/fake/literal")" ] || fail "a refused relaunch must launch nothing"
+  pass "fm-spawn --relaunch: inherited Git overrides do not hide the project primary checkout"
 }
 
 test_missing_instructions_refuse_before_stopping_anything() {
@@ -3182,7 +3207,7 @@ test_secondmate_relaunch_uses_the_default_for_an_unpinned_mate
 test_secondmate_relaunch_with_a_legacy_pin_file_uses_the_first_line
 test_secondmate_relaunch_refuses_an_unreadable_configured_pin_before_stop
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
-test_pig_secondmate_relaunch_refuses_before_stop
+test_primary_only_adapter_relaunch_refuses_before_stop
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
@@ -3193,6 +3218,9 @@ test_prefixed_prior_harness_wiring_is_still_retired
 test_muse_session_binding_is_retired_on_a_harness_switch
 test_cursor_session_binding_is_retired_on_a_harness_switch
 test_missing_worktree_refuses_before_stopping_anything
+test_relaunch_refuses_a_recorded_worktree_that_is_the_primary_home
+test_relaunch_refuses_a_recorded_worktree_that_is_the_project_primary_checkout
+test_relaunch_refuses_the_primary_checkout_under_inherited_git_overrides
 test_missing_instructions_refuse_before_stopping_anything
 test_checkpoint_refusal_leaves_the_record_byte_identical
 test_checkpoint_refuses_uninspectable_head_and_status

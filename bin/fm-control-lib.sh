@@ -120,8 +120,9 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
+    pig) return 1 ;;
     hermes) case "$kind" in ship|scout) ;; *) return 1 ;; esac ;;
-    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|pig) [ "$kind" != secondmate ] || return 1 ;;
+    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }
@@ -292,7 +293,8 @@ fm_control_exit_command() {  # <harness> [opencode-major]
       esac
       ;;
     claude|grok|kimi|cursor|muse|rovo) printf '/exit' ;;
-    codex|pi|pi-signed|pig|omp|gemini|agy|devin|commandcode|polytoken|cortex|kiro|hermes) printf '/quit' ;;
+    codex|pi|pi-signed|omp|gemini|agy|devin|commandcode|polytoken|cortex|kiro|hermes) printf '/quit' ;;
+    pig) printf '/quit' ;;
     *) return 1 ;;
   esac
 }

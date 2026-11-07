@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 
@@ -28,6 +29,9 @@ func Extension() *sdk.Extension {
 	if root == "" {
 		return ext
 	}
+	if os.Getenv("FM_ROOT_OVERRIDE") == "" {
+		_ = os.Setenv("FM_ROOT_OVERRIDE", root)
+	}
 	registerTurnEndGuard(ext, root)
 	registerSessionStart(ext, root)
 	bus := newEventBus()
@@ -40,7 +44,14 @@ func firstmateRoot() string {
 	if root := os.Getenv("FM_ROOT_OVERRIDE"); root != "" {
 		return root
 	}
-	return os.Getenv("FM_HOME")
+	if home := os.Getenv("FM_HOME"); home != "" {
+		return home
+	}
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", ".."))
 }
 
 func registerTurnEndGuard(ext *sdk.Extension, root string) {

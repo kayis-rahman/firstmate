@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait] [--fresh-session]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait] [--fresh-session]
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
 #        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
@@ -1003,7 +1003,6 @@ BASE_BRANCH_SET=0
 UPSTREAM_CONSENT=
 UPSTREAM_CONSENT_SET=0
 TRACEPARENT_SET=0
-FRESH_SESSION=0
 ACCOUNT_ARG=
 ACCOUNT_SET=0
 RELAUNCH=0
@@ -1088,7 +1087,6 @@ for a in "$@"; do
     ;;
   --relaunch) RELAUNCH=1 ;;
   --herdr-resume-lock-wait) HERDR_RESUME_LOCK_WAIT=1 ;;
-  --fresh-session) FRESH_SESSION=1 ;;
   --harness) want_value=harness ;;
   --harness=*)
     HARNESS_ARG=${a#--harness=}
@@ -1224,10 +1222,6 @@ case "$EFFORT" in
   ;;
 esac
 
-if [ "$FRESH_SESSION" -eq 1 ] && [ "$RELAUNCH" -eq 0 ]; then
-  echo "error: --fresh-session is a relaunch-only option" >&2
-  exit 1
-fi
 # --relaunch reuses an existing task's endpoint, worktree, project, and kind,
 # so every axis this block resolves for a fresh spawn instead comes from that
 # task's own durable record below. Contradicting it on the command line is a
@@ -2431,13 +2425,6 @@ ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
 RAW_SHELL_C=0
-raw_shell_has_c_flag() {  # <shell-option>
-  case "$1" in
-    --*) return 1 ;;
-    -*c*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -2573,6 +2560,36 @@ if [ "$RELAUNCH" -eq 1 ]; then
     echo "error: task $ID's recorded worktree '${RELAUNCH_WT:-none}' is missing; refusing to relaunch without the local copy its work lives in" >&2
     exit 1
   }
+  if [ "$KIND" != secondmate ]; then
+    # A worker must come back in its own disposable worktree, never in a
+    # primary home or a repository's primary checkout: refuse
+    # rather than fall back to wherever the restored pane happens to sit.
+    relaunch_wt_real=$(cd "$RELAUNCH_WT" 2>/dev/null && pwd -P) || relaunch_wt_real=$RELAUNCH_WT
+    relaunch_primary=
+    for relaunch_cand in "$FM_HOME" "$FM_ROOT"; do
+      relaunch_cand_real=$(cd "$relaunch_cand" 2>/dev/null && pwd -P) || continue
+      [ "$relaunch_wt_real" = "$relaunch_cand_real" ] && relaunch_primary=$relaunch_cand
+    done
+    if [ -z "$relaunch_primary" ]; then
+      # Probe the directory's own layout: an inherited GIT_DIR naming a linked
+      # worktree with GIT_WORK_TREE naming the primary checkout would otherwise
+      # make the two answers differ and pass the primary checkout.
+      relaunch_gdc=$(
+        unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+          GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES GIT_NAMESPACE \
+          GIT_DISCOVERY_ACROSS_FILESYSTEM GIT_CONFIG GIT_CONFIG_GLOBAL \
+          GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT
+        git -C "$RELAUNCH_WT" rev-parse --path-format=absolute --git-dir --git-common-dir 2>/dev/null
+      ) || relaunch_gdc=
+      relaunch_gd=${relaunch_gdc%%$'\n'*}
+      relaunch_gc=${relaunch_gdc#*$'\n'}
+      [ -z "$relaunch_gd" ] || [ "$relaunch_gd" != "$relaunch_gc" ] || relaunch_primary="its repository's primary checkout"
+    fi
+    [ -z "$relaunch_primary" ] || {
+      echo "error: task $ID's recorded worktree '$RELAUNCH_WT' is the primary home or checkout ($relaunch_primary), not an isolated task worktree; refusing to relaunch a worker there" >&2
+      exit 1
+    }
+  fi
   if [ "$KIND" = secondmate ]; then
     FIRSTMATE_HOME=$(fm_meta_get "$RELAUNCH_META" home)
     [ -n "$FIRSTMATE_HOME" ] || FIRSTMATE_HOME=$RELAUNCH_WT
@@ -2916,7 +2933,7 @@ launch_template() {
     fi
     ;;
   opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}__EFFORTFLAG__}'\'' __OPENCODEBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
-  pi | pi-signed | pig)
+  pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
       # The two primary extensions supervise the mate's own home. __PIEXT__ is
@@ -3160,27 +3177,24 @@ case "$ARG3" in
   LAUNCH=$ARG3
   HARNESS=""
   LAUNCH_WORDS=()
-  _expect_payload=0
   _env_arg_skip=0
   for __w in $LAUNCH; do
     if [ "$_env_arg_skip" -eq 1 ]; then _env_arg_skip=0; continue; fi
-    if [ "$_expect_payload" -eq 1 ]; then
-      _expect_payload=0
-      _p=$__w
-      case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac
-      # shellcheck disable=SC2086
-      for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done
-      continue
-    fi
     case "$__w" in
-      env) continue ;;
+      env|command|nohup|-- ) continue ;;
       [A-Za-z_]*=*) continue ;;
+      -S*|--split-string*)
+        echo "error: raw env split-string launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
+        exit 1
+        ;;
       -u|--unset|-C|--chdir) _env_arg_skip=1; continue ;;
-      -S|--split-string) _expect_payload=1; continue ;;
-      --split-string=*) _p=${__w#--split-string=}; case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac; for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done; continue ;;
-      -S*) _p=${__w#-S}; if [ -n "$_p" ]; then case "$_p" in \'*\'|"\"*") _p=${_p#?}; _p=${_p%?} ;; esac; for _pw in $_p; do LAUNCH_WORDS+=("$_pw"); done; else _expect_payload=1; fi; continue ;;
-      *) LAUNCH_WORDS+=("$__w") ;;
+      -*) continue ;;
     esac
+    __w=${__w#\"}
+    __w=${__w#\'}
+    __w=${__w%\"}
+    __w=${__w%\'}
+    LAUNCH_WORDS+=("$__w")
   done
   if [ "${#LAUNCH_WORDS[@]}" -gt 0 ]; then
     HARNESS=${LAUNCH_WORDS[0]##*/}
@@ -3193,32 +3207,109 @@ case "$ARG3" in
   # active. Resolving here on every spawn is what makes the split DURABLE - a
   # respawn (recovery, /updatefirstmate, restart) re-resolves, so
   # config/secondmate-harness keeps governing secondmate launches across restarts.
-  # The launch_template lookup below is the unverified-adapter guard for both
-  # kinds: a harness with no template aborts the spawn.
   if [ "$KIND" = secondmate ]; then
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID")
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate "$ID") || exit 1
     harness_src='config/secondmate-harness (falling back to config/crew-harness)'
   else
     if [ -f "$CONFIG/crew-dispatch.json" ]; then
       echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
       exit 1
     fi
-    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+    HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew) || exit 1
     harness_src='config/crew-harness'
   fi
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
   ;;
-*)
-  HARNESS=$ARG3
-  LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-    echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
-    exit 1
-  }
-  ;;
+*) HARNESS=$ARG3 ;;
 esac
+
+raw_shell_has_c_flag() {  # <shell-option>
+  case "$1" in
+    --*) return 1 ;;
+    -c|-?*c*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  case "$HARNESS" in
+    bash|sh|dash|zsh|ksh)
+      shell_seen=0
+      raw_shell_skip_next=0
+      for word in $LAUNCH; do
+        if [ "$raw_shell_skip_next" -eq 1 ]; then
+          raw_shell_skip_next=0
+          continue
+        fi
+        word=${word#\"}
+        word=${word#\'}
+        word=${word%\"}
+        word=${word%\'}
+        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
+          RAW_SHELL_C=1
+          break
+        fi
+        if [ "$shell_seen" -eq 0 ]; then
+          case "$word" in
+            -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
+          esac
+        fi
+        case "$(basename -- "$word")" in
+          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
+        esac
+      done
+      ;;
+  esac
+fi
+
+# Admit only a literal, simple command for an independently verified worker.
+# Unrecognized shell syntax remains refused rather than guessing what it runs.
+safe_raw_shell="^[[:space:]]*(bash|sh|dash|zsh|ksh)[[:space:]]+-l?c[[:space:]]+'(claude|codex|pi|pi-signed|omp|grok|kimi|cursor|muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|agy)([[:space:]]+[A-Za-z0-9_./:=+@,-]+)*'[[:space:]]*$"
+if [ "$RAW_SHELL_C" -eq 1 ] && [[ "$LAUNCH" =~ $safe_raw_shell ]]; then
+  HARNESS=${BASH_REMATCH[2]}
+  RAW_SHELL_C=0
+fi
+
+case "$KIND:$HARNESS:$RAW_SHELL_C" in
+  ship:pig:*|scout:pig:*|secondmate:pig:*)
+    echo "error: PiG is verified as a primary-only harness and cannot be dispatched for ship, scout, or secondmate work; select a separately verified harness" >&2
+    exit 1
+    ;;
+  ship:*:1|scout:*:1|secondmate:*:1)
+    echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
+    exit 1
+    ;;
+esac
+
+# raw_launch_has_pig(): any raw worker launch that actually invokes the PiG
+# executable. Quoted and wrapped invocations are unfolded so PiG cannot slip
+# past the primary-only boundary.
+raw_launch_has_pig=0
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  for _w in "${LAUNCH_WORDS[@]}"; do
+    if [ "${_w##*/}" = "pig" ]; then
+      raw_launch_has_pig=1
+      break
+    fi
+  done
+fi
+if [ "$RAW_LAUNCH" -eq 1 ] && [ "$raw_launch_has_pig" -eq 1 ] && [ "$HARNESS" != "pig" ]; then
+  echo "error: raw PiG launch commands are not verified for worker dispatch; select a separately verified harness" >&2
+  exit 1
+fi
+
+if [ "$RAW_LAUNCH" -eq 0 ]; then
+  if [ -z "$ARG3" ]; then
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  else
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
+      echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
+      exit 1
+    }
+  fi
+fi
 
 # muse, gemini, devin, commandcode, polytoken, cortex, and kiro are verified as CREWMATE/SCOUT adapters only. A secondmate is
 # a firstmate instance, so it needs a primary supervision protocol.
@@ -3326,7 +3417,7 @@ cortex)
     exit 1
   }
   ;;
-pi | pi-signed | pig)
+pi | pi-signed)
   PI_BIN=$(resolve_pi_executable "$HARNESS") || {
     echo "error: $HARNESS executable not found on PATH; install it or select a different verified harness" >&2
     exit 1
@@ -3417,61 +3508,6 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
       esac
     fi
   fi
-fi
-if [ "$RAW_LAUNCH" -eq 1 ]; then
-  case "$HARNESS" in
-    bash|sh|dash|zsh|ksh)
-      shell_seen=0
-      raw_shell_skip_next=0
-      for word in "${LAUNCH_WORDS[@]}"; do
-        if [ "$raw_shell_skip_next" -eq 1 ]; then
-          raw_shell_skip_next=0
-          continue
-        fi
-        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
-          RAW_SHELL_C=1
-          break
-        fi
-        case "$word" in
-          -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
-        esac
-        case "${word##*/}" in
-          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
-        esac
-      done
-      ;;
-  esac
-fi
-
-# raw_launch_has_pig() -- any raw worker launch that actually invokes the PiG
-# executable. env -S/--split-string payloads must be unfolded rather than
-# discarded, otherwise PiG slips past the primary-only boundary.
-raw_launch_has_pig=0
-if [ "$RAW_LAUNCH" -eq 1 ]; then
-  for _w in "${LAUNCH_WORDS[@]}"; do
-    if [ "${_w##*/}" = pig ]; then
-      raw_launch_has_pig=1
-      break
-    fi
-  done
-fi
-
-if [ "$RAW_LAUNCH" -eq 1 ]; then
-  case "$KIND:$HARNESS:$RAW_SHELL_C" in
-    ship:*:1|scout:*:1|secondmate:*:1)
-      echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
-      exit 1
-      ;;
-  esac
-fi
-
-if [ "$KIND" = secondmate ] && [ "$HARNESS" = "pig" ]; then
-  echo "error: PiG is verified as a primary-only harness and cannot be dispatched for secondmate work; select a separately verified harness" >&2
-  exit 1
-fi
-if [ "$RAW_LAUNCH" -eq 1 ] && [ "$raw_launch_has_pig" -eq 1 ]; then
-  echo "error: raw PiG launch commands are not verified for worker dispatch; select a separately verified harness" >&2
-  exit 1
 fi
 fm_backend_validate_harness "$BACKEND" "$HARNESS" || exit 1
 # Ultra is an explicit native capability, never a Pi thinking-level alias.
@@ -3717,9 +3753,8 @@ muse_credential_present() {
 # agent, a stale one, a malformed reference - degrades to that same
 # fresh-session launch rather than refusing, because nothing here is a safety
 # property; it preserves a display and supervision signal.
-relaunch_resume_args() {  # <harness> <backend> <target> [fresh]
-  local harness=${1-} backend=${2-} target=${3-} fresh=${4-} identity agent ref flag
-  if [ "${fresh:-0}" = 1 ] || [ "${FRESH_SESSION:-0}" = 1 ]; then return 0; fi
+relaunch_resume_args() {  # <harness> <backend> <target>
+  local harness=${1-} backend=${2-} target=${3-} identity agent ref flag
   [ "$backend" = herdr ] || return 0
   [ -n "$target" ] || return 0
   fm_backend_herdr_parse_target "$target" || return 0
@@ -3743,7 +3778,7 @@ model_flag_for_harness() {
     [ "$oc_major" = 1 ] || return 0
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
-  claude | codex | pi | pi-signed | pig | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro)
+  claude | codex | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro)
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
   # polytoken encodes reasoning effort inside the model reference, so the
@@ -3822,7 +3857,7 @@ effort_flag_for_harness() {
       ;;
     esac
     ;;
-  pi | pi-signed | pig)
+  pi | pi-signed)
     # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
     # its --thinking flag.
     case "$effort" in
@@ -5549,18 +5584,29 @@ spawn_enter_recorded_worktree() {
 # starts. Zellij and cmux implement this read with a shell probe, so keeping it
 # before launch prevents the probe from becoming input to a live worker.
 spawn_assert_agent_worktree() {
-  local expected seen i
+  local expected seen i last_poll=19 agent_status
   [ "$KIND" = secondmate ] && return 0
   case "$BACKEND" in orca|t3code) return 0 ;; esac
   expected=$(real_path_or_raw "$WT")
-  for i in $(seq 1 20); do
+  # The out-of-pane Herdr lease no longer waits for the new shell to process
+  # treehouse get. Allow its former minute of startup tolerance here, and
+  # repeat the idempotent cd once in case input arrived before shell readiness.
+  [ "$BACKEND" != herdr ] || last_poll=120
+  for i in $(seq 0 "$last_poll"); do
+    [ "$i" -eq 0 ] || sleep 0.5
     seen=$(spawn_current_path "$WT_TARGET" || true)
     if [ -n "$seen" ] && [ "$(real_path_or_raw "$seen")" = "$expected" ]; then
       return 0
     fi
-    [ "$i" -ge 20 ] || sleep 0.5
+    if [ "$BACKEND" = herdr ] && [ "$i" -eq 20 ]; then
+      spawn_enter_recorded_worktree
+    fi
   done
   echo "error: task $ID's worker started in '${seen:-unknown}', not its recorded worktree '$WT'; refusing to continue outside the copy holding its work" >&2
+  if [ "$BACKEND" = herdr ] && fm_backend_herdr_parse_target "$WT_TARGET"; then
+    agent_status=$(fm_backend_herdr_agent_status_raw "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")
+    echo "error: Herdr pane '$WT_TARGET': last foreground_cwd='${seen:-unknown}', agent_status='${agent_status:-unknown}'" >&2
+  fi
   exit 1
 }
 
@@ -6444,7 +6490,7 @@ BUSY_GEN=
     ;;
   esac
   case "$WIRING_HARNESS" in
-  claude* | opencode* | pi | pi-signed | pig | omp)
+  claude* | opencode* | pi | pi-signed | omp)
     # opencode arms on every detected major: OpenCode 2 and the OpenCode 1 /
     # undetected->1.x path both provision a busy-state plugin below that needs
     # this gen, so gating the arm on major >= 2 would leave OpenCode 1 without
@@ -6819,7 +6865,7 @@ EOF
     fi
     exclude_path '.opencode/plugins/fm-busy-state.js'
     ;;
-  pi | pi-signed | pig)
+  pi | pi-signed)
     # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
     # loaded from inside the project (verified live), but an explicit -e path
     # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
@@ -7510,7 +7556,7 @@ LAUNCH=${LAUNCH//__OMPEXT__/$sq_ompext}
 LAUNCH=${LAUNCH//__OMPWORKERCFG__/$sq_ompcfg}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
-pi | pi-signed | pig) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
+pi | pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
 cursor) LAUNCH=${LAUNCH//__CURSORBIN__/"$(shell_quote "$CURSOR_BIN")"} ;;
 gemini) LAUNCH=${LAUNCH//__GEMINISETTINGS__/"$(shell_quote "$STATE_REAL/$ID.gemini-settings.json")"} ;;
 omp)
@@ -7624,7 +7670,7 @@ if [ -n "$WORKER_ACCOUNT" ]; then
       LAUNCH="$(fm_worker_account_claude_shed) -u CLAUDE_CONFIG_DIR $LAUNCH"
     fi
     ;;
-  pi | pi-signed | pig)
+  pi | pi-signed)
     LAUNCH="PI_CODING_AGENT_DIR=$(shell_quote "$WORKER_ACCOUNT_ROOT") $LAUNCH"
     ;;
   esac
@@ -7710,6 +7756,40 @@ fi
 # LAUNCH_ENV_PREFIX construction below sets it again at the `env -i` boundary,
 # so under an enabled allowlist the switch is established before the wrapping
 # `/bin/sh` starts rather than only inside the command that shell runs.
+# Arm the worker-side OSC 7501 status reporter (bin/fm-osc7501.sh) inside the
+# launch before the agent command, so the reporter's parent is the pane shell
+# that runs the agent. The reporter header owns eligibility and native-version
+# gates; pass the executable the launch runs so the native probe reads its
+# version. A raw launch command establishes it only as a simple command whose
+# first word is a plain path to a harness with a launch template; a wrapper,
+# assignment prefix, quoted or expanded path, compound command, or unknown
+# adapter hides what actually runs, so it passes none and gets no reporter.
+# Its stderr stays on the pane so a config warning reaches the user. The `disarm` after the agent
+# command retires the reporter when the agent exits, because the pane shell
+# that sourced the launch outlives it. Newlines, not `;`, delimit the agent
+# command, so a raw launch ending in a separator or a comment stays intact.
+OSC7501_AGENT_BIN=
+if [ "$RAW_LAUNCH" = 0 ]; then
+  case "$HARNESS" in
+    pi | pi-signed) OSC7501_AGENT_BIN=${PI_BIN:-} ;;
+    muse) OSC7501_AGENT_BIN=${MUSE_BIN:-} ;;
+    *) OSC7501_AGENT_BIN=$HARNESS ;;
+  esac
+else
+  read -r osc7501_word _ <<<"$RAW_COMMAND"
+  case "$RAW_COMMAND" in
+    *[\;\&\|]* | *$'\n'*) ;;
+    *)
+      case "$osc7501_word" in
+        '' | *[!A-Za-z0-9._/+-]*) ;;
+        *) (launch_template "$HARNESS" "$KIND") >/dev/null 2>&1 && OSC7501_AGENT_BIN=$osc7501_word ;;
+      esac
+      ;;
+  esac
+fi
+LAUNCH="$(shell_quote "$FM_ROOT/bin/fm-osc7501.sh") arm --task $(shell_quote "$ID") --harness $(shell_quote "$HARNESS") --backend $(shell_quote "$BACKEND") --kind $(shell_quote "$KIND") --state $(shell_quote "$STATE_REAL") --config $(shell_quote "$CONFIG") --target $(shell_quote "$T") --agent-bin $(shell_quote "$OSC7501_AGENT_BIN") >/dev/null || true
+$LAUNCH
+$(shell_quote "$FM_ROOT/bin/fm-osc7501.sh") disarm --state $(shell_quote "$STATE_REAL") >/dev/null 2>/dev/null || true"
 if [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" = 1 ]; then
   LAUNCH="export LAVISH_AXI_HOST=$(shell_quote "$LAVISH_AXI_HOST"); $LAUNCH"
 fi
@@ -7720,6 +7800,9 @@ fi
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
 LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
+# Every launch also bounds the lifetime of the browser automation a worker starts.
+LAUNCH_CHROME_IDLE_TIMEOUT_MS=1800000
+LAUNCH="export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS; $LAUNCH"
 # When the live-harness gate has exported DISABLE_AUTOUPDATER into this spawn's
 # own environment, carry it into the launch command text so Claude Code's
 # auto-updater cannot rewrite the shared binary during a live run. Embedding the
@@ -7805,6 +7888,9 @@ spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 # pre-launch channel, so later commands in that shell inherit it too. The launch
 # command independently establishes the value for the agent process itself.
 spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
+# And the bounded browser-automation lifetime, so later commands in that same pane
+# shell inherit it as well as the agent process itself.
+spawn_send_text_line "$T" "export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"
 if [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" = 1 ]; then
   spawn_send_text_line "$T" "export LAVISH_AXI_HOST=$(shell_quote "$LAVISH_AXI_HOST")"
 fi
@@ -7876,6 +7962,9 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   # $LAUNCH is what gives the wrapping `/bin/sh` itself the switch, not only the
   # agent command it runs.
   LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX COMPACT_ADVISER_DISABLE=1"
+  # The same floor treatment for the bounded browser-automation lifetime above,
+  # so the wrapping `/bin/sh` itself carries it, not only the agent command it runs.
+  LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"
   if [ -n "$SPAWN_TRACEPARENT" ]; then
     # shellcheck disable=SC2016
     LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX "'${TRACEPARENT+"TRACEPARENT=$TRACEPARENT"}'
