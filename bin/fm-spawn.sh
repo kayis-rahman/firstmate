@@ -3183,7 +3183,7 @@ case "$ARG3" in
     case "$__w" in
       env|command|nohup|-- ) continue ;;
       [A-Za-z_]*=*) continue ;;
-      -S|--split-string|-S*|--split-string|--split-string=*)
+      -S*|--split-string*)
         echo "error: raw env split-string launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
         exit 1
         ;;
