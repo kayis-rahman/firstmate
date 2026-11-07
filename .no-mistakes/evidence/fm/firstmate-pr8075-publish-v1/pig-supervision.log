@@ -1,0 +1,41 @@
+PiG live run model=openai-codex/gpt-6-luna effort=medium
+[Skills]
+  afk, agent-skill-trigger-index, ahoy, apple-design, ask-user-authority,
+away-quiet-supervision, bearings, bootstrap-diagnostics, captain-hold-lifecycle,
+diagnostic-reasoning, discord-front-desk, firstmate-codexapp, firstmate-coding-guidelines,
+firstmate-orca, firstmate-self-repo, fmx-respond, harness-adapters, kun, no-mistakes,
+operational-home-layout, process-event-sources, project-management, quiet,
+quota-array-dispatch, rex, scout-completion, secondmate-provisioning, session-start-recovery,
+ship-landing, stow, stuck-crewmate-recovery, updatefirstmate, validation-supervision
+
+[Extensions]
+  algal/pi-openai-server-compaction:src, firstmate, fm-branch-supervision.ts, fm-firstmate,
+herdr-pig, pig-local-decisions
+
+[Skill conflicts]
+  "apple-design" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/e322667d68a7/01M6V2972T0QZ1DXPXDZMV5T4S/.agents/skills/apple-design/S
+KILL.md
+    ✗ ~/.agents/skills/apple-design/SKILL.md (skipped)
+
+
+ Read the injected Firstmate session-start heading and reply LIVE_DIGEST:<the exact FM_HOME
+ path>. If absent, reply PIG_NO_DIGEST. Do not use tools.
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 0.7.0 is available. Run pig update
+ Changelog: https://github.com/MichaelKinsy/PiG/releases/tag/v0.7.0
+──────────────────────────────────────────────────────────────────────────────────────────────
+
+ Error: Codex error: The usage limit has been reached
+ If this looks like a pig bug, /bug sends a report to the developers.
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/e322667d68a7/01M6V2972T0QZ1DXPXDZMV5T4S (detached)
+$0.000 (sub) 2.8%/272k (auto)                               (openai-codex) gpt-6-luna • medium
+not ok - PiG did not return the isolated-home token from its session-start digest
