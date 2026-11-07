@@ -3176,31 +3176,29 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
-  raw_skip_next=0
-  for word in $LAUNCH; do
-    if [ "$raw_skip_next" -eq 1 ]; then
-      raw_skip_next=0
-      continue
-    fi
-    case "$word" in
+  LAUNCH_WORDS=()
+  _env_arg_skip=0
+  for __w in $LAUNCH; do
+    if [ "$_env_arg_skip" -eq 1 ]; then _env_arg_skip=0; continue; fi
+    case "$__w" in
+      env|command|nohup|-- ) continue ;;
       [A-Za-z_]*=*) continue ;;
-      -u|--unset|-C|--chdir) raw_skip_next=1; continue ;;
-      -S*|--split-string|--split-string=*)
+      -S|--split-string|-S*|--split-string|--split-string=*)
         echo "error: raw env split-string launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
         exit 1
         ;;
-    esac
-    word=${word#\"}
-    word=${word#\'}
-    word=${word%\"}
-    word=${word%\'}
-    case "$(basename -- "$word")" in
-      env|command|nohup|--) continue ;;
+      -u|--unset|-C|--chdir) _env_arg_skip=1; continue ;;
       -*) continue ;;
     esac
-    HARNESS=$(basename -- "$word")
-    break
+    __w=${__w#\"}
+    __w=${__w#\'}
+    __w=${__w%\"}
+    __w=${__w%\'}
+    LAUNCH_WORDS+=("$__w")
   done
+  if [ "${#LAUNCH_WORDS[@]}" -gt 0 ]; then
+    HARNESS=${LAUNCH_WORDS[0]##*/}
+  fi
   ;;
 '')
   # No explicit harness: resolve from config. A secondmate AGENT launches on the
@@ -3281,6 +3279,23 @@ case "$KIND:$HARNESS:$RAW_SHELL_C" in
     exit 1
     ;;
 esac
+
+# raw_launch_has_pig(): any raw worker launch that actually invokes the PiG
+# executable. Quoted and wrapped invocations are unfolded so PiG cannot slip
+# past the primary-only boundary.
+raw_launch_has_pig=0
+if [ "$RAW_LAUNCH" -eq 1 ]; then
+  for _w in "${LAUNCH_WORDS[@]}"; do
+    if [ "${_w##*/}" = "pig" ]; then
+      raw_launch_has_pig=1
+      break
+    fi
+  done
+fi
+if [ "$RAW_LAUNCH" -eq 1 ] && [ "$raw_launch_has_pig" -eq 1 ] && [ "$HARNESS" != "pig" ]; then
+  echo "error: raw PiG launch commands are not verified for worker dispatch; select a separately verified harness" >&2
+  exit 1
+fi
 
 if [ "$RAW_LAUNCH" -eq 0 ]; then
   if [ -z "$ARG3" ]; then
