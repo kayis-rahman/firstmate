@@ -48,7 +48,6 @@ relaunch_cleanup() {
     [ -n "$d" ] && fm_test_remove_tree "$d"
   done
   fm_test_cleanup
-  fm_test_remove_tree "$TMP_ROOT"
 }
 trap relaunch_cleanup EXIT
 
@@ -1571,44 +1570,25 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   pass "fm-control relaunch: invalid configured effort is ignored before stop"
 }
 
-# PiG is verified for crewmate/scout work but has no secondmate supervision
-# protocol, so control refuses the unsupported task kind before touching it.
-test_pig_secondmate_relaunch_refuses_before_stop() {
-  local dir home smhome out rc
-  dir=$(new_case pig-secondmate pigmate)
-  home="$dir/home"
-  smhome="$dir/smhome"
-  mkdir -p "$home/config" "$home/data/pigmate"
-  printf 'pig\n' > "$home/config/secondmate-harness"
-  fm_git_worktree "$dir/proj" "$smhome" sm-branch
-  mkdir -p "$smhome/state" "$smhome/data" "$smhome/bin"
-  printf 'pigmate\n' > "$smhome/.fm-secondmate-home"
-  printf '# agents\n' > "$smhome/AGENTS.md"
-  printf '# secondmate brief\n' > "$home/data/pigmate/brief.md"
-  {
-    echo "window=fmses:fm-pigmate"
-    echo "endpoint_task_id=pigmate"
-    echo "worktree=$smhome"
-    echo "project=$smhome"
-    echo "harness=pig"
-    echo "kind=secondmate"
-    echo "mode=secondmate"
-    echo "yolo=off"
-    echo "model=default"
-    echo "effort=default"
-    echo "home=$smhome"
-  } > "$home/state/pigmate.meta"
-  printf '%s\n' "fm-pigmate" > "$dir/fake/windows"
-  printf '%s' "$smhome" > "$dir/fake/cwd"
-  out=$(run_control "$dir" pigmate relaunch --note "preserve the primary task"); rc=$?
-  expect_code 1 "$rc" "PiG must refuse a secondmate relaunch: $out"
-  assert_contains "$out" "PiG's worker adapter is not verified for secondmate supervision" \
-    "the refusal should name the unsupported PiG secondmate boundary"
-  [ "$(meta_field "$dir" pigmate harness)" = pig ] \
+# muse is a verified adapter, but only for crewmates and scouts: it has no
+# primary supervision protocol, so bin/fm-spawn.sh refuses it for a secondmate.
+# That refusal alone is not enough here, because the launch owner is reached
+# only AFTER the running agent has been stopped - a secondmate would be left
+# with no agent at all. The control plane asks the same capability question
+# before it touches anything, so the refusal lands while the agent is still up.
+test_primary_only_adapter_relaunch_refuses_before_stop() {
+  local dir out rc
+  dir=$(new_case primary-only pigship)
+  add_ship_task "$dir" pigship pig
+  out=$(run_control "$dir" pigship relaunch --note "preserve the primary task"); rc=$?
+  expect_code 1 "$rc" "a primary-only adapter should refuse a worker-task relaunch"
+  assert_contains "$out" "not verified to run a ship task" \
+    "the refusal should name the unsupported worker task kind"
+  [ "$(meta_field "$dir" pigship harness)" = pig ] \
     || fail "the refused relaunch must leave the durable record on PiG"
   assert_no_grep "/exit" "$dir/fake/literal" \
-    "a PiG secondmate relaunch refusal must preserve the running agent"
-  pass "fm-control relaunch: PiG secondmate relaunch refuses before stopping the agent"
+    "a primary-only relaunch refusal must preserve the running agent"
+  pass "fm-control relaunch: PiG primary-only worker relaunch refuses before stopping the agent"
 }
 
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop() {
@@ -3227,7 +3207,7 @@ test_secondmate_relaunch_uses_the_default_for_an_unpinned_mate
 test_secondmate_relaunch_with_a_legacy_pin_file_uses_the_first_line
 test_secondmate_relaunch_refuses_an_unreadable_configured_pin_before_stop
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
-test_pig_secondmate_relaunch_refuses_before_stop
+test_primary_only_adapter_relaunch_refuses_before_stop
 test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
