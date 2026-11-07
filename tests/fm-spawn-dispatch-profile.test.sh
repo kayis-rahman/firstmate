@@ -686,6 +686,8 @@ SH
     assert_contains "$result" "$want" "raw '$raw' reporter state: $result"
   done
   pass "a raw launch keeps a reporter only for an established agent below its native floor"
+}
+
 test_pig_primary_only_dispatch_refuses_every_worker_route() {
   local kind route rec id out status sm launch
   local -a invocation
