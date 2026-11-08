@@ -2437,6 +2437,13 @@ FIRSTMATE_HOME=
 RAW_LAUNCH=0
 RAW_SHELL_C=0
 FRESH_SESSION=0
+raw_shell_has_c_flag() {  # <shell-option>
+  case "$1" in
+    --*) return 1 ;;
+    -*c*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -3472,8 +3479,6 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
           raw_shell_skip_next=0
           continue
         fi
-        # Strip one surrounding layer of quotes so a quoted flag (e.g. "-c" or
-        # "-u") is still recognized as that flag.
         scan_word=$word
         scan_word=${scan_word#\"}
         scan_word=${scan_word#\'}
