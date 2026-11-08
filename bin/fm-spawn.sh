@@ -1007,6 +1007,7 @@ TRACEPARENT_SET=0
 ACCOUNT_ARG=
 ACCOUNT_SET=0
 RELAUNCH=0
+FRESH_SESSION=0
 # Opt-in only: exact-resume presentation-order lock waits instead of refusing.
 # Absent/unset keeps upstream refuse-on-contention. See header.
 HERDR_RESUME_LOCK_WAIT=0
@@ -2435,6 +2436,7 @@ ARG3=
 FIRSTMATE_HOME=
 RAW_LAUNCH=0
 RAW_SHELL_C=0
+FRESH_SESSION=0
 
 # --relaunch adoption: every identity axis comes from the task's own validated
 # durable record, never from the command line, so a relaunch can only ever
@@ -3470,14 +3472,23 @@ if [ "$RAW_LAUNCH" -eq 1 ]; then
           raw_shell_skip_next=0
           continue
         fi
-        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
+        # Strip one surrounding layer of quotes so a quoted flag (e.g. "-c" or
+        # "-u") is still recognized as that flag.
+        scan_word=$word
+        scan_word=${scan_word#\"}
+        scan_word=${scan_word#\'}
+        scan_word=${scan_word%\"}
+        scan_word=${scan_word%\'}
+        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$scan_word"; then
           RAW_SHELL_C=1
           break
         fi
-        case "$word" in
-          -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
-        esac
-        case "${word##*/}" in
+        if [ "$shell_seen" -eq 0 ]; then
+          case "$scan_word" in
+            -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
+          esac
+        fi
+        case "${scan_word##*/}" in
           bash|sh|dash|zsh|ksh) shell_seen=1 ;;
         esac
       done
