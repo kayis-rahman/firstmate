@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--dispatch-override <reason>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--base-branch <branch>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--dispatch-override <reason>] [--hermes-profile <name>] [--account <entry>] [--backend <name>] [--herdr-resume-lock-wait]
 #        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
@@ -984,6 +984,7 @@ KIND_SET=0
 HARNESS_ARG=
 MODEL=
 EFFORT=
+DISPATCH_OVERRIDE=
 BACKEND_ARG=
 MODE=
 YOLO=
@@ -1032,6 +1033,7 @@ for a in "$@"; do
       EFFORT=$a
       EFFORT_SET=1
       ;;
+    dispatch-override) DISPATCH_OVERRIDE=$a ;;
     hermes-profile)
       HERMES_PROFILE=$a
       HERMES_PROFILE_SET=1
@@ -1103,6 +1105,8 @@ for a in "$@"; do
     EFFORT=${a#--effort=}
     EFFORT_SET=1
     ;;
+  --dispatch-override) want_value=dispatch-override ;;
+  --dispatch-override=*) DISPATCH_OVERRIDE=${a#--dispatch-override=} ;;
   --hermes-profile) want_value=hermes-profile ;;
   --hermes-profile=*) HERMES_PROFILE=${a#--hermes-profile=}; HERMES_PROFILE_SET=1 ;;
   --backend) want_value=backend ;;
@@ -2149,6 +2153,7 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
   [ -z "$HARNESS_ARG" ] || shared_args+=(--harness "$HARNESS_ARG")
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
+  [ -z "$DISPATCH_OVERRIDE" ] || shared_args+=(--dispatch-override "$DISPATCH_OVERRIDE")
   [ "$HERMES_PROFILE_SET" -eq 0 ] || shared_args+=(--hermes-profile "$HERMES_PROFILE")
   [ -z "$BACKEND_ARG" ] || shared_args+=(--backend "$BACKEND_ARG")
   # One delivery contract applies to every pair in a batch, exactly like the shared
@@ -3232,75 +3237,28 @@ case "$ARG3" in
 *) HARNESS=$ARG3 ;;
 esac
 
-raw_shell_has_c_flag() {  # <shell-option>
-  case "$1" in
-    --*) return 1 ;;
-    -c|-?*c*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-if [ "$RAW_LAUNCH" -eq 1 ]; then
-  case "$HARNESS" in
-    bash|sh|dash|zsh|ksh)
-      shell_seen=0
-      raw_shell_skip_next=0
-      for word in $LAUNCH; do
-        if [ "$raw_shell_skip_next" -eq 1 ]; then
-          raw_shell_skip_next=0
-          continue
-        fi
-        word=${word#\"}
-        word=${word#\'}
-        word=${word%\"}
-        word=${word%\'}
-        if [ "$shell_seen" -eq 1 ] && raw_shell_has_c_flag "$word"; then
-          RAW_SHELL_C=1
-          break
-        fi
-        if [ "$shell_seen" -eq 0 ]; then
-          case "$word" in
-            -u|--unset|-C|--chdir|-S|--split-string) raw_shell_skip_next=1; continue ;;
-          esac
-        fi
-        case "$(basename -- "$word")" in
-          bash|sh|dash|zsh|ksh) shell_seen=1 ;;
-        esac
-      done
-      ;;
-  esac
-fi
-
-# Admit only a literal, simple command for an independently verified worker.
-# Unrecognized shell syntax remains refused rather than guessing what it runs.
-safe_raw_shell="^[[:space:]]*(bash|sh|dash|zsh|ksh)[[:space:]]+-l?c[[:space:]]+'(claude|codex|pi|pi-signed|omp|grok|kimi|cursor|muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|agy)([[:space:]]+[A-Za-z0-9_./:=+@,-]+)*'[[:space:]]*$"
-if [ "$RAW_SHELL_C" -eq 1 ] && [[ "$LAUNCH" =~ $safe_raw_shell ]]; then
-  HARNESS=${BASH_REMATCH[2]}
-  RAW_SHELL_C=0
-fi
-
-case "$KIND:$HARNESS:$RAW_SHELL_C" in
-  ship:pig:*|scout:pig:*|secondmate:pig:*)
-    echo "error: PiG is verified as a primary-only harness and cannot be dispatched for ship, scout, or secondmate work; select a separately verified harness" >&2
+case "$DISPATCH_OVERRIDE" in *[![:print:]]*) echo 'error: --dispatch-override must be a printable reason' >&2; exit 1 ;; esac
+DISPATCH_RECORD="$DATA/$ID/dispatch-resolution.json"
+if [ "$KIND" != secondmate ] && [ "$RELAUNCH" -eq 0 ] && [ -f "$CONFIG/crew-dispatch.json" ]; then
+  if [ ! -e "$DISPATCH_RECORD" ]; then
+    echo "error: config/crew-dispatch.json is active and task $ID has no recorded dispatch resolution; run bin/fm-dispatch-resolve.sh $DATA/$ID/brief.md --project <name> first" >&2
     exit 1
-    ;;
-  ship:*:1|scout:*:1|secondmate:*:1)
-    echo "error: raw shell -c launches cannot be safely classified for worker dispatch; select a direct harness or a verified launch template" >&2
+  fi
+  dispatch_fields=$(jq -r --arg id "$ID" '
+    select(.task == $id and (.status | IN("clear", "ambiguous", "escalate", "error", "off"))
+      and (if .status == "clear" then (.profile.harness | type) == "string" and .profile.harness != "" else true end))
+    | .status, (.profile.harness // ""), (.profile.model // ""), (.profile.effort // "")' "$DISPATCH_RECORD" 2>/dev/null) || dispatch_fields=
+  { read -r dispatch_status; read -r selected_harness; read -r selected_model; read -r selected_effort; } <<<"$dispatch_fields" || true
+  if [ -z "$dispatch_status" ]; then
+    echo "error: malformed dispatch resolution $DISPATCH_RECORD for task $ID; rerun bin/fm-dispatch-resolve.sh $DATA/$ID/brief.md --project <name>" >&2
     exit 1
-    ;;
-esac
-
-if [ "$RAW_LAUNCH" -eq 0 ]; then
-  if [ -z "$ARG3" ]; then
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-      echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
-      exit 1
-    }
-  else
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || {
-      echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
-      exit 1
-    }
+  fi
+  if [ "$dispatch_status" = clear ] && [ -z "$DISPATCH_OVERRIDE" ] \
+    && { [ "$RAW_LAUNCH" -eq 1 ] || [ "$HARNESS" != "$selected_harness" ] \
+      || { [ -n "$selected_model" ] && [ "${MODEL:-}" != "$selected_model" ]; } \
+      || { [ -n "$selected_effort" ] && [ "${EFFORT:-}" != "$selected_effort" ]; }; }; then
+    echo "error: launch flags do not match the clear dispatch selection --harness $selected_harness${selected_model:+ --model $selected_model}${selected_effort:+ --effort $selected_effort} recorded in $DISPATCH_RECORD; pass those flags with no raw launch command, or record this task's override with --dispatch-override <reason>" >&2
+    exit 1
   fi
 fi
 
@@ -7380,6 +7338,7 @@ preserve_relaunch_meta() {
   [ -z "$EXTERNAL_BACKUP_REMOTE" ] || echo "backup_prefix=$EXTERNAL_BACKUP_PREFIX"
   echo "model=${MODEL:-default}"
   echo "effort=${EFFORT:-default}"
+  [ -z "$DISPATCH_OVERRIDE" ] || printf 'dispatch_override=%s\n' "$DISPATCH_OVERRIDE"
   # The detected OpenCode major, recorded so fm-control sends the exit key this
   # agent's TUI understands. Written only when a version was resolved, so a
   # non-opencode or undetectable task record stays byte-identical.
