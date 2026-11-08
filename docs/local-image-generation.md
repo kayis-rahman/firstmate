@@ -20,7 +20,7 @@ The verified mflux command accepts one image reference per job.
 ## Guards
 
 Before starting a job, the helper refuses when free memory from `memory_pressure` is below 10 percent.
-It also refuses when a Godot process is active or another image job holds the state lock.
+A state lock prevents another image job from running concurrently.
 Every started job appends its UTC time, engine, output path, and exit result to the local image-generation log under `state/`.
 
 ## Configuration

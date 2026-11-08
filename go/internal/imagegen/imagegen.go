@@ -112,9 +112,6 @@ func run(options Options, locations paths, runner commandRunner) (err error) {
 	if free < 10 {
 		return fmt.Errorf("refusing image generation: free memory is %d%% (minimum 10%%; %s)", free, line)
 	}
-	if _, err := runner.Output("pgrep", "-f", "[G]odot"); err == nil {
-		return errors.New("refusing image generation while Godot is active")
-	}
 	if err := os.MkdirAll(locations.state, 0o755); err != nil {
 		return err
 	}

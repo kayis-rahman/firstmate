@@ -23,8 +23,6 @@ func (fake *fakeRunner) Output(name string, args ...string) ([]byte, error) {
 		return []byte(`{"data":[{"b64_json":"UE5H"}]}`), nil
 	case "memory_pressure":
 		return []byte(fake.memory), nil
-	case "pgrep":
-		return nil, errors.New("not running")
 	}
 	return nil, errors.New("unexpected command")
 }
@@ -85,26 +83,6 @@ func TestRefusesExistingLock(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "another image job") {
 		t.Fatalf("expected lock refusal, got %v", err)
 	}
-}
-
-func TestRefusesGodot(t *testing.T) {
-	locations, _ := world(t, "mflux")
-	runner := &fakeRunner{memory: "System-wide memory free percentage: 74%"}
-	// A narrow runner override models pgrep finding the Godot binary.
-	godot := godotRunner{fakeRunner: runner}
-	err := run(options(t.TempDir()), locations, godot)
-	if err == nil || !strings.Contains(err.Error(), "while Godot is active") {
-		t.Fatalf("expected Godot refusal, got %v", err)
-	}
-}
-
-type godotRunner struct{ *fakeRunner }
-
-func (runner godotRunner) Output(name string, args ...string) ([]byte, error) {
-	if name == "pgrep" {
-		return []byte("123\n"), nil
-	}
-	return runner.fakeRunner.Output(name, args...)
 }
 
 func TestAutoSelection(t *testing.T) {
