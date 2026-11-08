@@ -626,10 +626,6 @@
       "audience": "maintainer-verification"
     },
     {
-      "path": "docs/verification/pig.md",
-      "audience": "maintainer-verification"
-    },
-    {
       "path": "docs/verification/public-followup.md",
       "audience": "maintainer-verification"
     },

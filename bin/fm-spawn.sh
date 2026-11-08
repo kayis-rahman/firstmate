@@ -3195,8 +3195,10 @@ case "$ARG3" in
   RAW_LAUNCH=1
   LAUNCH=$ARG3
   HARNESS=""
+  LAUNCH_WORDS=()
   raw_skip_next=0
   for word in $LAUNCH; do
+    LAUNCH_WORDS+=("$word")
     if [ "$raw_skip_next" -eq 1 ]; then
       raw_skip_next=0
       continue

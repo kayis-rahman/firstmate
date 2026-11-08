@@ -9,7 +9,7 @@ PiG 0.5.3+1.4.0.74f46864 passed token-free extension registration validation onl
 | Fact | Value |
 |---|---|
 | Binary | `pig`, resolved from `PATH`. |
-| Scope | Primary only. `../../../bin/fm-harness.sh crew` refuses an absent or `default` worker choice under PiG; an explicit verified worker adapter remains selectable. |
+| Scope | Primary only. Worker, scout, and secondmate dispatch through PiG are not supported, and `../../../bin/fm-harness.sh crew` refuses any PiG worker choice. |
 | Identity | PiG publishes no Firstmate identity marker. Set `FM_PIG_HARNESS=pig` when starting PiG; `../../../bin/fm-harness.sh` trusts it only when the exact `pig` executable is in the process ancestry. |
 | Session lock | The session lock names the PiG process. PiG's isolated Node extension process is accepted when the lock owner is an exact live `pig` process and the tracked Pi extension marker names a live descendant of it; this does not require `FM_PIG_HARNESS` in the inspecting process. Pi and pi-signed still require the exact lock owner. OMP's exact-process proof is unchanged. |
 | Model | `--model openai-codex/gpt-6-luna` produced live responses at medium effort in the 2026-10-17 primary verification. `openai-codex/gpt-5.5` was also exercised in an earlier smoke, and PiG rejects `gpt-5.3-codex-spark` with the Codex-with-ChatGPT-account unsupported-model diagnostic. |
