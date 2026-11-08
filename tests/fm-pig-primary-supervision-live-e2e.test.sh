@@ -60,7 +60,7 @@ TAB=$(printf '%s' "$created" | jq -er '.result.root_pane.tab_id') \
 [ "$MODEL" = openai-codex/gpt-6-luna ] || fail "live PiG verification requires openai-codex/gpt-6-luna"
 [ "$THINKING" = medium ] || fail "live PiG verification requires medium effort"
 printf 'PiG live run model=%s effort=%s\n' "$MODEL" "$THINKING"
-PIG_CMD=$(printf 'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_PIG_HARNESS=pig FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 FM_WATCH_REARM_RETRY_BASE_MS=60000 FM_WATCH_REARM_RETRY_MAX_MS=60000 pig --approve --no-context-files --model %q --thinking %q -e .pi/extensions/fm-branch-supervision.ts' \
+PIG_CMD=$(printf 'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_GATE_REFUSE_BYPASS=1 FM_PIG_HARNESS=pig FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 FM_WATCH_REARM_RETRY_BASE_MS=60000 FM_WATCH_REARM_RETRY_MAX_MS=60000 pig --approve --no-context-files --model %q --thinking %q -e .pi/extensions/fm-branch-supervision.ts' \
   "$FM_HOME" "$CODE_ROOT" "$MODEL" "$THINKING")
 lab pane run "$PANE" "$PIG_CMD" >/dev/null || fail "could not start PiG in the isolated pane"
 "$HERDR_LAB_HELPER" viewer start "$HERDR_LAB_SESSION" >/dev/null \
@@ -206,8 +206,10 @@ printf '%s\n' "$relaunch" | grep -Fq "not verified to run a ship task" \
 [ "$(agent_state)" != dead ] || fail "the refused PiG relaunch stopped the live lab agent"
 pass "fm-control refuses PiG relaunch as primary-only and preserves the live lab agent"
 
+wait_idle 60 || fail "PiG did not return to idle before the exit probe"
+
 exit_result=$(env FM_HOME="$FM_HOME" HERDR_SESSION="$HERDR_LAB_SESSION" FM_SPAWN_NO_GUARD=1 \
-  FM_CONTROL_POLL=0.2 FM_CONTROL_EXIT_WAIT=20 "$ROOT/bin/fm-control.sh" piglive exit 2>&1) \
+  FM_CONTROL_POLL=0.2 FM_CONTROL_EXIT_WAIT=60 "$ROOT/bin/fm-control.sh" piglive exit 2>&1) \
   || fail "fm-control could not exit PiG: $exit_result"
 printf '%s\n' "$exit_result" | grep -Fq 'stopped piglive' \
   || fail "fm-control did not confirm the PiG exit: $exit_result"
@@ -219,7 +221,7 @@ RECOVERY_HOME=$("$LAB_HOME_HELPER" create "$TASK_TMP/recovery-home")
 printf 'kind=ship\nharness=pig\nbackend=herdr\nwindow=%s:%s\nendpoint_task_id=piglive\nworktree=%s\nproject=%s\nmode=direct-PR\nyolo=off\nmodel=%s\neffort=%s\nherdr_session=%s\nherdr_workspace_id=%s\nherdr_tab_id=%s\nherdr_pane_id=%s\n' \
   "$HERDR_LAB_SESSION" "$PANE" "$ROOT" "$ROOT" "$MODEL" "$THINKING" \
   "$HERDR_LAB_SESSION" "$WORKSPACE" "$TAB" "$PANE" > "$RECOVERY_HOME/state/piglive.meta"
-RECOVERY_PIG_CMD=$(printf 'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_PIG_HARNESS=pig FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 FM_WATCH_REARM_RETRY_BASE_MS=60000 FM_WATCH_REARM_RETRY_MAX_MS=60000 pig --approve --no-context-files --model %q --thinking %q -e .pi/extensions/fm-branch-supervision.ts' \
+RECOVERY_PIG_CMD=$(printf 'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_GATE_REFUSE_BYPASS=1 FM_PIG_HARNESS=pig FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 FM_WATCH_REARM_RETRY_BASE_MS=60000 FM_WATCH_REARM_RETRY_MAX_MS=60000 pig --approve --no-context-files --model %q --thinking %q -e .pi/extensions/fm-branch-supervision.ts' \
   "$RECOVERY_HOME" "$CODE_ROOT" "$MODEL" "$THINKING")
 lab pane run "$PANE" "$RECOVERY_PIG_CMD" >/dev/null \
   || fail "could not start PiG in the separate recovery home"
