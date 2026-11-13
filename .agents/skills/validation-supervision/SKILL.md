@@ -21,6 +21,9 @@ Custody recovery settles branch ownership, not content: the worker must replace 
 Apart from that single supported abort, do not hand-edit, commit, restart, or start a second validation run while the obsolete run still owns the branch.
 Once ownership is settled, validate exactly once against that final head so no obsolete or intermediate head is ever treated as authoritative.
 
+The no-mistakes fix agent cannot run local generators such as mflux, so the worker must generate any required asset before or between runs and commit it to the branch rather than leave it to a fix round.
+If a cancelled run's preserved head has vanished and structured status reports `inspect_and_reconcile_manually`, reconcile branch ownership and let the worker continue from its clean local head with a fresh run; never force or delete refs.
+
 An ask-user finding returns as `needs-decision`; firstmate loads `ask-user-authority` and either decides or escalates per that skill.
 Send the same worker one exact decision naming the decision key, step, action, affected finding IDs, instructions where needed, and exact response command, passing `--resolve-key` so the worker's open decision record closes at answer time.
 Require the matching `resolved` event, forbid `--yes`, and require the worker to process every synchronous return until completion or a genuinely new escalation.
