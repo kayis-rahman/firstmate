@@ -927,6 +927,62 @@ SH
   printf '%s\n' "$w"
 }
 
+# A relaunch that fails only because the remote host was unreachable (fm-spawn
+# exits 255; evidence 2026-11-14: the Pi hosting piworm-ops rebooted and the
+# relaunch was never retried) must not spend the park bound, must back off, and
+# must retry once the host answers - through the guarded spawn only, never as a
+# local replacement.
+relaunch_remote() {  # <w> <spawn-rc> [env...] -> "<rc>|<attempts>|<backoff-pending>"
+  local w=$1 rc=$2; shift 2
+  mkdir -p "$w/fake/bin"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/spawn.log"\nexit %s\n' "$w" "$rc" > "$w/fake/bin/fm-spawn.sh"
+  chmod +x "$w/fake/bin/fm-spawn.sh"
+  # shellcheck disable=SC2016 # positional params expand in the child shell.
+  env STATE="$w/home/state" FM_HOME="$w/home" FM_DATA_OVERRIDE="$w/home/data" "$@" \
+    bash -c '
+      . "$0/bin/fm-secondmate-liveness-lib.sh"
+      FM_ROOT="$2"
+      FM_SM_LIVE_KILL=0 FM_SM_LIVE_RESUME=0 FM_SM_LIVE_STATE=missing
+      fm_secondmate_liveness_relaunch "$1" rsm1 30; rc=$?
+      pending=no; fm_secondmate_liveness_backoff_pending rsm1 && pending=yes
+      printf "%s|%s|%s\n" "$rc" "$(fm_secondmate_liveness_recent_attempts rsm1 3600)" "$pending"
+    ' "$ROOT" "$w/home/state/rsm1.meta" "$w/fake"
+}
+
+test_remote_relaunch_unreachable_host_backs_off_and_retries() {
+  local w out n
+  w=$(make_remote_probe_world relaunch-unreachable)
+  : > "$w/spawn.log"
+
+  # Three consecutive unreachable failures would have parked the mate under the
+  # default bound of 3 attempts; none of them spends it.
+  n=0
+  while [ "$n" -lt 3 ]; do
+    out=$(relaunch_remote "$w" 255 FM_SECONDMATE_RELAUNCH_BACKOFF_BASE_SECS=60)
+    [ "$out" = '255|0|yes' ] \
+      || fail "an unreachable-host relaunch failure must not spend the park bound and must back off, got '$out' on try $n"
+    n=$((n + 1))
+  done
+  # The backoff doubles, up to its cap.
+  [ "$(awk '{print $2}' "$w/home/state/.secondmate-relaunch-backoff-rsm1")" -eq 240 ] \
+    || fail "the backoff must double per unreachable failure: $(cat "$w/home/state/.secondmate-relaunch-backoff-rsm1")"
+
+  # An ordinary spawn failure still counts toward the bound and sets no backoff.
+  rm -f "$w/home/state/.secondmate-relaunch-backoff-rsm1" "$w/home/state/.secondmate-relaunch-rsm1"
+  out=$(relaunch_remote "$w" 1)
+  [ "$out" = '1|1|no' ] || fail "an ordinary relaunch failure must count and not back off, got '$out'"
+
+  # Once the host is reachable the retry succeeds, clears the backoff, and went
+  # through the guarded respawn of the same remote mate (never a local one).
+  rm -f "$w/home/state/.secondmate-relaunch-rsm1"
+  relaunch_remote "$w" 255 >/dev/null
+  out=$(relaunch_remote "$w" 0)
+  [ "$out" = '0|1|no' ] || fail "a successful retry must clear the backoff, got '$out'"
+  grep -qvx 'rsm1 --secondmate' "$w/spawn.log" \
+    && fail "relaunch must only respawn the remote mate through fm-spawn --secondmate: $(cat "$w/spawn.log")"
+  pass "remote relaunch: an unreachable host backs off without spending the park bound, and a reachable retry clears it"
+}
+
 test_remote_full_probe_rex_route() {
   local w out
   w=$(make_remote_probe_world_rex probe-rex)
@@ -1014,6 +1070,7 @@ test_relaunch_waits_for_other_mates_relaunch_lock
 test_sweep_refuses_relaunch_on_ledger_errors
 test_remote_poll_probe_maps_states
 test_remote_poll_probe_unreachable_preserves_route
+test_remote_relaunch_unreachable_host_backs_off_and_retries
 test_remote_full_probe_rex_route
 test_remote_full_probe_rex_backend_drift
 test_remote_full_probe_rex_readiness_verdicts

@@ -1026,6 +1026,41 @@ test_projection_cleanup_exact_succeeds_only_when_the_task_pane_closed() {
   pass "herdr projection abort cleanup reports success only when the task pane closed"
 }
 
+# A failed spawn whose pane cannot be verified right after creation (the treehouse
+# lease failure case) must retry the verified close, never close an unverified
+# pane, and still hand the caller a failure it can record.
+test_projection_cleanup_exact_retries_an_unverified_pane_and_never_closes_it_blind() {
+  local retried never_verified dir record
+  retried=$(bash -c '. "$0/bin/backends/herdr.sh"
+    FM_HERDR_ABORT_CLOSE_RETRY_SECS=0; n=0
+    fm_backend_herdr_projection_close_pane_focus_preserving() {
+      [ "$2" != w1:p2 ] || { n=$((n + 1)); [ "$n" -ge 2 ] || return 1; }
+      printf "CLOSED %s;" "$2"; }
+    fm_backend_herdr_cli() { printf "{\"result\":{\"pane\":{\"pane_id\":\"w1:p2\"}}}"; }
+    fm_backend_herdr_projection_cleanup_exact fmtest w1:p2 w1:p1; printf "rc=%s tries=%s" "$?" "$n"' "$ROOT" 2>&1)
+  [ "$retried" = "CLOSED w1:p2;CLOSED w1:p1;rc=0 tries=2" ] \
+    || fail "a transiently unverifiable pane must be closed by the retry, got '$retried'"
+  never_verified=$(bash -c '. "$0/bin/backends/herdr.sh"
+    FM_HERDR_ABORT_CLOSE_RETRY_SECS=0; blind=0
+    fm_backend_herdr_cli() { [ "$3" = get ] && return 1; [ "$3" = close ] && blind=1; return 0; }
+    fm_backend_herdr_projection_focus_snapshot() { printf "w0\tt0"; }
+    fm_backend_herdr_projection_cleanup_exact fmtest w1:p2 ""; printf "rc=%s blind_close=%s" "$?" "$blind"' "$ROOT" 2>&1)
+  case "$never_verified" in
+    *"rc=1 blind_close=0") ;;
+    *) fail "a pane that never verifies must report failure and never be closed, got '$never_verified'" ;;
+  esac
+  dir="$TMP_ROOT/orphan-record"; mkdir -p "$dir"
+  bash -c '. "$0/bin/backends/herdr.sh"
+    fm_backend_herdr_projection_record_orphan_pane "$1" task-x fmsess w9 t9 w9:p9' "$ROOT" "$dir" \
+    || fail "the orphan pane record was not written"
+  record=$(cat "$dir/task-x.herdr-orphan-pane")
+  [ "$record" = "session=fmsess
+workspace=w9
+tab=t9
+pane=w9:p9" ] || fail "the orphan pane record did not name the exact pane: $record"
+  pass "herdr projection abort cleanup retries an unverified pane, never closes it blind, and can record it exactly"
+}
+
 test_busy_state_never_reports_a_shell_only_pane_busy() {
   local sleep_bin shell_pid dir resp log fb out
   sleep_bin=$(command -v sleep) || fail "sleep not found"
@@ -6563,6 +6598,7 @@ test_process_state_shell_verdict_survives_several_shell_processes
 test_process_state_jq_calls_do_not_grow_with_foreground_processes
 test_projection_reclaim_rollback_refuses_a_stale_registration
 test_projection_cleanup_exact_succeeds_only_when_the_task_pane_closed
+test_projection_cleanup_exact_retries_an_unverified_pane_and_never_closes_it_blind
 test_busy_state_never_reports_a_shell_only_pane_busy
 test_cli_caches_the_selected_client_within_a_process
 test_cli_scopes_the_selected_client_to_its_session

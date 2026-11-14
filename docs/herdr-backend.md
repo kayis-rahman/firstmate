@@ -275,6 +275,7 @@ The parent is the placement and ordering reference the projection is bound under
 The normal `fm-<id>` task tab is created in the exact new workspace returned by Herdr.
 Only the exact seeded default tab returned by the same workspace-create response can be pruned.
 Before and after create, prune, order, abort cleanup, and normal cleanup, Firstmate verifies exact workspace, tab, pane, and active-focus ids.
+A failed spawn retries the verified close of its own task pane a bounded number of times, never closes a pane it could not verify, and records a pane it could not close in `state/<id>.herdr-orphan-pane` with its exact session, workspace, tab, and pane ids.
 An ambiguous response grants no mutation or cleanup authority.
 
 ### Ordering

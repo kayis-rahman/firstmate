@@ -2826,17 +2826,40 @@ fm_backend_herdr_projection_create_task() {  # <cwd> <workspace-label> <task-lab
 # there. A failed close call is followed by an exact presence check, because
 # the close can confirm the pane gone and then fail only to restore focus.
 fm_backend_herdr_projection_cleanup_exact() {  # <session> <task-pane> <seeded-pane>
-  local session=$1 task_pane=$2 seeded_pane=$3 task_closed=1
-  if [ -n "$task_pane" ]; then
+  local session=$1 task_pane=$2 seeded_pane=$3 task_closed=1 attempt=1
+  local attempts=3
+  # An exact-pane verification that fails right after the pane was created is
+  # often transient (the server is still settling), so the verified close is
+  # retried a bounded number of times. Every attempt still verifies the exact
+  # pane before it closes anything; a pane that never verifies is never closed.
+  while [ -n "$task_pane" ] && [ "$task_closed" -ne 0 ] && [ "$attempt" -le "$attempts" ]; do
     if fm_backend_herdr_projection_close_pane_focus_preserving "$session" "$task_pane" ||
       [ "$(fm_backend_herdr_pane_presence_state "$session" "$task_pane")" = dead ]; then
       task_closed=0
+    else
+      # FM_HERDR_ABORT_CLOSE_RETRY_SECS is a test hook: tests set it to 0 so the
+      # retry does not really wait. It is not an operator setting.
+      [ "$attempt" -ge "$attempts" ] || sleep "${FM_HERDR_ABORT_CLOSE_RETRY_SECS:-1}"
     fi
-  fi
+    attempt=$((attempt + 1))
+  done
   if [ -n "$seeded_pane" ] && [ "$seeded_pane" != "$task_pane" ]; then
     fm_backend_herdr_projection_close_pane_focus_preserving "$session" "$seeded_pane" || true
   fi
   return "$task_closed"
+}
+
+# fm_backend_herdr_projection_record_orphan_pane: durably record the exact pane a
+# failed spawn created and could not verify or close, so it is never lost to the
+# operator or a later reconcile. Writes <state>/<task>.herdr-orphan-pane
+# atomically with the exact session and ids, and never closes anything.
+fm_backend_herdr_projection_record_orphan_pane() {  # <state> <task> <session> <workspace> <tab> <pane>
+  local state=$1 task=$2 session=$3 workspace=$4 tab=$5 pane=$6 tmp
+  [ -d "$state" ] && [ -n "$task" ] && [ -n "$pane" ] || return 1
+  tmp=$(mktemp "$state/.$task.herdr-orphan-pane.XXXXXX") || return 1
+  printf 'session=%s\nworkspace=%s\ntab=%s\npane=%s\n' "$session" "$workspace" "$tab" "$pane" > "$tmp" \
+    || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$state/$task.herdr-orphan-pane" || { rm -f "$tmp"; return 1; }
 }
 
 # fm_backend_herdr_projection_parent_workspace_exact: resolve one exact parent
