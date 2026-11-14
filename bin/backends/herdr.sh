@@ -2827,8 +2827,7 @@ fm_backend_herdr_projection_create_task() {  # <cwd> <workspace-label> <task-lab
 # the close can confirm the pane gone and then fail only to restore focus.
 fm_backend_herdr_projection_cleanup_exact() {  # <session> <task-pane> <seeded-pane>
   local session=$1 task_pane=$2 seeded_pane=$3 task_closed=1 attempt=1
-  local attempts=${FM_HERDR_ABORT_CLOSE_ATTEMPTS:-3}
-  case "$attempts" in ''|*[!0-9]*|0) attempts=3 ;; esac
+  local attempts=3
   # An exact-pane verification that fails right after the pane was created is
   # often transient (the server is still settling), so the verified close is
   # retried a bounded number of times. Every attempt still verifies the exact
@@ -2838,6 +2837,8 @@ fm_backend_herdr_projection_cleanup_exact() {  # <session> <task-pane> <seeded-p
       [ "$(fm_backend_herdr_pane_presence_state "$session" "$task_pane")" = dead ]; then
       task_closed=0
     else
+      # FM_HERDR_ABORT_CLOSE_RETRY_SECS is a test hook: tests set it to 0 so the
+      # retry does not really wait. It is not an operator setting.
       [ "$attempt" -ge "$attempts" ] || sleep "${FM_HERDR_ABORT_CLOSE_RETRY_SECS:-1}"
     fi
     attempt=$((attempt + 1))

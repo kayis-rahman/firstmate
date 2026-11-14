@@ -1721,17 +1721,17 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
     fi
     return 0
   fi
-  if status_captain_wait_kind "$statusf" > /dev/null; then
-    wait_record 'declared captain wait' 'awaiting the captain - its own newest line is a decision or hold for them' \
-      captain 'answer the held decision or release the hold' "$statusf"
-    return 0
-  fi
-  [ -e "$CONFIG/wedge-defer-parked-gate" ] || return 1
-  if status_has_open_needs_decision "$statusf" \
+  if [ -e "$CONFIG/wedge-defer-parked-gate" ] \
+    && status_has_open_needs_decision "$statusf" \
     && run=$(crew_gate_awaits_human_decision "$task") \
     && status_has_open_needs_decision "$statusf" "$run"; then
     wait_record 'verified wait at a parked gate' "awaiting firstmate's ask-user decision" \
       supervisor "decide the gate's ask-user finding and relay the decision to the crewmate" ''
+    return 0
+  fi
+  if status_captain_wait_kind "$statusf" > /dev/null; then
+    wait_record 'declared captain wait' 'awaiting the captain - its own newest line is a decision or hold for them' \
+      captain 'answer the held decision or release the hold' "$statusf"
     return 0
   fi
   return 1

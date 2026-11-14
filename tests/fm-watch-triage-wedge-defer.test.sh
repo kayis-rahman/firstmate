@@ -799,6 +799,27 @@ working: resumed' \
   pass "a worker waiting on the captain (open needs-decision, or a blocker reclassified as held for them) is deferred without any flag, while real wedges keep the ladder"
 }
 
+# The captain-wait record must not shadow the parked-gate record: a lane whose
+# NEWEST line is still the open gate-question needs-decision (no trailing
+# working: line) in a home that armed config/wedge-defer-parked-gate keeps the
+# supervisor record, because its crew state says a human owes the gate's answer.
+test_wedge_threshold_parked_gate_keeps_precedence_over_a_captain_wait() {
+  local dir state fakebin out capture window
+  local human='state: parked · source: run-step · parked at awaiting_approval: 2 finding(s) · ask-user: authority decision · run: 01RUNGATE'
+  window="test:fm-wedge"
+  dir=$(wedge_threshold_fixture parked-gate-newest 'needs-decision [key=nm-01RUNGATE-review]: the gate raised an authority question' 2000 600)
+  arm_parked_gate "$dir"
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$human" exit \
+    || fail "a parked gate whose newest line is its open question was never rechecked: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the parked-gate recheck"
+  grep -F 'verified wait at a parked gate' "$out" >/dev/null \
+    || fail "the captain-wait record shadowed the parked-gate record: $(cat "$out")"
+  grep -F 'declared captain wait' "$out" >/dev/null \
+    && fail "the parked gate was worded as a captain wait: $(cat "$out")"
+  pass "a parked human-owed gate keeps its supervisor record when its open question is the newest line"
+}
+
 # --- a wait record that does not carry every field is refused ----------------
 # wait_record joins its five fields with US and wedge_defer_wait parses them with
 # `IFS=<us> read`, so consecutive delimiters yield genuinely EMPTY fields and no
@@ -1044,6 +1065,7 @@ fm_test_run \
   test_wedge_threshold_defers_to_a_worker_blocker \
   test_wedge_threshold_worker_wait_is_off_until_armed \
   test_wedge_threshold_defers_to_a_wait_on_the_captain \
+  test_wedge_threshold_parked_gate_keeps_precedence_over_a_captain_wait \
   test_wedge_defer_refuses_a_half_filled_wait_record \
   test_wedge_threshold_defers_to_an_executing_validation_run \
   test_wedge_threshold_escalates_when_no_run_is_executing \
