@@ -1810,6 +1810,7 @@ handle_wake() {  # <reason> <state>
                      idle\ *s,\ possible\ wedge,\ escalation\ *)
                        last=$(status_declared_wait_line "$state/$task.status")
                        status_is_paused_or_captain_held "$last" \
+                         || status_captain_wait_kind "$state/$task.status" >/dev/null \
                          || { [ -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/wedge-defer-worker-wait" ] \
                                 && status_worker_wait_verb "$state/$task.status" >/dev/null; } \
                          || decision="escalate|${reason#stale: }"

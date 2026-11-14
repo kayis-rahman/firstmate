@@ -113,8 +113,43 @@ fm_secondmate_liveness_recent_attempts() {  # <id> <window-secs>
   now=$(date +%s)
   cutoff=$((now - window))
   awk -F '\t' -v cutoff="$cutoff" \
-    '$2 == "rearmed" { n = 0; next } $1 ~ /^[0-9]+$/ && $1 >= cutoff && $2 == "attempt" { n++ } END { print n + 0 }' \
+    '$2 == "rearmed" { n = 0; next } $2 == "unreachable" { if (n > 0) n--; next } $1 ~ /^[0-9]+$/ && $1 >= cutoff && $2 == "attempt" { n++ } END { print n + 0 }' \
     "$ledger" 2>/dev/null
+}
+
+# Backoff for a relaunch that failed only because the remote host could not be
+# reached (fm-spawn returns 255). Such a failure says nothing about the mate, so
+# its attempt row is cancelled by an `unreachable` row rather than spent toward
+# the park bound, and the watcher tick retries on a doubling delay
+# (FM_SECONDMATE_RELAUNCH_BACKOFF_BASE_SECS 60, capped at
+# FM_SECONDMATE_RELAUNCH_BACKOFF_MAX_SECS 1800) kept in
+# .secondmate-relaunch-backoff-<id> as "<not-before-epoch> <delay>". Every retry
+# still re-probes first and goes through fm-spawn's readiness gate and the
+# per-mate locks, so a host that comes back with its endpoint alive is never
+# relaunched and a remote route is never replaced by a local endpoint.
+fm_secondmate_liveness_backoff_pending() {  # <id>
+  local marker="$STATE/.secondmate-relaunch-backoff-$1" until
+  until=$(awk '{ print $1; exit }' "$marker" 2>/dev/null) || return 1
+  case "$until" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$(date +%s)" -lt "$until" ]
+}
+
+fm_secondmate_liveness_backoff_note() {  # <id>
+  local marker="$STATE/.secondmate-relaunch-backoff-$1" prev delay base max tmp
+  base=${FM_SECONDMATE_RELAUNCH_BACKOFF_BASE_SECS:-60}
+  max=${FM_SECONDMATE_RELAUNCH_BACKOFF_MAX_SECS:-1800}
+  case "$base" in ''|*[!0-9]*|0) base=60 ;; esac
+  case "$max" in ''|*[!0-9]*|0) max=1800 ;; esac
+  prev=$(awk '{ print $2; exit }' "$marker" 2>/dev/null || true)
+  case "$prev" in ''|*[!0-9]*) delay=$base ;; *) delay=$((prev * 2)) ;; esac
+  [ "$delay" -le "$max" ] || delay=$max
+  tmp=$(mktemp "$STATE/.secondmate-relaunch-backoff.XXXXXX") || return 1
+  printf '%s %s\n' "$(( $(date +%s) + delay ))" "$delay" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$marker" || { rm -f "$tmp"; return 1; }
+}
+
+fm_secondmate_liveness_backoff_clear() {  # <id>
+  rm -f "$STATE/.secondmate-relaunch-backoff-$1"
 }
 
 # fm_secondmate_liveness_probe <meta> <id> <full|poll>
@@ -380,6 +415,10 @@ fm_secondmate_liveness_relaunch() {  # <meta> <id> [timeout-secs]
   FM_SM_LIVE_RC=$rc
   if [ "$rc" -eq 0 ]; then
     fm_secondmate_liveness_ledger_add "$id" relaunched || true
+    fm_secondmate_liveness_backoff_clear "$id"
+  elif [ "$rc" -eq 255 ]; then
+    fm_secondmate_liveness_ledger_add "$id" unreachable || true
+    fm_secondmate_liveness_backoff_note "$id" || true
   else
     fm_secondmate_liveness_ledger_add "$id" failed || true
   fi

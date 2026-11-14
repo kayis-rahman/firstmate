@@ -1013,6 +1013,40 @@ status_worker_wait_verb() {  # <status-file>
   printf '%s' "$verb"
 }
 
+# 0, printing `needs-decision` or `held`, when the task's newest status event is a
+# wait on the CAPTAIN that needs no opt-in: the worker's own still-open
+# `needs-decision:` line (status_worker_wait_verb owns what ends it), or a
+# `resolved` line firstmate wrote to reclassify an earlier blocker as held for the
+# captain (its note says "held for the captain"). Neither is a stalled pane, and a
+# lane in either state was escalated as a possible wedge on every idle window
+# while the captain thought. A `blocked:` line that was not reclassified stays on
+# the opt-in worker-wait path, because a blocker is owed to firstmate. Any later
+# line, or a steering-inbox record acknowledged after the line, ends it.
+status_captain_wait_kind() {  # <status-file>
+  local f=$1 last verb note rec
+  last=$(last_status_line "$f")
+  [ -n "$last" ] || return 1
+  status_line_verb "$last" verb
+  case "$verb" in
+    needs-decision)
+      status_worker_wait_verb "$f" > /dev/null || return 1
+      printf 'needs-decision'
+      ;;
+    "${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}")
+      note=$(status_line_note "$last")
+      case "$(printf '%s' "$note" | tr '[:upper:]' '[:lower:]')" in
+        *'held for the captain'*) ;;
+        *) return 1 ;;
+      esac
+      for rec in "${f%.status}.inbox/handled"/*.msg; do
+        [ "$rec" -nt "$f" ] && return 1
+      done
+      printf 'held'
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 # 0 when <key> has a record in a folded "<key>\t<verb>\t<note>" open set.
 _fm_open_set_has() {  # <open-set> <key>
   case "$1" in

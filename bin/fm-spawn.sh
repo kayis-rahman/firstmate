@@ -1798,6 +1798,12 @@ spawn_abort_cleanup() {
       "$HERDR_PROJECTION_ABORT_TASK_PANE" \
       "$HERDR_PROJECTION_ABORT_SEEDED_PANE"; then
       SPAWN_ENDPOINT_CLOSED=1
+    elif fm_backend_herdr_projection_record_orphan_pane "$STATE" "$ID" \
+      "$HERDR_PROJECTION_ABORT_SESSION" "${HERDR_WORKSPACE_ID:-}" "${HERDR_TAB_ID:-}" \
+      "$HERDR_PROJECTION_ABORT_TASK_PANE"; then
+      echo "warning: the herdr pane $HERDR_PROJECTION_ABORT_TASK_PANE of the failed spawn of $ID could not be verified or closed; recorded it in $STATE/$ID.herdr-orphan-pane" >&2
+    else
+      echo "warning: the herdr pane $HERDR_PROJECTION_ABORT_TASK_PANE (session $HERDR_PROJECTION_ABORT_SESSION) of the failed spawn of $ID could not be verified or closed and could not be recorded; close it by hand" >&2
     fi
   fi
   if [ "$HERDR_PRESENTATION_ORDER_LOCK_HELD" = 1 ]; then

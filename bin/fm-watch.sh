@@ -1188,6 +1188,9 @@ secondmate_liveness_tick() {
       relaunchable)
         if [ -e "$bound_marker" ] || [ -L "$bound_marker" ]; then
           :
+        elif fm_secondmate_liveness_backoff_pending "$id"; then
+          # The last relaunch only failed to reach the host; retry on its backoff.
+          triage_log "secondmate $id relaunch waiting out its unreachable-host backoff"
         elif ! attempts=$(fm_secondmate_liveness_recent_attempts "$id" "$SECONDMATE_LIVENESS_WINDOW_SECS"); then
           err="relaunch ledger is unreadable; endpoint left $FM_SM_LIVE_STATE"
         elif [ "$attempts" -ge "$SECONDMATE_LIVENESS_MAX_ATTEMPTS" ]; then
@@ -1208,6 +1211,7 @@ secondmate_liveness_tick() {
         fi
         ;;
       alive)
+        fm_secondmate_liveness_backoff_clear "$id"
         if [ -e "$bound_marker" ] || [ -L "$bound_marker" ]; then
           if ! fm_secondmate_liveness_ledger_add "$id" rearmed; then
             err="relaunch ledger is unwritable; auto-relaunch stays paused"
@@ -1697,6 +1701,11 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
   if task_captain_call_open "$task"; then
     wait_record "$WEDGE_BACKLOG_HOLD_KIND" 'awaiting the captain - held in the backlog' \
       captain 'answer the held decision or release the hold' ''
+    return 0
+  fi
+  if status_captain_wait_kind "$statusf" > /dev/null; then
+    wait_record 'declared captain wait' 'awaiting the captain - its own newest line is a decision or hold for them' \
+      captain 'answer the held decision or release the hold' "$statusf"
     return 0
   fi
   if [ -e "$CONFIG/wedge-defer-worker-wait" ] && verb=$(status_worker_wait_verb "$statusf"); then

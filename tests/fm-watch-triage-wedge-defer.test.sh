@@ -739,6 +739,66 @@ test_wedge_threshold_worker_wait_is_off_until_armed() {
   pass "with config/wedge-defer-worker-wait absent a worker blocker keeps the byte-identical wedge reason"
 }
 
+# A worker waiting on the captain was escalated as a possible wedge on every idle
+# window (firstmate-upstream-sync-v2 escalated 17+ times while blocked on a
+# captain decision). Unlike a plain blocker, a still-open newest needs-decision
+# and a blocker firstmate reclassified as held for the captain are waits on the
+# captain, so they defer in an UNARMED home. Same fixtures as the real status log.
+test_wedge_threshold_defers_to_a_wait_on_the_captain() {
+  local dir state fakebin out capture window key n case_log
+  local working='state: working · source: run-step · ci running'
+  window="test:fm-wedge"; key=$(printf '%s' "$window" | tr ':/.' '___')
+
+  for case_log in \
+    'needs-decision [key=scope]: ship the narrow fix or the broad one' \
+    'blocked [at=1794643000]: PR checks never register on the fork
+resolved [key=default] [at=1794643513]: reclassified by firstmate: fork PR checks never registered; held for the captain (check fork Actions); no worker action possible'; do
+    dir=$(wedge_threshold_fixture captain-wait-quiet "$case_log" 0 600)
+    state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+    [ ! -e "$dir/config/wedge-defer-worker-wait" ] || fail "the fixture armed the opt-in flag, so it proves nothing"
+    n=1
+    while [ "$n" -le 3 ]; do
+      wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$working" absorb \
+        || fail "a wait on the captain wedge-escalated at threshold $n: ${case_log}: $(cat "$out")"
+      n=$((n + 1))
+    done
+    [ "$(wedge_stale_wakes "$state" "$window")" -eq 0 ] \
+      || fail "a wait on the captain queued a wedge wake: ${case_log}: $(cat "$state/.wake-queue")"
+    [ ! -e "$state/.wedge-escalations-$key" ] \
+      || fail "a wait on the captain counted a wedge escalation: ${case_log}"
+  done
+
+  # Past the recheck cadence it re-surfaces once, naming the captain.
+  dir=$(wedge_threshold_fixture captain-wait-aged \
+    'needs-decision [key=scope]: ship the narrow fix or the broad one' 2000 600)
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$working" exit \
+    || fail "a wait on the captain older than the recheck cadence was never rechecked: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the captain-wait recheck"
+  grep -F 'awaiting the captain' "$out" >/dev/null \
+    || fail "the captain-wait recheck did not name the captain: $(cat "$out")"
+  grep -F 'possible wedge' "$out" >/dev/null \
+    && fail "the captain-wait recheck was worded as a possible wedge: $(cat "$out")"
+
+  # Real wedge detection stays for a worker that is not waiting on the captain:
+  # a plain resolved line, a newer working line, and an unreclassified blocker.
+  for case_log in \
+    'blocked: need the API key
+resolved: firstmate supplied the key' \
+    'needs-decision [key=scope]: narrow or broad
+working: resumed' \
+    'blocked: need the API key for the staging account'; do
+    dir=$(wedge_threshold_fixture captain-wait-ended "$case_log" 2000 600)
+    state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+    wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$working" exit \
+      || fail "a lane not waiting on the captain never escalated: ${case_log}: $(cat "$out")"
+    ack_stopped_cycle "$state" || fail "could not acknowledge the non-captain wedge escalation"
+    grep -F 'possible wedge, escalation 1' "$out" >/dev/null \
+      || fail "a lane not waiting on the captain lost the wedge ladder: ${case_log}: $(cat "$out")"
+  done
+  pass "a worker waiting on the captain (open needs-decision, or a blocker reclassified as held for them) is deferred without any flag, while real wedges keep the ladder"
+}
+
 # --- a wait record that does not carry every field is refused ----------------
 # wait_record joins its five fields with US and wedge_defer_wait parses them with
 # `IFS=<us> read`, so consecutive delimiters yield genuinely EMPTY fields and no
@@ -982,6 +1042,7 @@ fm_test_run \
   test_wedge_threshold_parked_gate_is_off_until_armed \
   test_wedge_threshold_defers_to_a_worker_blocker \
   test_wedge_threshold_worker_wait_is_off_until_armed \
+  test_wedge_threshold_defers_to_a_wait_on_the_captain \
   test_wedge_defer_refuses_a_half_filled_wait_record \
   test_wedge_threshold_defers_to_an_executing_validation_run \
   test_wedge_threshold_escalates_when_no_run_is_executing \

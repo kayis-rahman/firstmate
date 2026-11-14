@@ -1018,6 +1018,7 @@ The optional local, gitignored `config/wedge-defer-worker-wait` presence flag op
 With it present, a provably-working pane about to escalate is deferred to the `FM_PAUSE_RESURFACE_SECS` recheck cadence when its newest status line is the worker's own still-open `blocked:` or `needs-decision:` line, and the recheck names firstmate and that verb's clearing action instead of reporting a suspected wedge.
 Lines under supervisor-reserved keys do not count, the escalation count does not rise, and any newer status line or a newer acknowledged steering-inbox record ends the deferral, so an answered lane that never resumes returns to the ladder.
 The away-mode daemon honors the same evidence before it escalates a possible-wedge wake.
+A still-open newest `needs-decision:` line, and a `resolved` line reclassifying a blocker as held for the captain, defer without this flag because they are waits on the captain.
 
 With the flag absent the wedge timer spends no read for it and keeps the unchanged escalation schedule, reasons, and `demand-deep-inspection` wording.
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
