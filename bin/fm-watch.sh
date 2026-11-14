@@ -1711,11 +1711,6 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
       captain 'answer the held decision or release the hold' ''
     return 0
   fi
-  if status_captain_wait_kind "$statusf" > /dev/null; then
-    wait_record 'declared captain wait' 'awaiting the captain - its own newest line is a decision or hold for them' \
-      captain 'answer the held decision or release the hold' "$statusf"
-    return 0
-  fi
   if [ -e "$CONFIG/wedge-defer-worker-wait" ] && verb=$(status_worker_wait_verb "$statusf"); then
     if [ "$verb" = blocked ]; then
       wait_record 'declared blocker' 'awaiting firstmate - its own newest line reports a blocker' \
@@ -1724,6 +1719,11 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
       wait_record 'declared decision' 'awaiting firstmate - its own newest line asks for a decision' \
         supervisor 'answer the reported decision with fm-send --resolve-key' "$statusf"
     fi
+    return 0
+  fi
+  if status_captain_wait_kind "$statusf" > /dev/null; then
+    wait_record 'declared captain wait' 'awaiting the captain - its own newest line is a decision or hold for them' \
+      captain 'answer the held decision or release the hold' "$statusf"
     return 0
   fi
   [ -e "$CONFIG/wedge-defer-parked-gate" ] || return 1
