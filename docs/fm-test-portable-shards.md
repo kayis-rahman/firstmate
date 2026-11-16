@@ -51,6 +51,12 @@ The T3 Code backend suites carry the slowest successful Ubuntu samples from CI r
 
 The new `tests/fm-remote-herdr-identity.test.sh` serial hint is provisionally 6158 ms, from a successful local macOS arm64 `bin/fm-test-run.sh` sample on 2026-11-08. Replace it with an Ubuntu timing-artifact maximum at the next CI refresh; this is not whole-shard CI timing evidence.
 
+Sixty serial members carried no hint on 2026-11-16, past the coverage guard's 15% bound.
+Fifty-two of them take the slowest successful `FM_TEST_END` sample from Ubuntu run [43618424032](https://github.com/kayis-rahman/firstmate/actions/runs/43618424032), a partial run whose other scripts failed.
+The other eight failed in that run, so they carry provisional maxima of three `bin/fm-test-run.sh` samples in a local Ubuntu 24.04 container: `tests/fm-backend-hc-appdetect-smoke.test.sh` (144 ms, a capability skip without herdr-core), `tests/fm-env-cause.test.sh` (773 ms), `tests/fm-hygiene.test.sh` (325 ms), `tests/fm-lavish-tools.test.sh` (92 ms), `tests/fm-model-preflight.test.sh` (7903 ms), `tests/fm-slot-claim.test.sh` (4873 ms), and `tests/fm-spawn-chrome-idle-timeout.test.sh` (13725 ms).
+`tests/fm-go-pilot.test.sh` is provisionally 30000 ms, above its 48 ms stub-tool sample, because a runner with a Go toolchain also builds the tool.
+Replace all of these with Ubuntu timing-artifact maxima at the next green CI refresh.
+
 ## Parallel lanes
 
 The two parallel lanes use longest-processing-time assignment over those hints.

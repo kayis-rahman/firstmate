@@ -163,7 +163,7 @@ APP_TERM=$("$ROOT/bin/fm-hc-lab.sh" run "$HC_TEST_SES" run --bg --no-parent \
 
 ID=appdets1
 OUT=$(HC_TERMINAL_ID=$APP_TERM HC_TERMINAL_SOCKET=$HC_TEST_SOCK \
-  spawn_one "$ID" "sh -c 'echo appdetect-terminal-ok'" 2>"$TMP_ROOT/a.err")
+  spawn_one "$ID" "echo appdetect-terminal-ok" 2>"$TMP_ROOT/a.err")
 rc=$?
 [ "$rc" -eq 0 ] || fail "fm-spawn.sh under the app-terminal signal failed"$'\n'"--- stdout ---"$'\n'"$OUT"$'\n'"--- stderr ---"$'\n'"$(cat "$TMP_ROOT/a.err")"
 case "$OUT" in *"spawned $ID "*) : ;; *) fail "unexpected spawn output: $OUT" ;; esac
@@ -226,7 +226,7 @@ APP_TERM2=$("$ROOT/bin/fm-hc-lab.sh" run "$HC_TEST_SES" run --bg --no-parent \
 
 ID=appdetc1
 OUT=$(HC_TERMINAL_ID=$APP_TERM2 HC_TERMINAL_SOCKET=$HC_TEST_SOCK \
-  spawn_one "$ID" "sh -c 'echo appdetect-explicit-ok'" 2>"$TMP_ROOT/c.err")
+  spawn_one "$ID" "echo appdetect-explicit-ok" 2>"$TMP_ROOT/c.err")
 rc=$?
 [ "$rc" -eq 0 ] || fail "fm-spawn.sh with explicit config/backend=hc failed"$'\n'"--- stdout ---"$'\n'"$OUT"$'\n'"--- stderr ---"$'\n'"$(cat "$TMP_ROOT/c.err")"
 META=$STATE/$ID.meta

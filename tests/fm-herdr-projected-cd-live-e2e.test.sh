@@ -94,7 +94,7 @@ for DELAY_ENTRY in 0 1; do
   fm_test_spawn_home "$CASE/home" codex
   fm_test_spawn_brief "$CASE/home" projected-cd 'Exercise a projected shell worktree entry.'
   if ! PATH="$TMP_ROOT/fakebin:$PATH" FM_HOME="$CASE/home" FM_ROOT_OVERRIDE="$ROOT" FM_SPAWN_NO_GUARD=1 HERDR_SESSION="$HERDR_LAB_SESSION" \
-    bash "$ROOT/bin/fm-spawn.sh" projected-cd "$TMP_ROOT/project" "sh -c 'while :; do sleep 60; done'" --backend herdr --mode no-mistakes --yolo off > "$CASE/spawn.log" 2>&1; then
+    bash "$ROOT/bin/fm-spawn.sh" projected-cd "$TMP_ROOT/project" "sleep 86400" --backend herdr --mode no-mistakes --yolo off > "$CASE/spawn.log" 2>&1; then
     cat "$CASE/spawn.log" >&2
     fail "Herdr $VERSION projected spawn failed (delayed=$DELAY_ENTRY)"
   fi

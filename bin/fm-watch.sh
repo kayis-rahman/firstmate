@@ -4602,7 +4602,9 @@ EOF
       continue
     fi
     if ! watcher_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")"; then
-      if [ "$kind" != secondmate ]; then
+      # A vanished Herdr worker pane wakes firstmate once, immediately; other
+      # backends keep the stale-escalation gone-endpoint report.
+      if [ "$kind" != secondmate ] && [ "$(window_backend "$w")" = herdr ]; then
         meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
         state=$(fm_busy_classify_live "$(fm_backend_of_meta "$meta")" "$w" \
           "$(fm_meta_get "$meta" harness)" "$task" "$STATE" "$(window_label "$w")")

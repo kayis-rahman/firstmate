@@ -113,8 +113,8 @@ test_busy_event_records_and_clears_its_last_error() {
   assert_grep "event=agent-start" "$record" "the record must name the event"
   assert_grep "error=no armed busy-state gen for task-1" "$record" "the record must carry the exact error"
   [ "$(wc -l < "$record" | tr -d ' ')" = 1 ] || fail "the record must stay one line"
-  [ "$(stat -f '%Lp' "$record" 2>/dev/null || stat -c '%a' "$record")" = 600 ] \
-    || fail "the record must be private (mode $(stat -f '%Lp' "$record" 2>/dev/null || stat -c '%a' "$record"))"
+  [ "$(stat -c '%a' "$record" 2>/dev/null || stat -f '%Lp' "$record")" = 600 ] \
+    || fail "the record must be private (mode $(stat -c '%a' "$record" 2>/dev/null || stat -f '%Lp' "$record"))"
 
   # A later failure overwrites: this is the LAST error, not a log.
   status=0

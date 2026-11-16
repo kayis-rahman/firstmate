@@ -13,7 +13,7 @@ printf '<html></html>\n' >"$tmp/board.html"
 out=$(PATH="$tmp/bin:$PATH" FM_HOME="$tmp/home" "$ROOT/bin/fm-lavish-capture.sh" "$tmp/board.html")
 file=$(printf '%s\n' "$out" | awk '/Captured full Lavish response:/{print $NF}')
 grep -q FULL_RESPONSE_SENTINEL "$file"
-[ "$(stat -f %Lp "$file" 2>/dev/null || stat -c %a "$file")" = 600 ]
+[ "$(stat -c %a "$file" 2>/dev/null || stat -f %Lp "$file")" = 600 ]
 echo 'ok - poll output is durably captured before its path is reported'
 # Health classification follows the actual owning process, not lsof's command label.
 cat >"$tmp/bin/route" <<'EOF'

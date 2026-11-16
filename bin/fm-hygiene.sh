@@ -282,7 +282,6 @@ sweep() {
         if [ "$branch" = "HEAD" ]; then reason="detached HEAD (unclassifiable)";
         else
           # commits not on remote?
-          remote_sha="$(git -C "$path" rev-parse "origin/$branch" 2>/dev/null || true)"
           head_sha="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
           if ! git -C "$path" merge-base --is-ancestor "$head_sha" "origin/$branch" 2>/dev/null; then
             if ! git -C "$path" ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then reason="branch not on remote"; else reason="local commits not on remote"; fi
@@ -319,7 +318,7 @@ sweep() {
     TASK_IS_DONE "$id" || { echo "skip evidence $id: task not done"; continue; }
     # media/archive deletion
     while IFS= read -r -d '' f; do
-      sz="$(stat -f %z "$f" 2>/dev/null || stat -c %s "$f" 2>/dev/null || echo 0)"
+      sz="$(wc -c < "$f" 2>/dev/null | tr -d " " || true)"; sz=${sz:-0}
       if [ "$sz" -gt 204800 ]; then
         if [ $yes -eq 1 ]; then rm -f "$f"; echo "removed media $f size=$(human "$sz")"; removed_bytes=$((removed_bytes+sz)); else echo "would remove media $f size=$(human "$sz")"; fi
       fi
