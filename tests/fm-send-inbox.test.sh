@@ -542,6 +542,92 @@ test_empty_message_refused() {
   pass "fm-send: an empty or whitespace-only text steer refuses before marking, recording, or typing"
 }
 
+# Idle-steer guard (opt-in config/idle-steer-guard): age a state file by N minutes.
+age_file() { # <file> <minutes>
+  local ts=$(($(date +%s) - $2 * 60))
+  TZ=UTC touch -t "$(date -u -r "$ts" +%Y%m%d%H%M.%S 2>/dev/null || date -u -d "@$ts" +%Y%m%d%H%M.%S)" "$1"
+}
+
+idle_case() { # <name> <idle-minutes|none> [guard-flag-content|off]
+  local dir
+  dir=$(setup_case "$1")
+  if [ "${3:-}" != off ]; then
+    mkdir -p "$dir/home/config"
+    printf '%s\n' "${3:-}" >"$dir/home/config/idle-steer-guard"
+  fi
+  if [ "$2" != none ]; then
+    : >"$dir/home/state/t1.turn-ended"
+    age_file "$dir/home/state/t1.turn-ended" "$2"
+  fi
+  printf '%s\n' "$dir"
+}
+
+test_idle_steer_guard() {
+  local dir err rc
+  # Busy worker (busy-state record says busy) with an old turn-end: sends.
+  dir=$(idle_case idle-busy 200)
+  printf 'v1 gen=g1 seq=1 state=busy source=claude-hook event=start ts=%s\n' "$(date +%s)" >"$dir/home/state/t1.busy-state"
+  printf 'g1\n' >"$dir/home/state/t1.busy-gen"
+  err="$dir/send.err"
+  run_send "$dir" "$err" -- t1 "busy steer" || fail "a busy worker must be steered without the guard"
+  assert_not_contains "$(cat "$err")" "--idle-path" "a busy worker's steer printed the idle guard"
+
+  # Idle under the threshold: sends silently.
+  dir=$(idle_case idle-under 10)
+  run_send "$dir" "$err" -- t1 "fresh steer" || fail "a recently idle worker must be steered"
+  assert_not_contains "$(cat "$err")" "--idle-path" "an under-threshold steer printed the idle guard"
+
+  # Idle over the threshold: refused, nothing recorded, paths named.
+  dir=$(idle_case idle-over 90)
+  run_send "$dir" "$err" -- t1 "late steer"
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "a steer to a worker idle over 60 minutes must refuse"
+  assert_contains "$(cat "$err")" "idle 9" "the refusal should state the idle minutes"
+  assert_contains "$(cat "$err")" "--idle-path" "the refusal should name the confirmation flag"
+  [ ! -d "$dir/home/state/t1.inbox" ] || fail "a refused idle steer still wrote an inbox record"
+
+  # The same send with a chosen path goes through.
+  run_send "$dir" "$err" -- t1 --idle-path relaunch "late steer" || fail "--idle-path must let the steer through"
+  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "the confirmed idle steer was not recorded"
+
+  # --resolve-key answers are steers and follow the guard.
+  dir=$(idle_case idle-resolve 90)
+  printf 'needs-decision [at=1] [key=k1]: pick\n' >"$dir/home/state/t1.status"
+  age_file "$dir/home/state/t1.status" 90
+  run_send "$dir" "$err" -- t1 --resolve-key k1 "answer" && fail "a keyed answer to a long-idle worker must refuse"
+  [ ! -d "$dir/home/state/t1.inbox" ] || fail "a refused keyed answer was recorded"
+
+  # A newer status line counts as activity.
+  dir=$(idle_case idle-status 90)
+  printf 'working [at=1]: x\n' >"$dir/home/state/t1.status"
+  run_send "$dir" "$err" -- t1 "steer" || fail "a recent status line should keep the worker out of the guard"
+
+  # The configured minutes override the default.
+  dir=$(idle_case idle-limit 90 120)
+  run_send "$dir" "$err" -- t1 "steer" || fail "idle 90 under a 120 minute limit must send"
+
+  # Guard disabled without the flag file.
+  dir=$(idle_case idle-off 500 off)
+  run_send "$dir" "$err" -- t1 "steer" || fail "without config/idle-steer-guard nothing is guarded"
+
+  # A missing turn-end record is unknown, never idle.
+  dir=$(idle_case idle-unknown none)
+  run_send "$dir" "$err" -- t1 "steer" || fail "a missing turn-end record must not block"
+
+  # Keys are never guarded.
+  dir=$(idle_case idle-key 500)
+  run_send "$dir" "$err" -- t1 --key Enter || fail "--key must never be guarded"
+
+  # Secondmate targets are never guarded.
+  dir=$(idle_case idle-secondmate 500)
+  rm -f "$dir/home/state/t1.meta"
+  fm_write_secondmate_meta "$dir/home/state/domain.meta" "$dir/home" "sess:fm-t1" alpha claude
+  : >"$dir/home/state/domain.turn-ended"
+  age_file "$dir/home/state/domain.turn-ended" 500
+  run_send "$dir" "$err" -- domain "route this" || fail "a secondmate steer must never be guarded"
+  pass "fm-send: the opt-in idle-steer guard refuses only long-idle crewmate text steers"
+}
+
 test_text_steer_rides_inbox
 test_deep_home_doorbell_stays_short
 test_multiline_steer_is_legal
@@ -559,3 +645,4 @@ test_meta_lock_contention_fails_bounded
 test_delivery_lock_serializes_enqueue
 test_unwritable_inbox_fails_loudly
 test_empty_message_refused
+test_idle_steer_guard

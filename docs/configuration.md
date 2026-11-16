@@ -154,6 +154,17 @@ While tasks are in flight, dispatch shared-repo edits to a crewmate.
 
 See [`local-image-generation.md`](local-image-generation.md) for the two-line local engine setting, guards, and supported worker command.
 
+## Idle-steer guard (config/idle-steer-guard)
+
+Create the local, gitignored `config/idle-steer-guard` file to make `bin/fm-send.sh` refuse a plain text steer, including a `--resolve-key` answer, to a local crewmate or scout that has sat idle past a threshold, because its prompt cache is cold by then.
+The file may be empty or hold one positive integer of minutes; the default is 60.
+Idle time is the age of the newer of the task's `state/<id>.turn-ended` and `state/<id>.status`.
+A missing turn-end record, a busy worker, or an age under the threshold sends exactly as without the guard.
+The refusal prints the idle minutes and three paths: `steer` for one short step left, `relaunch` to start fresh from the on-disk state and resend the full order, and `handoff` to get a handoff written first.
+Re-run the steer with `--idle-path steer|relaunch|handoff` to confirm the chosen path and send.
+Keys, `--fire-and-forget`, secondmate and remote targets, explicit backend targets, and `bin/fm-control.sh` are never guarded, and a home without the file sees no change.
+`bin/fm-send.sh`'s header owns the exact contract.
+
 ## Calm preference (config/calm)
 
 The Pi Calm extension and the Claude Code Calm mod share the local, gitignored `config/calm` preference under the effective Firstmate home.
