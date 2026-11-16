@@ -224,8 +224,8 @@
 # refused with --key, with an explicit backend target (no task ledger in this
 # home), and with an empty message.
 #
-# Idle-steer guard (opt-in): a home that creates config/idle-steer-guard (empty,
-# or one positive integer of minutes, default 60) refuses a plain text steer to a
+# Idle-steer guard (opt-in): a home that creates config/idle-steer-guard (see
+# docs/configuration.md for the per-harness threshold format) refuses a plain text steer to a
 # local crewmate or scout task that has sat idle longer than that, because its
 # prompt cache is cold. The refusal prints the idle minutes and the three paths:
 # steer (one short step left), relaunch (several turns left with state on disk:
@@ -504,6 +504,41 @@ fm_send_resolve_target() { # <raw-target>
   return 1
 }
 
+# Idle threshold in minutes for the target's worker family: a "<family>=<minutes>"
+# line in the flag file, else a bare "<minutes>" line, else the built-in default
+# (codex 40, every other harness 60). A pi worker whose recorded model provider
+# is openai-codex counts as codex.
+fm_send_idle_limit() { # <flag-file>
+  local flag=$1 family model line key val bare=
+  family=$(fm_meta_get "$TARGET_META" harness)
+  model=$(fm_meta_get "$TARGET_META" model)
+  case "$family" in pi | pi-signed) case "$model" in openai-codex/*) family=codex ;; esac ;; esac
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line//[[:space:]]/}
+    case "$line" in
+    '' | '#'*) continue ;;
+    *=*)
+      key=${line%%=*}
+      val=${line#*=}
+      case "$val" in '' | *[!0-9]* | 0) continue ;; esac
+      if [ "$key" = "$family" ]; then
+        printf '%s' "$val"
+        return 0
+      fi
+      ;;
+    *[!0-9]* | 0) ;;
+    *) bare=$line ;;
+    esac
+  done <"$flag"
+  if [ -n "$bare" ]; then
+    printf '%s' "$bare"
+  elif [ "$family" = codex ]; then
+    printf 40
+  else
+    printf 60
+  fi
+}
+
 # Idle-steer guard (see the header): refuse a plain text steer to a task idle
 # past the home's threshold unless --idle-path names the chosen path. Unknown
 # state never blocks: only a present turn-end record can prove idleness.
@@ -512,9 +547,8 @@ fm_send_idle_steer_guard() {
   [ -f "$flag" ] || return 0
   [ -n "$TARGET_SELECTOR" ] && [ -n "$TARGET_META" ] || return 0
   [ "$TARGET_BACKEND" != remote ] && [ "$MARK_FROM_FIRSTMATE" != 1 ] && [ -z "$FIRE_AND_FORGET_ID" ] || return 0
-  limit=$(tr -d '[:space:]' < "$flag" 2>/dev/null || true)
-  case "$limit" in '' | *[!0-9]* | 0) limit=60 ;; esac
   id=$(fm_send_id_from_meta "$TARGET_META")
+  limit=$(fm_send_idle_limit "$flag")
   [ -f "$STATE/$id.turn-ended" ] || return 0
   case "$(fm_busy_record_read "$STATE" "$id" 2>/dev/null || true)" in busy\ *) return 0 ;; esac
   last=$(fm_path_mtime "$STATE/$id.turn-ended") || return 0

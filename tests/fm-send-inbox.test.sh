@@ -628,6 +628,37 @@ test_idle_steer_guard() {
   pass "fm-send: the opt-in idle-steer guard refuses only long-idle crewmate text steers"
 }
 
+test_idle_steer_guard_per_harness() {
+  local dir err rc
+  err=$TMP_ROOT/per-harness.err
+  # claude at 50 minutes sends (limit 60).
+  dir=$(idle_case idle-claude50 50)
+  run_send "$dir" "$err" -- t1 "steer" || fail "claude idle 50m must send under the 60m limit"
+  # codex at 50 minutes is refused (limit 40).
+  dir=$(idle_case idle-codex50 50)
+  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  run_send "$dir" "$err" -- t1 "steer"
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "codex idle 50m must refuse under the 40m limit"
+  assert_contains "$(cat "$err")" "limit 40" "the refusal should name the codex limit"
+  # codex at 30 minutes sends.
+  dir=$(idle_case idle-codex30 30)
+  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  run_send "$dir" "$err" -- t1 "steer" || fail "codex idle 30m must send under the 40m limit"
+  # pi on an openai-codex model counts as codex; other pi models use the default.
+  dir=$(idle_case idle-pi-codex 50)
+  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi" "model=openai-codex/gpt-5"
+  run_send "$dir" "$err" -- t1 "steer" && fail "pi on openai-codex idle 50m must refuse"
+  dir=$(idle_case idle-pi-other 50)
+  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi" "model=other/model"
+  run_send "$dir" "$err" -- t1 "steer" || fail "pi on another provider idle 50m must send"
+  # A per-harness line in the flag file overrides the default.
+  dir=$(idle_case idle-override 50 "codex=60")
+  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
+  run_send "$dir" "$err" -- t1 "steer" || fail "codex=60 must let codex idle 50m send"
+  pass "fm-send: the idle-steer guard threshold follows the worker harness (claude 60, codex 40) and the config override"
+}
+
 test_text_steer_rides_inbox
 test_deep_home_doorbell_stays_short
 test_multiline_steer_is_legal
@@ -646,3 +677,4 @@ test_delivery_lock_serializes_enqueue
 test_unwritable_inbox_fails_loudly
 test_empty_message_refused
 test_idle_steer_guard
+test_idle_steer_guard_per_harness
