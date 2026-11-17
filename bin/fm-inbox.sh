@@ -65,6 +65,12 @@
 # `ready` is the read-only primary-readiness projection (lock, wake-consumer
 # health, away posture, observation time). It never acquires the session lock
 # and never infers liveness from a lock file, a session, or a pane.
+# The inspected home's live lock owner determines its supervision model, not
+# the caller's harness. A PiG owner always yields wake_consumer.state=unknown,
+# reason=supervision-unverified and can_receive_work=unknown, even with an
+# FM_SUPERVISION_MODEL override or matching extension markers. The model and
+# health rules are owned by bin/fm-wake-lib.sh; tests/fm-inbox.test.sh covers
+# cross-home inspection and the PiG negative controls.
 #
 # Configuration. A region, a model id and an AWS profile name somebody's account
 # and somebody's choices, so this file carries no default for any of them. Each is

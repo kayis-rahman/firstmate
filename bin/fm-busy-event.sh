@@ -60,8 +60,9 @@
 # therefore writes state/<id>.busy-event-last-error as ONE line,
 # `at=<epoch> cmd=<cmd> source=<source> event=<event> error=<message>`, by an
 # atomic same-directory replace under umask 077. A successful arm (a fresh
-# incarnation) and a successful retire clear it, so a record that persists
-# across a session names a hook that kept failing. bin/fm-bootstrap.sh's
+# incarnation) and a successful retire clear it; successful apply, progress,
+# and stream events leave it intact, so persistence alone does not prove
+# repeated or continuing failure. bin/fm-bootstrap.sh's
 # HOOK_LAST_ERROR diagnostic is the reader; this script alone owns the record's
 # format and lifecycle. A failure that cannot trust its own id or state
 # directory writes nothing, because the record path itself would be unsafe.

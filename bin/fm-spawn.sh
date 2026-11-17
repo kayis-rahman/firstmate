@@ -434,6 +434,11 @@
 #   compact-adviser kill switch COMPACT_ADVISER_DISABLE, which the floor also
 #   pins to 1 with a literal assignment so it survives the cleared environment
 #   even on a host that never had it set.
+#   Pane launches also pin CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=1800000 in
+#   both the pane shell and agent command, including the filtered environment,
+#   bounding idle browser automation to 30 minutes. T3 Code's provider-owned
+#   environment does not receive this assignment. Regression coverage:
+#   tests/fm-spawn-chrome-idle-timeout.test.sh.
 #   An enabled task trace also retains TRACEPARENT. Explicit Firstmate launch
 #   assignments still apply inside the filtered environment, including the
 #   FM_TASK_INBOX export every launch carries (the absolute state/<id>.inbox
@@ -3619,14 +3624,8 @@ if [ "$HARNESS" = kiro ]; then
     kiro_hook_path_validate "$STATE" "$ID" || exit 1
   fi
 fi
-# free-model-axi model health preflight (bin/fm-model-preflight.sh header owns
-# the verdict contract, including the tolerate cases): a model whose recorded
-# probe is unhealthy refuses the launch here - before any endpoint, worktree,
-# or record exists - printing the exact probe evidence and the healthiest
-# alternative, while an absent advisor, an unknown model, and a stale-snapshot
-# warning all proceed. The model itself is never changed by this gate; only the
-# captain chooses models, so a refusal goes back to the caller to re-dispatch or
-# escalate.
+# Run model health preflight before allocating a worker endpoint or worktree;
+# bin/fm-model-preflight.sh owns the verdict and model-choice safety contract.
 "$SCRIPT_DIR/fm-model-preflight.sh" "$MODEL" || exit 1
 # Worker account pin (header above): resolved before any endpoint, worktree, or
 # record exists. An absent pin selects nothing and leaves every later launch
@@ -7972,7 +7971,7 @@ fi
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
 LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
-# Every launch also bounds the lifetime of the browser automation a worker starts.
+# Pane launch idle-timeout contract: see the launch-environment header above.
 LAUNCH_CHROME_IDLE_TIMEOUT_MS=1800000
 LAUNCH="export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS; $LAUNCH"
 # When the live-harness gate has exported DISABLE_AUTOUPDATER into this spawn's

@@ -30,9 +30,8 @@
 #                 "HOOK_LAST_ERROR: task <id> busy-state hook last error: <line>"
 #                 - a worker's busy-state hook (bin/fm-busy-event.sh) recorded a
 #                 failure that every harness wrapper otherwise discards
-#                 silently; the record clears on the task's next successful arm
-#                 or retirement, so a line that persists names a hook still
-#                 failing on every use,
+#                 silently; bin/fm-busy-event.sh owns the record's lifecycle,
+#                 and its timestamp distinguishes an old failure from a new one,
 #                 "TANGLE: <remediation>",
 #                 "SECONDMATE_SYNC: secondmate <id>: skipped: <reason>",
 #                 "NUDGE_SECONDMATES: secondmate <id>: send failed: <reason>",
