@@ -651,6 +651,32 @@ test_idle_steer_guard_per_harness() {
   pass "fm-send: the idle-steer guard threshold follows the worker harness (claude 60, codex 40)"
 }
 
+test_idle_guard_ignores_flag_contents() {
+  local dir err harness content index=0 limit age
+  err=$TMP_ROOT/flag-contents.err
+  for harness in claude codex; do
+    case "$harness" in claude) limit=60 ;; codex) limit=40 ;; esac
+    for content in 1 999 $'claude=1\ncodex=1' $'claude=999\ncodex=999'; do
+      index=$((index + 1))
+      # Neither a bare integer nor a family override may shorten the limit.
+      dir=$(idle_case "flag-under-$index" "$((limit - 1))")
+      fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=$harness"
+      printf '%s\n' "$content" >"$dir/home/config/idle-steer-guard"
+      run_send "$dir" "$err" -- t1 "continue" || fail "$harness: flag contents shortened the fixed limit"
+      [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "accepted steer was not enqueued"
+      # Nor may either legacy format extend it and silently bypass the guard.
+      age=$((limit + 1))
+      dir=$(idle_case "flag-over-$index" "$age")
+      fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=$harness"
+      printf '%s\n' "$content" >"$dir/home/config/idle-steer-guard"
+      run_send "$dir" "$err" -- t1 "continue" && fail "$harness: flag contents extended the fixed limit"
+      assert_contains "$(<"$err")" "limit $limit" "refusal did not report the fixed limit"
+      [ ! -d "$dir/home/state/t1.inbox" ] || fail "refused steer was enqueued"
+    done
+  done
+  pass "fm-send: legacy flag contents cannot shorten or extend fixed idle limits"
+}
+
 test_text_steer_rides_inbox
 test_deep_home_doorbell_stays_short
 test_multiline_steer_is_legal
@@ -670,3 +696,4 @@ test_unwritable_inbox_fails_loudly
 test_empty_message_refused
 test_idle_steer_guard
 test_idle_steer_guard_per_harness
+test_idle_guard_ignores_flag_contents
