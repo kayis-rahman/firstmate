@@ -1,0 +1,206 @@
+[
+  {
+    "name": "claude-59m-empty-flag",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-60m-empty-flag",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-61m-empty-flag",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "codex-39m-empty-flag",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-40m-empty-flag",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-41m-empty-flag",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "claude-bare-low-59m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-bare-low-61m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "claude-bare-high-59m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-bare-high-61m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "claude-family-low-59m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-family-low-61m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "claude-family-high-59m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "claude-family-high-61m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "codex-bare-low-39m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-bare-low-41m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "codex-bare-high-39m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-bare-high-41m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "codex-family-low-39m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-family-low-41m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "codex-family-high-39m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "codex-family-high-41m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "pi-openai-codex/gpt-5-50m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "pi-signed-openai-codex/gpt-5-50m",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  },
+  {
+    "name": "pi-other/model-50m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "other-None-50m",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "flag-absent-disables-guard",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "missing-turn-end-does-not-block",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "fresh-status-keeps-worker-warm",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "explicit-confirmation-steer",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "explicit-confirmation-relaunch",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "explicit-confirmation-handoff",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "BASELINE-reproduces-bare-999-bypass",
+    "exit": 0,
+    "records": 1,
+    "pass": true
+  },
+  {
+    "name": "BASELINE-reproduces-family-1-premature-refusal",
+    "exit": 1,
+    "records": 0,
+    "pass": true
+  }
+]
