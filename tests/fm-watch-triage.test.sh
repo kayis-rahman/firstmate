@@ -2414,6 +2414,28 @@ SH
   pass "a vanished Herdr endpoint wakes firstmate despite a working-only status tail"
 }
 
+test_missing_tmux_endpoint_surfaces_working_task_once() {
+  local dir state fakebin out pid
+  dir=$(make_case vanished-tmux-endpoint)
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$fakebin/tmux"
+  chmod +x "$fakebin/tmux"
+  printf 'window=firstmate:fm-vanished\nkind=ship\nbackend=tmux\nharness=claude\n' > "$state/vanished.meta"
+  printf 'working: compiling\n' > "$state/vanished.status"
+  prime_status_seen "$state" "$state/vanished.status"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" \
+    FM_CONFIG_OVERRIDE="$dir/config" FM_POLL=1 FM_SIGNAL_GRACE=0 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
+    "$WATCH" > "$out" 2>&1 &
+  pid=$!
+  if ! wait_for_exit "$pid" 150; then reap "$pid"; fail "a missing tmux endpoint on a working task did not wake firstmate: $(cat "$out")"; fi
+  [ "$(grep -c 'endpoint disappeared' "$out" || true)" -eq 1 ] \
+    || fail "the wake did not name the vanished endpoint exactly once: $(cat "$out")"
+  [ "$(grep -c 'endpoint disappeared' "$state/.wake-queue" || true)" -eq 1 ] \
+    || fail "the vanished endpoint was not queued exactly once"
+  pass "a vanished tmux endpoint wakes firstmate despite a working-only status tail"
+}
+
 test_gone_endpoint_reports_once_instead_of_escalating_forever() {
   local dir state fakebin out capture window key verdict round
   local failed='state: failed · source: run-step · run failed'
@@ -5544,6 +5566,7 @@ fm_test_run \
   test_wedge_escalation_marks_demand_deep_inspection_after_threshold \
   test_wedge_escalation_resets_when_pane_becomes_active \
   test_missing_herdr_endpoint_surfaces_working_task_once \
+  test_missing_tmux_endpoint_surfaces_working_task_once \
   test_gone_endpoint_reports_once_instead_of_escalating_forever \
   test_live_and_unproven_endpoints_still_wedge_escalate \
   test_wedge_guards_absent_config_keeps_the_unchanged_ladder \

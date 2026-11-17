@@ -6334,7 +6334,6 @@ EOF
   fi
 fi
 spawn_enter_recorded_worktree
-spawn_enter_recorded_worktree
 spawn_assert_agent_worktree
 
 # Pre-register Claude's workspace trust for the directory this launch starts in,
