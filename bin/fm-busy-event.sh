@@ -87,18 +87,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # See the header's last-error record contract. Best-effort by design: recording
 # a failure must never become a second failure that masks the first.
 busy_error_record() { # <message>
-  local msg=$1 tmp now saved_umask
+  local msg=$1 tmp now saved_umask source=${SOURCE:-} event=${EVENT:-}
   [ -d "$STATE" ] || return 0
   case "$ID" in *[!A-Za-z0-9._-]*) return 0 ;; esac
   now=$(date +%s)
   msg=${msg//$'\n'/ }
   msg=${msg//$'\r'/ }
+  source=${source//$'\n'/ }
+  source=${source//$'\r'/ }
+  event=${event//$'\n'/ }
+  event=${event//$'\r'/ }
   [ "${#msg}" -le 500 ] || msg=${msg:0:500}
   tmp="$STATE/.$ID.busy-event-last-error.tmp.$$"
   saved_umask=$(umask)
   umask 077
   if ! printf 'at=%s cmd=%s source=%s event=%s error=%s\n' \
-    "$now" "$CMD" "${SOURCE:-}" "${EVENT:-}" "$msg" > "$tmp" 2>/dev/null; then
+    "$now" "$CMD" "$source" "$event" "$msg" > "$tmp" 2>/dev/null; then
     umask "$saved_umask"
     rm -f "$tmp" 2>/dev/null || true
     return 0
