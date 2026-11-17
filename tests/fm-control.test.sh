@@ -1416,6 +1416,7 @@ test_fm_control_help_mentions_fresh_session_flag
 # Stub-backed test of relaunch_resume_args' --fresh-session handling, with no
 # Herdr endpoint: the herdr reference read is canned to a Pi-owned session so
 # the absent case keeps the --session reference and the present case drops it.
+# shellcheck disable=SC2034 # The herdr session, pane, and FRESH_SESSION globals are read by the eval-loaded relaunch_resume_args.
 test_relaunch_resume_args_fresh_session_behavior() {
   local out
   eval "$(sed -n '/^shell_quote()/,/^}/p' "$ROOT/bin/fm-spawn.sh")"

@@ -23,7 +23,8 @@ pig --approve \
 
 The `/afk` and `/quiet` routes are configured to use the Pi branch and skip the
 away daemon. Configuring these extensions does not verify watcher restoration,
-wake-drain acknowledgement, ship-ready landing, or section 9 escalation wording.
+wake-drain acknowledgement, ship-ready landing, or section 9 escalation wording;
+direct TUI invocation is unverified as well.
 
 ## Branch dispatch over the shared bus
 

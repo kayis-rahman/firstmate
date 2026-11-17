@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
+# Behavior tests for bin/fm-go-pilot.sh, the per-tool Go/shell dispatcher.
+# The dispatcher runs from a private code-root copy so the test never mutates
+# this checkout's gitignored bin/go-pilot/ build output. The Go tool is built
+# from go/cmd when a Go toolchain is installed; without one, a stub binary
+# stands in for it, because the dispatcher contract under test (selection,
+# exit-status reporting, and fallback) does not depend on the Go program.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PILOT="$ROOT/bin/fm-go-pilot.sh"
 
 fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 pass() { printf 'ok - %s\n' "$1"; }
 
 TMP_HOME="$(mktemp -d)"
 trap 'rm -rf "$TMP_HOME"' EXIT
+CODE="$TMP_HOME/code"
+mkdir -p "$TMP_HOME/config" "$CODE/bin/go-pilot"
+cp "$ROOT/bin/fm-go-pilot.sh" "$ROOT/bin/fm-env-cause.sh" "$CODE/bin/"
+PILOT="$CODE/bin/fm-go-pilot.sh"
+GO_TOOL="$CODE/bin/go-pilot/env-cause"
 export FM_HOME="$TMP_HOME"
-mkdir -p "$TMP_HOME/config"
+
+if command -v go >/dev/null 2>&1; then
+  ( cd "$ROOT/go" && go build -o "$GO_TOOL" ./cmd/fm-env-cause ) \
+    || fail "go build of go/cmd/fm-env-cause failed"
+else
+  # shellcheck disable=SC2016 # The stub script text is written literally.
+  printf '#!/bin/sh\n[ "${1:-}" = --help ] && exit 0\nexit 2\n' > "$GO_TOOL"
+  chmod +x "$GO_TOOL"
+  printf '# go toolchain not installed; dispatcher checked against a stub Go tool\n'
+fi
 
 # default off runs shell
 out=$("$PILOT" env-cause --help 2>&1) || true
@@ -22,7 +41,7 @@ esac
 printf 'env-cause\n' > "$TMP_HOME/config/go-pilot"
 out=$("$PILOT" env-cause --help 2>&1) || true
 case "$out" in
-  *'-> go'*) pass "enabled uses go" ;;
+  *'-> go (exit='*) pass "enabled uses go" ;;
   *) fail "enabled did not use go: $out" ;;
 esac
 
@@ -35,11 +54,10 @@ case "$out" in
 esac
 
 # missing binary falls back to shell
-mv "$ROOT/bin/go-pilot/env-cause" "$ROOT/bin/go-pilot/env-cause.bak"
+rm -f "$GO_TOOL"
 out=$("$PILOT" env-cause --help 2>&1) || true
-mv "$ROOT/bin/go-pilot/env-cause.bak" "$ROOT/bin/go-pilot/env-cause"
 case "$out" in
-  *'falling back to shell'* | *'-> shell'*) pass "missing binary falls back to shell" ;;
+  *'falling back to shell'*'-> shell'*) pass "missing binary falls back to shell" ;;
   *) fail "missing binary did not fall back: $out" ;;
 esac
 

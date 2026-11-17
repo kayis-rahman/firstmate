@@ -113,8 +113,8 @@ test_busy_event_records_and_clears_its_last_error() {
   assert_grep "event=agent-start" "$record" "the record must name the event"
   assert_grep "error=no armed busy-state gen for task-1" "$record" "the record must carry the exact error"
   [ "$(wc -l < "$record" | tr -d ' ')" = 1 ] || fail "the record must stay one line"
-  [ "$(stat -f '%Lp' "$record" 2>/dev/null || stat -c '%a' "$record")" = 600 ] \
-    || fail "the record must be private (mode $(stat -f '%Lp' "$record" 2>/dev/null || stat -c '%a' "$record"))"
+  [ "$(stat -c '%a' "$record" 2>/dev/null || stat -f '%Lp' "$record")" = 600 ] \
+    || fail "the record must be private (mode $(stat -c '%a' "$record" 2>/dev/null || stat -f '%Lp' "$record"))"
 
   # A later failure overwrites: this is the LAST error, not a log.
   status=0
@@ -127,6 +127,37 @@ test_busy_event_records_and_clears_its_last_error() {
   gen=$(bash "$BUSY_EVENT" arm "$state" task-1) || fail "re-arm must succeed"
   assert_absent "$record" "a successful arm must clear the last-error record"
   pass "the hook records its last error durably, newest wins, and arm clears it"
+}
+
+test_multiline_hook_tokens_keep_diagnostics_on_one_line() {
+  local home="$TMP_ROOT/boot-multiline" field token source event status out record
+  mkdir -p "$home/state" "$home/data" "$home/config"
+  record="$home/state/task-multiline.busy-event-last-error"
+  for field in source event; do
+    for token in $'bad\nvalue' $'bad\rvalue' $'bad\r\nvalue'; do
+      source=pi-ext
+      event=agent-start
+      if [ "$field" = source ]; then source=$token; else event=$token; fi
+      status=0
+      out=$(bash "$BUSY_EVENT" apply "$home/state" task-multiline busy --current-gen \
+        --source "$source" --event "$event" 2>&1) || status=$?
+      expect_code 1 "$status" "a multiline --$field must be rejected"
+      assert_contains "$out" "invalid --$field" "the rejection must name the invalid field"
+      assert_present "$record" "the rejection must persist its diagnostic"
+      [ "$(wc -l < "$record" | tr -d ' ')" = 1 ] || fail "invalid --$field split the diagnostic record"
+      out=$(< "$record")
+      case "$out" in *$'\r'*) fail "invalid --$field left a carriage return in the diagnostic" ;; esac
+      assert_contains "$out" "error=invalid --$field" "the record must retain the cause"
+      status=0
+      out=$(FM_BOOTSTRAP_DETECT_ONLY=1 FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
+        FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
+        bash "$ROOT/bin/fm-bootstrap.sh" 2>&1) || status=$?
+      expect_code 0 "$status" "bootstrap must still succeed"
+      assert_contains "$out" "HOOK_LAST_ERROR: task task-multiline" "bootstrap must surface the rejection"
+      assert_contains "$out" "error=invalid --$field" "bootstrap must not truncate the cause"
+    done
+  done
+  pass "multiline hook tokens preserve a single-line diagnostic and bootstrap cause"
 }
 
 test_retire_clears_the_last_error() {
@@ -177,6 +208,7 @@ test_non_macos_and_off_target_failures_stay_unclassified
 test_auto_platform_follows_uname
 test_file_input_classifies_like_stdin
 test_busy_event_records_and_clears_its_last_error
+test_multiline_hook_tokens_keep_diagnostics_on_one_line
 test_retire_clears_the_last_error
 test_session_start_surfaces_the_hook_last_error
 test_session_start_is_silent_without_a_hook_error

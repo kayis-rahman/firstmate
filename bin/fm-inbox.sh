@@ -65,6 +65,12 @@
 # `ready` is the read-only primary-readiness projection (lock, wake-consumer
 # health, away posture, observation time). It never acquires the session lock
 # and never infers liveness from a lock file, a session, or a pane.
+# The inspected home's live lock owner determines its supervision model, not
+# the caller's harness. A PiG owner always yields wake_consumer.state=unknown,
+# reason=supervision-unverified and can_receive_work=unknown, even with an
+# FM_SUPERVISION_MODEL override or matching extension markers. The model and
+# health rules are owned by bin/fm-wake-lib.sh; tests/fm-inbox.test.sh covers
+# cross-home inspection and the PiG negative controls.
 #
 # Configuration. A region, a model id and an AWS profile name somebody's account
 # and somebody's choices, so this file carries no default for any of them. Each is
@@ -882,22 +888,26 @@ cmd_ready() {
   fi
 
   # The supervision model belongs to the INSPECTED home, not to whoever ran
-  # this command. An explicit FM_SUPERVISION_MODEL still wins; otherwise
-  # classify the lock-holder pid through fm-harness.sh ancestry. No holder,
-  # or a walk that names nothing, is honest unknown - never the caller's
-  # own harness, and never a durable per-home model record.
+  # this command. A PiG lock owner is always unverified; for other harnesses,
+  # an explicit FM_SUPERVISION_MODEL wins; otherwise classify the lock-holder pid
+  # through fm-harness.sh ancestry. No holder or empty walk is honest unknown -
+  # never the caller's own harness, and never a durable per-home model record.
   local resolved_model harness anc
   resolved_model=${FM_SUPERVISION_MODEL:-}
-  if [ -z "$resolved_model" ] && [ "$lock_state" = held ] && [ -n "$lock_pid" ]; then
+  if [ "$lock_state" = held ] && [ -n "$lock_pid" ]; then
     anc=$("$SELF_DIR/fm-harness.sh" ancestry "$lock_pid" 2>/dev/null || true)
     harness=${anc#* }
-    case "$harness" in
-      claude|cursor|agy) resolved_model=autoarm ;;
-      pi|pi-signed|omp) resolved_model=extension ;;
-      '') ;;
-      unknown) ;;
-      *) resolved_model=persistent ;;
-    esac
+    if [ "$harness" = pig ]; then
+      resolved_model=unverified
+    elif [ -z "$resolved_model" ]; then
+      case "$harness" in
+        claude|cursor|agy) resolved_model=autoarm ;;
+        pi|pi-signed|omp) resolved_model=extension ;;
+        '') ;;
+        unknown) ;;
+        *) resolved_model=persistent ;;
+      esac
+    fi
   fi
   if [ -z "$resolved_model" ]; then
     consumer_state=unknown
@@ -906,12 +916,14 @@ cmd_ready() {
     consumer_state=unknown
     consumer_reason="no-wake-lib"
   else
-    FM_SUPERVISION_MODEL=$resolved_model \
-      fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
-        "$FM_HOME" "$FM_ROOT"
+    fm_watcher_supervision_verdict "$STATE" "$watch" "${FM_GUARD_GRACE:-300}" \
+      "$FM_HOME" "$FM_ROOT" "$resolved_model"
     if [ "$FM_WATCHER_VERDICT_OK" = true ]; then
       consumer_state=healthy
       consumer_reason="supervised"
+    elif [ "$FM_WATCHER_VERDICT_REASON" = unverified-supervision ]; then
+      consumer_state=unknown
+      consumer_reason="supervision-unverified"
     elif [ "$FM_WATCHER_VERDICT_REASON" = no-watcher ]; then
       consumer_state=unknown
       consumer_reason="no-watcher"

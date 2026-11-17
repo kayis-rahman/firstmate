@@ -434,6 +434,11 @@
 #   compact-adviser kill switch COMPACT_ADVISER_DISABLE, which the floor also
 #   pins to 1 with a literal assignment so it survives the cleared environment
 #   even on a host that never had it set.
+#   Pane launches also pin CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=1800000 in
+#   both the pane shell and agent command, including the filtered environment,
+#   bounding idle browser automation to 30 minutes. T3 Code's provider-owned
+#   environment does not receive this assignment. Regression coverage:
+#   tests/fm-spawn-chrome-idle-timeout.test.sh.
 #   An enabled task trace also retains TRACEPARENT. Explicit Firstmate launch
 #   assignments still apply inside the filtered environment, including the
 #   FM_TASK_INBOX export every launch carries (the absolute state/<id>.inbox
@@ -986,6 +991,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-project-capacity-lib.sh
 . "$SCRIPT_DIR/fm-project-capacity-lib.sh"
+# shellcheck source=bin/fm-slot-claim-lib.sh
+. "$SCRIPT_DIR/fm-slot-claim-lib.sh"
 # shellcheck source=bin/fm-worker-account-lib.sh
 . "$SCRIPT_DIR/fm-worker-account-lib.sh"
 # shellcheck source=bin/fm-omp-profile-lib.sh
@@ -3617,6 +3624,9 @@ if [ "$HARNESS" = kiro ]; then
     kiro_hook_path_validate "$STATE" "$ID" || exit 1
   fi
 fi
+# Run model health preflight before allocating a worker endpoint or worktree;
+# bin/fm-model-preflight.sh owns the verdict and model-choice safety contract.
+"$SCRIPT_DIR/fm-model-preflight.sh" "$MODEL" || exit 1
 # Worker account pin (header above): resolved before any endpoint, worktree, or
 # record exists. An absent pin selects nothing and leaves every later launch
 # step exactly as it was. A pinned Claude root is exported here as well, so the
@@ -6298,6 +6308,30 @@ fi
 # adoption. This also updates Herdr's restored pane shell before any harness is
 # started, so a later host restart inherits the task worktree rather than the
 # tab's original project directory.
+# One live copy, two task records (bin/fm-slot-claim-lib.sh owns the scan): a
+# stale or duplicated record already naming this copy means cleanup would
+# refuse for either task later, exactly as bin/fm-teardown.sh refuses it today.
+# Spawn cannot know WHICH record is stale (slot reuse legitimately hands a copy
+# on while an earlier record lingers - data/learnings.md 2026-10-07 - and only
+# the operator can reconcile that), so this check REPORTS the pair plainly at
+# dispatch instead of letting it surface first as a teardown refusal, and edits
+# no record: reconciliation is bin/fm-crew-state.sh's operator action.
+if [ "$KIND" != secondmate ] && [ -n "${WT:-}" ]; then
+  claim_rc=0
+  fm_slot_claim_rows "$STATE" "$STATE/$ID.meta" "$WT" || claim_rc=$?
+  if [ "$claim_rc" -eq 2 ]; then
+    echo "warning: cannot check whether $WT is already claimed by another task record ($FM_SLOT_CLAIM_ERROR); if two records end up on one working copy, cleanup will refuse for both" >&2
+  elif [ "$claim_rc" -eq 0 ]; then
+    echo "warning: $WT is already claimed by another task record:" >&2
+    while IFS=$'\t' read -r claim_id claim_field claim_state; do
+      [ -n "$claim_id" ] || continue
+      echo "warning:   task $claim_id records it in $claim_field (record in $claim_state)" >&2
+    done <<EOF
+$FM_SLOT_CLAIM_ROWS
+EOF
+    echo "warning: after this spawn, two task records name one working copy; cleanup will refuse for either until one record is reconciled (bin/fm-crew-state.sh); this check edited no record" >&2
+  fi
+fi
 spawn_enter_recorded_worktree
 spawn_assert_agent_worktree
 
@@ -7937,6 +7971,9 @@ fi
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
 LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
+# Pane launch idle-timeout contract: see the launch-environment header above.
+LAUNCH_CHROME_IDLE_TIMEOUT_MS=1800000
+LAUNCH="export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS; $LAUNCH"
 # When the live-harness gate has exported DISABLE_AUTOUPDATER into this spawn's
 # own environment, carry it into the launch command text so Claude Code's
 # auto-updater cannot rewrite the shared binary during a live run. Embedding the
@@ -8022,6 +8059,9 @@ spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 # pre-launch channel, so later commands in that shell inherit it too. The launch
 # command independently establishes the value for the agent process itself.
 spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
+# And the bounded browser-automation lifetime, so later commands in that same pane
+# shell inherit it as well as the agent process itself.
+spawn_send_text_line "$T" "export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"
 if [ "$LAVISH_AXI_HOST_CONFIG_PRESENT" = 1 ]; then
   spawn_send_text_line "$T" "export LAVISH_AXI_HOST=$(shell_quote "$LAVISH_AXI_HOST")"
 fi
@@ -8093,6 +8133,9 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   # $LAUNCH is what gives the wrapping `/bin/sh` itself the switch, not only the
   # agent command it runs.
   LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX COMPACT_ADVISER_DISABLE=1"
+  # The same floor treatment for the bounded browser-automation lifetime above,
+  # so the wrapping `/bin/sh` itself carries it, not only the agent command it runs.
+  LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"
   if [ -n "$SPAWN_TRACEPARENT" ]; then
     # shellcheck disable=SC2016
     LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX "'${TRACEPARENT+"TRACEPARENT=$TRACEPARENT"}'

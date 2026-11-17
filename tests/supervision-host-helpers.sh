@@ -231,14 +231,12 @@ trap suite_cleanup EXIT
 make_home() {  # <name> <attended|away|quiet> [config line]
   local home="$TMP_ROOT/$1"
   mkdir -p "$home/state" "$home/config" "$home/fakebin"
-  # An unreachable backend: the watcher reads no endpoint as dead, so the only
-  # wakes are the status appends each case makes.
   printf '#!/usr/bin/env bash\nexit 1\n' > "$home/fakebin/tmux"
   chmod +x "$home/fakebin/tmux"
   make_fake_crew_state "$home/fakebin" >/dev/null
   printf '%s\n' "${3:-}" > "$home/config/supervision-host"
   [ -n "${3:-}" ] || : > "$home/config/supervision-host"
-  printf 'project=demo\nwindow=fm-demo\nharness=claude\n' > "$home/state/demo.meta"
+  printf 'project=demo\nharness=claude\n' > "$home/state/demo.meta"
   echo handle > "$home/stub-mode"
   # The captain has spoken in this session, so an attended wake has a mirror.
   [ "$2" = away ] \
@@ -571,7 +569,7 @@ SH
   append_status "$home" 'measurement driver running' paused
   wait_until 250 test -e "$home/before-drain.ready" || fail "inherited handling: the first turn never started"
   successor=$(cat "$home/state/.watch.lock/pid")
-  printf 'project=demo\nwindow=fm-beta\nharness=claude\n' > "$home/state/beta.meta"
+  printf 'project=demo\nharness=claude\n' > "$home/state/beta.meta"
   printf 'needs-decision [at=%s]: select an export format\n' "$(date +%s)" > "$home/state/beta.status"
   wait_until 250 bash -c '! kill -0 "$1" 2>/dev/null' _ "$successor" \
     || fail "inherited handling: the main-only close did not occur during the first turn"
@@ -959,7 +957,7 @@ assert_lost_handoff_keeps_watching() {  # <boundary|pass-through>
   home=$(make_primary_home "lost-handoff-$mode")
   : > "$home/config/supervision-handoff-ack"
   : > "$home/hook.own-group"
-  printf 'project=demo\nwindow=fm-other\nharness=claude\n' > "$home/state/other.meta"
+  printf 'project=demo\nharness=claude\n' > "$home/state/other.meta"
   FM_SUPERVISION_HANDOFF_RETRY_SECONDS=3 FM_SUPERVISION_HOST_PARK_SECONDS=3600 \
     FM_TEST_SUPERVISION_HOST_CLOCK="$home/park-clock" start_hook_session "$home"
   turn_end "$home"
