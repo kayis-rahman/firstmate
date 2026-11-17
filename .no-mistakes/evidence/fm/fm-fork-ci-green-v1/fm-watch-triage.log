@@ -1,0 +1,26 @@
+1..132
+tests/wake-helpers.sh: line 342: 16169 Terminated: 15          PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 "$@" "$WATCH" > "$out"
+tests/wake-helpers.sh: line 342: 21957 Terminated: 15          PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 "$@" "$WATCH" > "$out"
+ok - legacy-colliding endpoints wake independently and never revert to legacy memory
+ok - a 180-byte session and 64-byte task retain bounded markers and produce a stale wake
+ok - punctuation, percent escapes and Unicode have distinct stable filename keys
+ok - opted-in current stream silence uses inspection delay across changing panes; disabled, tool, and foreign phases do not
+ok - model progress extends only opted-in bounds and obsolete stream episodes reset before legacy fallback
+ok - stream close, progress, and replacement cancel publication after queue and recovery lock waits
+ok - stream close, progress, and replacement cancel publication after queue and recovery lock waits
+ok - stream close, progress, and replacement cancel publication after queue and recovery lock waits
+rm: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/tmp/fm-watch-triage-tests.kOoJzd/pi-counter-uncapped/state/.wedge-escalations-v3.3d897044a2604c1fe9201075846767cbb8859b9fb6c1ad55f279b3eb3bfd591c: is a directory
+ok - stream count writes and cap truncation defend failures while uncapped delivery continues
+ok - a capped stream that resumes and stalls before rearming starts a fresh episode
+ok - status_span_has_actionable: benign absorbed, captain events surfaced, classified events not re-fired
+ok - an actionable event is not hidden by later routine appends, and is named as itself
+ok - span classification retires closed decisions and surfaces rejected transitions for reconciliation
+ok - span classification from an offset keeps closed decisions closed and live ones live
+ok - a malformed seen signature causes the whole status log to be classified
+ok - stale_is_terminal: terminal status surfaces, non-terminal and no-status are benign
+ok - classifier primitives: keyed decisions and activity phases, captain relevance, window-to-task, and overrides
+ok - unrecognized status prefixes are visible and recognized prefixes are unchanged
+ok - crew_is_provably_working: only working+run-step/pane is provable; idle/finished/parked/failed/unknown surface
+ok - status_is_paused: only the leading paused verb matches, paused is not captain-relevant, and the two declared-wait verbs stay separable
+ok - crew_absorb_class: working/paused/none from one read; crew_is_paused and crew_is_provably_working agree
+not ok - a file written after the anchor was not reported as write evidence

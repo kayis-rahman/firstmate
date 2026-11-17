@@ -1,0 +1,22 @@
+Final targeted test turn
+
+All seven product scenarios were driven live in this turn. No product source or test files were changed.
+
+1. Bootstrap shared-copy collision detection and read-only reconciliation: live-cli.py, live-cli.log.
+2. Busy-event hook error persistence, stale/unarmed rejection, arm/retire recovery, and single-line invalid multiline tokens: live-cli.py and live-error-boundary.py, corresponding logs. Both invalid fields now retain error=invalid in bootstrap diagnostics without altering the generation.
+3. PiG posture boundary: real fm-afk-launch and fm-inbox ready commands with their supported harness/model environment selections. Away daemon refused, readiness honestly unknown. This is not a claim of PiG model-session validation.
+4. Hygiene dry-run versus execution and the exact size boundary: live-hygiene.py, live-hygiene.log.
+5. Real custom-command worker launches on private tmux, disposable git project/origin/worktree pool, with and without launch environment allowlist: live-spawn.py, live-spawn.log. Actual workers executed in recorded worktrees and received timeout 1800000 despite inherited 1. No fake model CLI.
+6. Real logged-in Claude primary on short disposable private tmux: primary-authorized.py, primary-authorized.log. Interactive launch required workspace trust, so it was not accepted (no operator trust configuration changes). Switched to the native streaming CLI interface through tmux, explicitly supplying the repository settings. The genuine model answered the probe and executed the supported lock+supervision-host park command in a background Bash tool. fm-inbox ready reported a live harness lock, healthy supervised consumer, fresh beacon and can_receive=true. The identity-recorded host exited on TERM. This proves executable supervision lifecycle, not interactive Stop-hook autoarm delivery. No fabricated model/auth session.
+7. Real Herdr launch placement and endpoint disappearance: herdr-authorized.py, herdr-authorized.log. Isolated config/home/state/pool in a fresh authorized short directory, named fm-lab-* session. A symlink to the genuine live fleet socket supplied only the helper's read-only tripwire discovery; every lifecycle operation targeted only the named lab. Helper prepare, provision, run and teardown all succeeded; teardown verified the fleet tripwire. Actual worker cwd matched its recorded worktree and its pane belonged to the exact launcher workspace. Closing that exact lab pane produced one durable disappearance wake despite working-only status. Setup retries corrected missing injected socket identity and pane-id/capture-command handling in the evidence driver, not product code.
+
+Targeted automated checks this turn:
+- fm-slot-claim.test.sh and fm-spawn-chrome-idle-timeout.test.sh completed successfully.
+- fm-supervision-host-hook.test.sh completed successfully (FM_TEST_COMPLETE).
+- Selected supervision-host mirror/TERM regression completed successfully.
+- fm-supervision-host-park.test.sh initially reached the command's 400-second combined hook+park time budget after the first fourteen cases passed. It was not claimed to have completed as one invocation. All remaining cases were then driven through the existing test runner in two focused selections (held/tagged plus first-cycle/unverified/outside-owner/superseded); both completed successfully. Thus every park case was exercised, without a repository-wide suite run.
+- Selected missing-Herdr-endpoint triage regression completed successfully.
+
+The selected supervision suites contain fake session/engine fixtures and are supporting regression checks only; the independent genuine Claude and Herdr scenarios provide the live proof.
+
+All fresh short labs/private servers and worktree-local fixtures created by the live drivers were removed. The empty .test-phase directory was removed. Final git status and diff were clean. No lint, static analysis, formatter, broad repository suite, pipeline control, push, PR, CI, package install, login mutation or default-session lifecycle operation ran. Remote CI remains the outer executor's responsibility. No UI implementation changed; evidence is executable CLI transcripts, persisted protocol records and real worker output rather than screenshots.

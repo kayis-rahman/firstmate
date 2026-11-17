@@ -1,0 +1,4 @@
+1..1
+# running test_missing_herdr_endpoint_surfaces_working_task_once
+ok - a vanished Herdr endpoint wakes firstmate despite a working-only status tail
+FM_TEST_COMPLETE

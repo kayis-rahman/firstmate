@@ -1,0 +1,14 @@
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/afk.p1qDjr
+$ fm-afk-launch.sh enter --words ... (PiG primary branch pin)
+Away posture recorded at 2026-11-17T01:54:27Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. Your away instructions are recorded verbatim; the away session will carry them out where it can, and anything it is unsure of, or that needs you, waits for your return. Destructive, irreversible, and security-sensitive actions are never pre-authorizable, whatever the words say. Expected return: not given. Spend cap: 4 concurrent workers.
+Away posture (recorded):
+  entered: 2026-11-17T01:54:27Z
+  expected return: not given
+  spend cap: 4 concurrent workers
+  reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+  your words (verbatim):
+    Hold all work for return; merge nothing.
+$ fm-afk-launch.sh start
+fm-afk-launch: the away daemon is no longer launched on pi; the away-posture record is the posture there (run bin/fm-afk-launch.sh enter and stop)
+start exit=1
+ASSERTION: away contract persisted; daemon start refused; no daemon terminal created.

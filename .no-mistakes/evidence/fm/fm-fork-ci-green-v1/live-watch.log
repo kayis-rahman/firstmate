@@ -1,0 +1,23 @@
+$ bin/fm-lab-home.sh create /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/watch-home
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/watch-home
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s new-session -d -s fm-lab-watch -x 120 -y 40 -c /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ /bin/bash
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s new-window -d -t fm-lab-watch -n fm-vanished sleep 300
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s display-message -p -t fm-lab-watch #{pid}
+91898
+[exit 0]
+$ bash -c . bin/fm-wake-lib.sh; fm_wake_status_mark_current "$FM_HOME/state" "$FM_HOME/state/vanished.status"
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s kill-window -t fm-lab-watch:fm-vanished
+[exit 0]
+$ bin/fm-watch.sh
+stale: fm-lab-watch:fm-vanished (recorded worker endpoint disappeared; inspect the task and recover its work)
+[exit 0]
+Persisted wake queue:
+1794881414	1	stale	fm-lab-watch:fm-vanished	stale: fm-lab-watch:fm-vanished (recorded worker endpoint disappeared; inspect the task and recover its work)
+Live tmux worker disappearance was surfaced and queued exactly once.
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s kill-server
+[exit 0]
+Private tmux server stopped; disposable home removed.

@@ -1,0 +1,3 @@
+Read-only live-fleet socket reference in disposable config:
+{"sessions":[{"default":true,"name":"default","running":true,"session_dir":"/tmp/fmv.Aqfv6j/xdg/herdr","socket_path":"/tmp/fmv.Aqfv6j/xdg/herdr/herdr.sock"}]}
+prepare=0

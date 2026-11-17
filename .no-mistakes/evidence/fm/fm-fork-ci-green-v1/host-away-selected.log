@@ -1,0 +1,4 @@
+1..1
+# running test_away_wake_is_handled_on_the_engine_and_never_reaches_main
+ok - host: an away wake is handled on the engine through the branch contract and never reaches main
+FM_TEST_COMPLETE

@@ -1,0 +1,10 @@
+1..4
+# running test_first_cycle_status_streams_and_owner_options_reach_it
+ok - host: the first cycle's status streams once, --restart replaces a stale watcher, and an owner predecessor makes a handling successor
+# running test_unverified_engine_hands_every_away_wake_to_main
+ok - host: a home naming an unverified engine hands every away wake to main with the reason
+# running test_host_outside_the_lock_owner_stands_down
+ok - host: a host outside the session-lock owner stands down without arming
+# running test_superseded_host_leaves_the_owner_untouched
+ok - host: a host under a superseded auto-arm generation stands down without touching the owner
+FM_TEST_COMPLETE

@@ -1,0 +1,3 @@
+ok - a launch bounds the browser-automation lifetime, with and without the cleared-environment allowlist
+ok - the launch command carries the browser-automation bound on its own, across harness prefix shapes
+fm-spawn-chrome-idle-timeout: PASS

@@ -1,0 +1,6 @@
+1..2
+# running test_unchanged_held_outcome_reaches_the_captain_once_until_a_new_event
+ok - host: an unchanged held outcome reaches the captain once across cadences, and a later decision on the task still does
+# running test_tagged_lock_holder_reaches_the_engine_whole
+ok - host: a Windows-tagged session-lock holder reaches the engine's lease whole
+FM_TEST_COMPLETE

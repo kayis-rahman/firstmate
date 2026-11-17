@@ -1,0 +1,4 @@
+1..2
+ok - a vanished Herdr endpoint wakes firstmate despite a working-only status tail
+ok - a vanished tmux endpoint wakes firstmate despite a working-only status tail
+FM_TEST_COMPLETE

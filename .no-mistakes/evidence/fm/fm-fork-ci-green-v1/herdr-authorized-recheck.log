@@ -1,0 +1,5 @@
+Guarded prepare against existing session registry (read-only session discovery):
+prepare exit=0
+Isolated config prepare:
+fm-herdr-lab: fleet-state tripwire requires exactly one running default session
+isolated prepare exit=1

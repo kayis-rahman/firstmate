@@ -1,0 +1,10 @@
+ok - the observed no-route-to-host failure gets a hedged Local Network privacy cause
+ok - host-unreachable markers classify case-insensitively
+ok - non-macOS, non-LAN, and unrelated failures stay unclassified
+ok - auto platform selection follows uname
+ok - file input and missing files behave like the contract
+ok - the hook records its last error durably, newest wins, and arm clears it
+ok - multiline hook tokens preserve a single-line diagnostic and bootstrap cause
+ok - retirement clears the last-error record
+ok - session start surfaces a silent hook failure with its exact last error
+ok - session start stays silent when no hook error is recorded

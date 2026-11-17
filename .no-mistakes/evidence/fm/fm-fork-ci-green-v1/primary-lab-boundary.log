@@ -1,0 +1,6 @@
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/tmp/fm-lab.mRXCUa
+Attempt real Claude primary on required private lab socket:
+error connecting to /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/tmp/fm-lab.mRXCUa/tmux/tmux-501/fm-lab (File name too long)
+launch_exit=1
+error connecting to /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/tmp/fm-lab.mRXCUa/tmux/tmux-501/fm-lab (File name too long)
+teardown_exit=1

@@ -1,0 +1,6 @@
+ok - the scan reports other claimants, excludes self, and ignores dead paths
+ok - shared rows report only paths two distinct records claim
+ok - session start reports two records on one working copy plainly
+ok - session start stays silent when no path is claimed twice
+ok - spawn reports a working copy another record claims, plainly and without editing
+ok - teardown keeps its exact refusal on a shared working copy

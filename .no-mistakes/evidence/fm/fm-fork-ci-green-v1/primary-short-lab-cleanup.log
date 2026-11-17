@@ -1,0 +1,6 @@
+stopped: lab tmux server and lab processes
+removed: task temp /tmp/fm-lab55fde9193e61-worker+aa00b5f0bfcd9b984a9cf87cbd0dc10f1929a4e924cbb8024d86eea4fe02b753
+removed: task temp /tmp/fm-lab55fde9193e61-worker
+removed: 3 Claude project entries under /private/tmp/fmv.NVER/run
+warning: ~/.treehouse gained entries during the lab; left as is: update-check.json
+removed: /private/tmp/fmv.NVER/run

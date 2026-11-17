@@ -1,0 +1,4 @@
+1..1
+# running test_undelivered_dialog_is_fed_again_on_the_next_turn
+ok - host: dialog a turn never completed with its report (a park boundary, a stopped turn, no report) reaches the next turn
+FM_TEST_COMPLETE

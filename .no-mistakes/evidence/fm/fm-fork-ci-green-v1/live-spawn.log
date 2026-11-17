@@ -1,0 +1,156 @@
+$ bin/fm-lab-home.sh create /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home
+[exit 0]
+$ git init -q -b main /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project
+[exit 0]
+$ git -C /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project add .
+[exit 0]
+$ git -C /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project -c user.name=Test -c user.email=test@example.invalid commit -qm initial
+[exit 0]
+$ git clone --bare /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/origin.git
+Cloning into bare repository '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/origin.git'...
+done.
+[exit 0]
+$ git -C /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project remote add origin /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/origin.git
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s new-session -d -s firstmate -x 120 -y 40 -c /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ /bin/bash
+[exit 0]
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s display-message -p -t firstmate #{pid}
+55391
+[exit 0]
+$ bin/fm-spawn.sh env-absent /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project printf '%s\n' "$PWD" "$CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS" > /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/env-absent.result; sleep 300 --mode local-only --yolo off --backend tmux
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home
+warning: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home/data/env-absent/launch-brief.md records no ship branch; defaulting to legacy branch fm/env-absent
+warning: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home/data/env-absent/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: env-absent ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+spawned env-absent harness=printf kind=ship mode=local-only yolo=off window=firstmate:fm-env-absent worktree=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/1/project
+[exit 0]
+Actual worker output env-absent:
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/1/project
+1800000
+Published task metadata:
+window=firstmate:fm-env-absent
+endpoint_task_id=env-absent
+worktree=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/1/project
+project=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project
+harness=printf
+kind=ship
+mode=local-only
+yolo=off
+branch=fm/env-absent
+tasktmp=/tmp/fm-env-absent
+model=default
+effort=default
+spawn_gen=s1794884658.55404.17999
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s capture-pane -p -t firstmate:fm-env-absent
+kayisrahman@Kayiss-Mac-mini project % treehouse get
+🌳 Setting up worktree...
+🌳 Entered worktree at /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spa
+wn-world/pool/.treehouse/project-aed0e5/1/project. Type 'exit' to return.
+kayisrahman@Kayiss-Mac-mini project % cd -- '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H
+8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/1/project'
+kayisrahman@Kayiss-Mac-mini project % export GOTMPDIR=/tmp/fm-env-absent/gotmp
+kayisrahman@Kayiss-Mac-mini project % export COMPACT_ADVISER_DISABLE=1
+kayisrahman@Kayiss-Mac-mini project % export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=1800000
+kayisrahman@Kayiss-Mac-mini project % export FM_TASK_ID=env-absent
+kayisrahman@Kayiss-Mac-mini project % . '/tmp/fm-env-absent+0fce266b7703895a08b15581d4b41329072365b9c62903a30349e62afa61
+ee6b/launch.s1794884658.55404.17999.sh'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[exit 0]
+$ bin/fm-spawn.sh env-allowlist /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project printf '%s\n' "$PWD" "$CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS" > /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/env-allowlist.result; sleep 300 --mode local-only --yolo off --backend tmux
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home
+warning: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home/data/env-allowlist/launch-brief.md records no ship branch; defaulting to legacy branch fm/env-allowlist
+warning: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-home/data/env-allowlist/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: env-allowlist ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+spawned env-allowlist harness=printf kind=ship mode=local-only yolo=off window=firstmate:fm-env-allowlist worktree=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/2/project
+[exit 0]
+Actual worker output env-allowlist:
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/2/project
+1800000
+Published task metadata:
+window=firstmate:fm-env-allowlist
+endpoint_task_id=env-allowlist
+worktree=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/2/project
+project=/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spawn-world/project
+harness=printf
+kind=ship
+mode=local-only
+yolo=off
+branch=fm/env-allowlist
+tasktmp=/tmp/fm-env-allowlist
+model=default
+effort=default
+spawn_gen=s1794884663.60339.16549
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s capture-pane -p -t firstmate:fm-env-allowlist
+kayisrahman@Kayiss-Mac-mini project % treehouse get
+🌳 Setting up worktree...
+🌳 Entered worktree at /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/spa
+wn-world/pool/.treehouse/project-aed0e5/2/project. Type 'exit' to return.
+kayisrahman@Kayiss-Mac-mini project % cd -- '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H
+8NQ0BQ/.test-phase/spawn-world/pool/.treehouse/project-aed0e5/2/project'
+kayisrahman@Kayiss-Mac-mini project % export GOTMPDIR=/tmp/fm-env-allowlist/gotmp
+kayisrahman@Kayiss-Mac-mini project % export COMPACT_ADVISER_DISABLE=1
+kayisrahman@Kayiss-Mac-mini project % export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=1800000
+kayisrahman@Kayiss-Mac-mini project % export FM_TASK_ID=env-allowlist
+kayisrahman@Kayiss-Mac-mini project % . '/tmp/fm-env-allowlist+0fce266b7703895a08b15581d4b41329072365b9c62903a30349e62af
+a61ee6b/launch.s1794884663.60339.16549.sh'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[exit 0]
+Both real custom-command launches received the fixed timeout and ran in their recorded isolated worktrees.
+$ tmux -S /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.s kill-server
+[exit 0]
+Private tmux server stopped; disposable project, origin, home and pool removed.

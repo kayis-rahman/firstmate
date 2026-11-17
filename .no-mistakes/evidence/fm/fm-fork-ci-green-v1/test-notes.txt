@@ -1,0 +1,23 @@
+Targeted test phase only; no lint, format, broad repository suite, push, PR or CI phase was executed.
+
+Live product checks:
+- live-cli.py: bootstrap shared-copy collision/read-only diagnostics; busy-event unarmed/stale generation failures and arm/retire recovery; PiG branch-primary away-daemon refusal using FM_SUPERVISION_PRIMARY_HARNESS=pig and FM_SUPERVISION_ACTOR=branch; ready output with unverified supervision. All passed. This did not launch a PiG model session.
+- live-watch.py: real tmux worker window created and destroyed on the explicitly addressed worktree-local .s socket. Real watcher surfaced and queued its disappearance once despite working-only status. Passed.
+- live-spawn.py: real tmux + treehouse + disposable git project/origin; supported raw-command workers executed in their recorded worktrees and received timeout 1800000 instead of inherited 1, both without and with the launch environment allowlist. Passed. No fake harness CLI was used; no model session was claimed.
+- live-hygiene.py: dry run versus execute, 204800-byte boundary, selected evidence and active-task preservation. Passed.
+- live-error-boundary.py: newline-bearing invalid source and invalid event both produced two-line last-error records. Bootstrap omitted error=invalid because it reads the first line only. FAILED. Task generation remained unchanged in both cases.
+
+Targeted automated checks:
+- bash tests/fm-slot-claim.test.sh: passed.
+- bash tests/fm-spawn-chrome-idle-timeout.test.sh: passed.
+- bash tests/fm-model-preflight.test.sh: passed with fixture advisor.
+- bash tests/fm-supervision-host-hook.test.sh: passed, FM_TEST_COMPLETE.
+- Initial bash tests/fm-supervision-host.test.sh failed TERM handback. A temporary workspace timeout executable was found incompatible with fm_run_timed's -k option and removed. Full supervision-host rerun passed, FM_TEST_COMPLETE, using native timeout mechanisms. The single direct timeout call in that suite used an exported shell function delegating to fm_run_timed; executable discovery therefore still selected the native Perl fallback.
+- Initial bash tests/fm-watch-triage.test.sh failed the worktree-write probe with that invalid timeout executable. After removal, selected tests test_crew_worktree_written_since_classifier, test_missing_herdr_endpoint_surfaces_working_task_once and test_missing_tmux_endpoint_surfaces_working_task_once all passed. The complete triage suite was not rerun or claimed green.
+- Initial bash tests/fm-supervision-host-park.test.sh failed its simulated Windows tagged-holder case. Isolated reproduction also failed. Fixed only that fixture: sever its POSIX parent chain, pin its simulated primary, and translate GNU stat fields to native BSD stat on macOS. The selected tagged-holder case then passed; the complete park suite rerun also passed, FM_TEST_COMPLETE.
+- Supervision suites use fixture session identity and a stub model engine; these are not live model-session proofs.
+
+Herdr:
+XDG_CONFIG_HOME=.test-phase/x FM_HERDR_LAB_STATE_DIR=$PWD/.test-phase/hs bin/fm-herdr-lab.sh prepare fm-lab-gate refused because its tripwire requires exactly one running default session. The isolated config had none. Provision/run did not execute. Teardown refused without a tripwire; no lab session had been created. Creating a default session or writing to the operator's Herdr config would violate the assigned boundaries. Real Herdr runtime scenarios remain untested.
+
+Evidence scripts are retained beside these logs. Every disposable home, private tmux server, scratch project/origin, worktree pool and test driver directory was removed after validation. Only the intentional park test-fixture fix remains in the worktree. An unrelated host-wide ps diagnostic emitted by the original failing supervision fixture was redacted from its initial log; the failure and fixture diagnostics were retained.

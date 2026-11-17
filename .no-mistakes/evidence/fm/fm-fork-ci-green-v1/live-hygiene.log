@@ -1,0 +1,17 @@
+$ /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-hygiene.sh sweep --treehouse-root /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/hygiene-home/pool
+=== fm-hygiene sweep (dry run) ===
+-- treehouse --
+-- evidence --
+skip evidence active-task: task not done
+would remove media /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/hygiene-home/data/done-task/large.png size=200.0KB
+space freed (dry-run estimated if dry): 0B
+[exit 0]
+$ /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-hygiene.sh sweep --treehouse-root /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/hygiene-home/pool --yes
+=== fm-hygiene sweep (execute) ===
+-- treehouse --
+-- evidence --
+skip evidence active-task: task not done
+removed media /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/hygiene-home/data/done-task/large.png size=200.0KB
+space freed (dry-run estimated if dry): 200.0KB
+[exit 0]
+Dry run preserved every file. Execute removed only the completed-task media above 204800 bytes; exact-boundary, selected, and active-task media survived.

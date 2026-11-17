@@ -1,0 +1,47 @@
+$ bin/fm-lab-home.sh create /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home
+[exit 0]
+$ bin/fm-bootstrap.sh
+COLLISION: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/shared-copy is recorded by alpha/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state) and beta/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state); reconcile the stale record (bin/fm-crew-state.sh) before cleanup refuses it
+[exit 0]
+$ bin/fm-bootstrap.sh
+[exit 0]
+$ bin/fm-busy-event.sh apply /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state alpha busy --current-gen --source pi-ext --event agent-start
+error: no armed busy-state gen for alpha
+[exit 1]
+Persisted hook failure: at=1794884652 cmd=apply source=pi-ext event=agent-start error=no armed busy-state gen for alpha (--current-gen)
+$ bin/fm-bootstrap.sh
+HOOK_LAST_ERROR: task alpha busy-state hook last error: at=1794884652 cmd=apply source=pi-ext event=agent-start error=no armed busy-state gen for alpha (--current-gen)
+[exit 0]
+$ bin/fm-busy-event.sh arm /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state alpha
+g1794884653.52897.23449
+[exit 0]
+$ bin/fm-busy-event.sh apply /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state alpha idle --gen stale-generation --source pi-ext --event agent-end
+error: stale busy-state gen for alpha (event rejected)
+[exit 1]
+$ bin/fm-busy-event.sh retire /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state alpha --current-gen
+[exit 0]
+$ bin/fm-bootstrap.sh
+[exit 0]
+$ bin/fm-afk-launch.sh enter --words Disposable verification only.
+Away posture recorded at 2026-11-17T03:04:13Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. Your away instructions are recorded verbatim; the away session will carry them out where it can, and anything it is unsure of, or that needs you, waits for your return. Destructive, irreversible, and security-sensitive actions are never pre-authorizable, whatever the words say. Expected return: not given. Spend cap: 4 concurrent workers.
+Away posture (recorded):
+  entered: 2026-11-17T03:04:13Z
+  expected return: not given
+  spend cap: 4 concurrent workers
+  reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+  your words (verbatim):
+    Disposable verification only.
+[exit 0]
+$ bin/fm-afk-launch.sh start
+fm-afk-launch: the away daemon is no longer launched on pig; the away-posture record is the posture there (run bin/fm-afk-launch.sh enter and stop)
+[exit 1]
+$ bin/fm-afk-launch.sh stop
+fm-afk-launch: away-posture record archived at /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/live-home/state/afk-contracts/1794884653.afk-contract
+fm-afk-launch: away mode stopped; no daemon terminal was running, .afk cleared, and the posture record archived
+[exit 0]
+$ bin/fm-inbox.sh ready
+{"schema":"fm-primary-ready.v1","home":".test-phase/live-home","observed_at":"2026-11-17T03:04:14Z","lock":{"state":"free","pid":null,"live_harness":false},"wake_consumer":{"state":"unknown","reason":"supervision-unverified","beacon_age_seconds":null},"posture":{"state":"present"},"can_receive":false}
+[exit 0]
+Parsed ready output: {"schema": "fm-primary-ready.v1", "home": ".test-phase/live-home", "observed_at": "2026-11-17T03:04:14Z", "lock": {"state": "free", "pid": null, "live_harness": false}, "wake_consumer": {"state": "unknown", "reason": "supervision-unverified", "beacon_age_seconds": null}, "posture": {"state": "present"}, "can_receive": false}
+All live CLI assertions passed. Disposable home and shared copy removed in finally.

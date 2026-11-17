@@ -1,0 +1,8 @@
+1..3
+# running test_crew_worktree_written_since_classifier
+ok - crew_worktree_written_since: real writes are evidence; no worktree, no anchor, quiet trees, .git churn and a mate's own home are not
+# running test_missing_herdr_endpoint_surfaces_working_task_once
+ok - a vanished Herdr endpoint wakes firstmate despite a working-only status tail
+# running test_missing_tmux_endpoint_surfaces_working_task_once
+ok - a vanished tmux endpoint wakes firstmate despite a working-only status tail
+FM_TEST_COMPLETE

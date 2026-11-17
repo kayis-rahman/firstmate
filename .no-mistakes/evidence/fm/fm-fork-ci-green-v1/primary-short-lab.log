@@ -1,0 +1,6 @@
+lab: /private/tmp/fmv.NVER/run (tear down with: bin/fm-live-lab.sh down /private/tmp/fmv.NVER/run)
+tree: d2e84de4dcf658a073f3e4feabd8514bde26532e from /tmp/fmv.NVER/source
+model health: free-model-axi returned no readable model snapshot; 'sonnet' launches unvalidated (run 'free-model-axi sync' to restore it)
+spawned lab55fde9193e61-worker harness=claude kind=ship mode=local-only yolo=on window=firstmate:fm-lab55fde9193e61-worker worktree=/private/tmp/fmv.NVER/run/treehouse/.treehouse/notes-cecb9c/1/notes
+gate: /private/tmp/fmv.NVER/run/home/data/lab55fde9193e61-worker/gate (touch, then message the worker to resume)
+primary: claude --setting-sources project,local --model sonnet --effort medium --permission-mode auto

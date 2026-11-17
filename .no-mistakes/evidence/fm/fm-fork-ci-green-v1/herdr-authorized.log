@@ -1,0 +1,63 @@
+$ ["bin/fm-lab-home.sh", "create", "/private/tmp/fmv.UEXq5O/home"]
+/private/tmp/fmv.UEXq5O/home
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "prepare", "fm-lab-proof-81570"]
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "provision", "fm-lab-proof-81570"]
+[exit 0]
+$ ["git", "init", "-q", "-b", "main", "/private/tmp/fmv.UEXq5O/project"]
+[exit 0]
+$ ["git", "-C", "/private/tmp/fmv.UEXq5O/project", "add", "."]
+[exit 0]
+$ ["git", "-C", "/private/tmp/fmv.UEXq5O/project", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]
+[exit 0]
+$ ["git", "clone", "--bare", "/private/tmp/fmv.UEXq5O/project", "/private/tmp/fmv.UEXq5O/origin.git"]
+Cloning into bare repository '/private/tmp/fmv.UEXq5O/origin.git'...
+done.
+[exit 0]
+$ ["git", "-C", "/private/tmp/fmv.UEXq5O/project", "remote", "add", "origin", "/private/tmp/fmv.UEXq5O/origin.git"]
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "run", "fm-lab-proof-81570", "workspace", "create", "--cwd", "/private/tmp/fmv.UEXq5O/project", "--label", "lab-launcher", "--no-focus"]
+{"id":"cli:workspace:create","result":{"root_pane":{"agent_status":"unknown","cwd":"/private/tmp/fmv.UEXq5O/project","focused":true,"foreground_cwd":"/private/tmp/fmv.UEXq5O/project","pane_id":"w1:p1","revision":0,"scroll":{"max_offset_from_bottom":0,"offset_from_bottom":0,"viewport_rows":40},"tab_id":"w1:t1","terminal_id":"term_6607039ceb3b51","workspace_id":"w1"},"tab":{"agent_status":"unknown","focused":true,"label":"1","number":1,"pane_count":1,"tab_id":"w1:t1","workspace_id":"w1"},"type":"workspace_created","workspace":{"active_tab_id":"w1:t1","agent_status":"unknown","focused":true,"label":"lab-launcher","number":1,"pane_count":1,"tab_count":1,"workspace_id":"w1"}}}
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "run", "fm-lab-proof-81570", "session", "list", "--json"]
+{"sessions":[{"default":true,"name":"default","running":true,"session_dir":"/private/tmp/fmv.UEXq5O/xdg/herdr","socket_path":"/private/tmp/fmv.UEXq5O/xdg/herdr/herdr.sock"},{"default":false,"name":"fm-lab-proof-81570","running":true,"session_dir":"/private/tmp/fmv.UEXq5O/xdg/herdr/sessions/fm-lab-proof-81570","socket_path":"/private/tmp/fmv.UEXq5O/xdg/herdr/sessions/fm-lab-proof-81570/herdr.sock"}]}
+[exit 0]
+$ ["bin/fm-spawn.sh", "proof", "/private/tmp/fmv.UEXq5O/project", "pwd > /private/tmp/fmv.UEXq5O/worker.result; sleep 300", "--mode", "local-only", "--yolo", "off", "--backend", "herdr"]
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fmv.UEXq5O/home
+warning: /private/tmp/fmv.UEXq5O/home/data/proof/launch-brief.md records no ship branch; defaulting to legacy branch fm/proof
+warning: /private/tmp/fmv.UEXq5O/home/data/proof/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: proof ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+🌳 Setting up worktree...
+🌳 Leased worktree at /private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project. Run 'treehouse return /private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project' to release it.
+spawned proof harness=pwd kind=ship mode=local-only yolo=off window=fm-lab-proof-81570:w1:p2 worktree=/private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project
+[exit 0]
+Persisted task metadata: {"window": "fm-lab-proof-81570:w1:p2", "endpoint_task_id": "proof", "worktree": "/private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project", "project": "/private/tmp/fmv.UEXq5O/project", "harness": "pwd", "kind": "ship", "mode": "local-only", "yolo": "off", "branch": "fm/proof", "tasktmp": "/tmp/fm-proof", "model": "default", "effort": "default", "spawn_gen": "s1794884983.82116.2213", "backend": "herdr", "herdr_session": "fm-lab-proof-81570", "herdr_workspace_id": "w1", "herdr_tab_id": "w1:t2", "herdr_pane_id": "w1:p2"}
+Actual worker cwd: /private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project
+Target: fm-lab-proof-81570:w1:p2
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "run", "fm-lab-proof-81570", "pane", "get", "w1:p2"]
+{"id":"cli:pane:get","result":{"pane":{"agent_status":"unknown","cwd":"/private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project","focused":false,"foreground_cwd":"/private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project","pane_id":"w1:p2","revision":0,"scroll":{"max_offset_from_bottom":0,"offset_from_bottom":0,"viewport_rows":40},"tab_id":"w1:t2","terminal_id":"term_6607039d5df6c2","workspace_id":"w1"},"type":"pane_info"}}
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "run", "fm-lab-proof-81570", "pane", "read", "w1:p2", "--format", "text"]
+kayisrahman@Kayiss-Mac-mini project % cd -- '/private/tmp/fmv.UEXq5O/pool/.treehouse/project-dbbe75/1/project'
+kayisrahman@Kayiss-Mac-mini project % export GOTMPDIR=/tmp/fm-proof/gotmp
+kayisrahman@Kayiss-Mac-mini project % export COMPACT_ADVISER_DISABLE=1
+kayisrahman@Kayiss-Mac-mini project % export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=1800000
+kayisrahman@Kayiss-Mac-mini project % export FM_TASK_ID=proof
+kayisrahman@Kayiss-Mac-mini project % . '/tmp/fm-proof+a0f83e5cfaadcc81a67e701bff7abd5b4950c7b43a4d704fcc6b61eb36ab0094
+/launch.s1794884983.82116.2213.sh'
+[exit 0]
+$ ["bash", "-c", ". bin/fm-wake-lib.sh; fm_wake_status_mark_current \"$FM_HOME/state\" \"$FM_HOME/state/proof.status\""]
+[exit 0]
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "run", "fm-lab-proof-81570", "pane", "close", "w1:p2"]
+{"id":"cli:pane:close","result":{"type":"ok"}}
+[exit 0]
+$ ["bin/fm-watch.sh"]
+stale: fm-lab-proof-81570:w1:p2 (recorded worker endpoint disappeared; inspect the task and recover its work)
+[exit 0]
+Actual wake queue:
+1794884986	1	stale	fm-lab-proof-81570:w1:p2	stale: fm-lab-proof-81570:w1:p2 (recorded worker endpoint disappeared; inspect the task and recover its work)
+PASS: real Herdr worker ran in its recorded worktree and launcher workspace; destroyed endpoint generated one durable disappearance wake.
+$ ["/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/bin/fm-herdr-lab.sh", "teardown", "fm-lab-proof-81570"]
+[exit 0]
+Guarded teardown completed; only disposable lab removed.

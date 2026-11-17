@@ -1,0 +1,44 @@
+$ ['bash', 'bin/fm-lab-home.sh', 'create', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/watch-live/home']
+exit=0
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/watch-live/home
+
+
+$ ['tmux', '-S', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/x', 'new-session', '-d', '-s', 'lab', '-n', 'keeper', '-x', '120', '-y', '40', 'sleep 180']
+exit=0
+
+
+$ ['tmux', '-S', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/x', 'new-window', '-t', 'lab', '-n', 'fm-live-worker', 'sleep 180']
+exit=0
+
+
+$ ['bash', '-c', '. bin/fm-wake-lib.sh; fm_wake_status_mark_current "$FM_STATE_OVERRIDE" "$FM_STATE_OVERRIDE/live-worker.status"']
+exit=0
+
+
+$ ['tmux', '-S', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/x', 'list-windows', '-t', 'lab']
+exit=0
+0: keeper- (1 panes) [120x40] [layout {"V":2,"L":{"t":"p","w":120,"h":40,"x":0,"y":0,"a":true,"i":0,"I":"%0"}}] @0
+1: fm-live-worker* (1 panes) [120x40] [layout {"V":2,"L":{"t":"p","w":120,"h":40,"x":0,"y":0,"a":true,"i":0,"I":"%1"}}] @1 (active)
+
+
+$ ['tmux', '-S', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/x', 'kill-window', '-t', 'lab:fm-live-worker']
+exit=0
+
+
+$ ['tmux', '-S', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/x', 'list-windows', '-t', 'lab']
+exit=0
+0: keeper* (1 panes) [120x40] [layout {"V":2,"L":{"t":"p","w":120,"h":40,"x":0,"y":0,"a":true,"i":0,"I":"%0"}}] @0 (active)
+
+
+REAL WATCHER OUTPUT:
+stale: lab:fm-live-worker (recorded worker endpoint disappeared; inspect the task and recover its work)
+
+exit=0
+
+PERSISTED WAKE QUEUE:
+1794883886	1	stale	lab:fm-live-worker	stale: lab:fm-live-worker (recorded worker endpoint disappeared; inspect the task and recover its work)
+
+
+RESULT: removed real tmux worker produced exactly one disappearance notification despite unchanged working status.
+
+PRIVATE TMUX TEARDOWN: exit=0 

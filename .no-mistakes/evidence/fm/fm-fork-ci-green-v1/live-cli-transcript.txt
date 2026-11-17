@@ -1,0 +1,58 @@
+$ bin/fm-lab-home.sh create /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual
+[exit=0]
+
+$ bin/fm-busy-event.sh arm /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state probe
+g1794879495.55421.6454
+[exit=0]
+
+$ bin/fm-busy-event.sh apply /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state probe busy --gen stale-incarnation --source pi-ext --event agent-start
+error: stale busy-state gen for probe (event rejected)
+[exit=1]
+
+$ bin/fm-bootstrap.sh
+HOOK_LAST_ERROR: task probe busy-state hook last error: at=1794879495 cmd=apply source=pi-ext event=agent-start error=stale busy-state gen for probe (event rejected; current gen is bound to another incarnation)
+[exit=0]
+
+$ bin/fm-busy-event.sh arm /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state probe
+g1794879496.55617.14032
+[exit=0]
+
+$ bin/fm-busy-event.sh apply /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state probe busy --gen g1794879495.55421.6454 --source pi-ext --event agent-start
+error: stale busy-state gen for probe (event rejected)
+[exit=1]
+
+$ bin/fm-busy-event.sh retire /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state probe --current-gen
+[exit=0]
+
+$ bin/fm-bootstrap.sh
+COLLISION: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/copy is recorded by a/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state) and b/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/state); reconcile the stale record (bin/fm-crew-state.sh) before cleanup refuses it
+[exit=0]
+
+$ bin/fm-bootstrap.sh
+[exit=0]
+
+$ bin/fm-hygiene.sh sweep --treehouse-root /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/treehouse
+=== fm-hygiene sweep (dry run) ===
+-- treehouse --
+-- evidence --
+would remove media /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/data/done/big.png size=250.0KB
+space freed (dry-run estimated if dry): 0B
+[exit=0]
+
+$ bin/fm-hygiene.sh sweep --yes --treehouse-root /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/treehouse
+=== fm-hygiene sweep (execute) ===
+-- treehouse --
+-- evidence --
+removed media /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/manual/data/done/big.png size=250.0KB
+space freed (dry-run estimated if dry): 250.0KB
+[exit=0]
+
+$ bin/fm-inbox.sh ready
+{"schema":"fm-primary-ready.v1","home":".live-test/manual","observed_at":"2026-11-17T01:38:17Z","lock":{"state":"free","pid":null,"live_harness":false},"wake_consumer":{"state":"unknown","reason":"supervision-model-unknown-for-home","beacon_age_seconds":null},"posture":{"state":"present"},"can_receive":false}
+[exit=0]
+
+$ bin/fm-model-preflight.sh 
+[exit=0]
+
+ASSERTIONS: stale generation refused; private error surfaced and cleared on arm/retire; collision reported without editing metadata; sole claim silent; dry-run preserved media; sweep removed only oversized unselected media; readiness without a lock honest unknown; absent advisor tolerated.

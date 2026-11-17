@@ -1,0 +1,23 @@
+$ ["bin/fm-lab-home.sh", "create", "/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/error-home"]
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/error-home
+[exit 0]
+$ ["bin/fm-busy-event.sh", "arm", "/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/error-home/state", "alpha"]
+g1794884654.54549.4369
+[exit 0]
+$ ["bin/fm-busy-event.sh", "apply", "/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/error-home/state", "alpha", "busy", "--gen", "g1794884654.54549.4369", "--source", "pi-ext\nsecond-line", "--event", "agent-start"]
+error: invalid --source
+[exit 1]
+Persisted last-error record (JSON-escaped): "at=1794884654 cmd=apply source=pi-ext second-line event=agent-start error=invalid --source 'pi-ext second-line'\n"
+$ ["bin/fm-bootstrap.sh"]
+HOOK_LAST_ERROR: task alpha busy-state hook last error: at=1794884654 cmd=apply source=pi-ext second-line event=agent-start error=invalid --source 'pi-ext second-line'
+[exit 0]
+Observed boundary result: {"invalid_field": "source", "record_lines": 1, "bootstrap_names_error": true, "generation_unchanged": true}
+$ ["bin/fm-busy-event.sh", "apply", "/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.test-phase/error-home/state", "alpha", "busy", "--gen", "g1794884654.54549.4369", "--source", "pi-ext", "--event", "agent-start\nsecond-line"]
+error: invalid --event
+[exit 1]
+Persisted last-error record (JSON-escaped): "at=1794884654 cmd=apply source=pi-ext event=agent-start second-line error=invalid --event 'agent-start second-line'\n"
+$ ["bin/fm-bootstrap.sh"]
+HOOK_LAST_ERROR: task alpha busy-state hook last error: at=1794884654 cmd=apply source=pi-ext event=agent-start second-line error=invalid --event 'agent-start second-line'
+[exit 0]
+Observed boundary result: {"invalid_field": "event", "record_lines": 1, "bootstrap_names_error": true, "generation_unchanged": true}
+Disposable error home removed.

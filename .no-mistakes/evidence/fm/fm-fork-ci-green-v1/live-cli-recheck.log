@@ -1,0 +1,116 @@
+$ ['bash', 'bin/fm-busy-event.sh', 'arm', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook']
+exit=0
+g1794883819.84291.13419
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'manual', '--event', 'start']
+exit=0
+
+
+STATE after valid event: {'live-hook.busy-gen': 'g1794883819.84291.13419\n', 'live-hook.busy-state': 'v1 gen=g1794883819.84291.13419 seq=2 state=busy source=manual event=start ts=1794883819\n'}
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'bad\nvalue', '--event', 'start']
+exit=1
+error: invalid --source
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883819 cmd=apply source=bad value event=start error=invalid --source 'bad value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883819 cmd=apply source=bad value event=start error=invalid --source 'bad value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'bad\rvalue', '--event', 'start']
+exit=1
+error: invalid --source
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883820 cmd=apply source=bad value event=start error=invalid --source 'bad value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883820 cmd=apply source=bad value event=start error=invalid --source 'bad value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'bad\r\nvalue', '--event', 'start']
+exit=1
+error: invalid --source
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883820 cmd=apply source=bad  value event=start error=invalid --source 'bad  value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883820 cmd=apply source=bad  value event=start error=invalid --source 'bad  value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'manual', '--event', 'bad\nvalue']
+exit=1
+error: invalid --event
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883821 cmd=apply source=manual event=bad value error=invalid --event 'bad value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883821 cmd=apply source=manual event=bad value error=invalid --event 'bad value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'manual', '--event', 'bad\rvalue']
+exit=1
+error: invalid --event
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883822 cmd=apply source=manual event=bad value error=invalid --event 'bad value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883822 cmd=apply source=manual event=bad value error=invalid --event 'bad value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'busy', '--gen', 'g1794883819.84291.13419', '--source', 'manual', '--event', 'bad\r\nvalue']
+exit=1
+error: invalid --event
+
+
+PRIVATE SINGLE-LINE RECORD: at=1794883823 cmd=apply source=manual event=bad  value error=invalid --event 'bad  value'
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+HOOK_LAST_ERROR: task live-hook busy-state hook last error: at=1794883823 cmd=apply source=manual event=bad  value error=invalid --event 'bad  value'
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'arm', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook']
+exit=0
+g1794883824.93803.28061
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', 'idle', '--gen', 'g1794883819.84291.13419', '--source', 'manual', '--event', 'late']
+exit=1
+error: stale busy-state gen for live-hook (event rejected)
+
+
+$ ['bash', 'bin/fm-busy-event.sh', 'retire', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', 'live-hook', '--gen', 'g1794883824.93803.28061']
+exit=0
+
+
+REARM AND RETIRE: diagnostics clear; stale incarnation rejected.
+
+$ ['bash', 'bin/fm-busy-event.sh', 'apply', '/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state', '../escape', 'busy', '--current-gen', '--source', 'manual', '--event', 'start']
+exit=1
+error: invalid task id
+
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+COLLISION: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/shared-copy is recorded by one/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state) and two/worktree(/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/live/home/state); reconcile the stale record (bin/fm-crew-state.sh) before cleanup refuses it
+
+
+COLLISION RECORDS UNCHANGED: {"two.meta": "83e4848d352b0fc7f071b11de23b4845628d4e8550e63eb27101da74994abc2f", "one.meta": "909fd7337f64d2743a0f4cecf188e3d8d0fc1e8d6761224f07f19356d6c05046"}
+
+$ ['bash', 'bin/fm-bootstrap.sh']
+exit=0
+
+
+RESULT: all live diagnostic scenarios passed.

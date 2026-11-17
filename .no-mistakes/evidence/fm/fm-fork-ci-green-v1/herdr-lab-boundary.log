@@ -1,0 +1,7 @@
+Attempt absolute workspace-local Herdr configuration:
+fm-herdr-lab: session 'fm-lab-recheck' would bind a 145-byte socket path, over the 103-byte sun_path limit: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.validation/xdg/herdr/sessions/fm-lab-recheck/herdr-client.sock
+exit=1
+
+Attempt relative workspace-local configuration to shorten socket paths:
+fm-herdr-lab: fleet-state tripwire requires exactly one running default session
+exit=1

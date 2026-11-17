@@ -1,0 +1,8 @@
+ok primary: claude pid 29180 in /private/tmp/fmv.NVER/run/home
+ok probe: the primary answered LABREADY-55fde9193e61
+ok trust: /private/tmp/fmv.NVER/run/home is trusted in the Claude store
+ok mirror: verified writer, check passed, captain=1 main=1
+ok host: supervision host pid 47017
+ok watcher: live watcher with a fresh beacon
+ok worker: lab55fde9193e61-worker parked on /private/tmp/fmv.NVER/run/home/data/lab55fde9193e61-worker/gate
+fail treehouse: new ~/.treehouse entries: update-check.json

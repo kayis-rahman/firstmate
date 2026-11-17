@@ -1,0 +1,2 @@
+.live-test/fm-lab.b0vbW2
+error connecting to /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M7KH6C5G1XVHFRXS8H8NQ0BQ/.live-test/fm-lab.b0vbW2/tmux/tmux-501/fm-lab (File name too long)

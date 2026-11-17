@@ -1,0 +1,9 @@
+ok - an absent free-model-axi tolerates every model
+ok - a model the snapshot does not know is tolerated
+ok - a fresh healthy probe launches without noise
+ok - a stale snapshot warns with the exact age and still dispatches
+ok - an unhealthy probe refuses with exact evidence, the alternative, and the captain's authority
+ok - an unreadable snapshot tolerates with a named notice
+ok - spawn launches when the recorded probe is healthy
+ok - spawn refuses an unhealthy probe before any record or launch
+ok - spawn tolerates the advisor being absent
