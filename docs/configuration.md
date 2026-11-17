@@ -156,10 +156,9 @@ See [`local-image-generation.md`](local-image-generation.md) for the two-line lo
 
 ## Idle-steer guard (config/idle-steer-guard)
 
-Create the local, gitignored `config/idle-steer-guard` file to make `bin/fm-send.sh` refuse a plain text steer, including a `--resolve-key` answer, to a local crewmate or scout that has sat idle past a threshold, because its prompt cache is cold by then.
-The threshold depends on the worker's harness recorded in its task meta: 60 minutes for `claude` and every other harness, 40 for `codex`, and 40 for a `pi` or `pi-signed` worker whose recorded model provider is `openai-codex`.
-The file may be empty, or override those defaults with one `<harness>=<minutes>` line per harness and, optionally, a bare positive integer that replaces the default for every harness not named by a `<harness>=` line.
-Blank lines and lines starting with `#` are ignored.
+Create the local, gitignored `config/idle-steer-guard` file to make `bin/fm-send.sh` refuse a plain text steer, including a `--resolve-key` answer, to a local crewmate or scout that has sat idle past a fixed limit, because its prompt cache is cold by then.
+The limit depends on the worker's harness recorded in its task meta: 60 minutes for `claude` and every other harness, 40 for `codex`, and 40 for a `pi` or `pi-signed` worker whose recorded model provider is `openai-codex`.
+The file is a presence-only flag: its contents are ignored and the limits are not configurable.
 Idle time is the age of the newer of the task's `state/<id>.turn-ended` and `state/<id>.status`.
 A missing turn-end record, a busy worker, or an age under the threshold sends exactly as without the guard.
 The refusal prints the idle minutes and three paths: `steer` for one short step left, `relaunch` to start fresh from the on-disk state and resend the full order, and `handoff` to get a handoff written first.

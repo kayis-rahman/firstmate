@@ -548,12 +548,12 @@ age_file() { # <file> <minutes>
   TZ=UTC touch -t "$(date -u -r "$ts" +%Y%m%d%H%M.%S 2>/dev/null || date -u -d "@$ts" +%Y%m%d%H%M.%S)" "$1"
 }
 
-idle_case() { # <name> <idle-minutes|none> [guard-flag-content|off]
+idle_case() { # <name> <idle-minutes|none> [off]
   local dir
   dir=$(setup_case "$1")
   if [ "${3:-}" != off ]; then
     mkdir -p "$dir/home/config"
-    printf '%s\n' "${3:-}" >"$dir/home/config/idle-steer-guard"
+    : >"$dir/home/config/idle-steer-guard"
   fi
   if [ "$2" != none ]; then
     : >"$dir/home/state/t1.turn-ended"
@@ -602,10 +602,6 @@ test_idle_steer_guard() {
   printf 'working [at=1]: x\n' >"$dir/home/state/t1.status"
   run_send "$dir" "$err" -- t1 "steer" || fail "a recent status line should keep the worker out of the guard"
 
-  # The configured minutes override the default.
-  dir=$(idle_case idle-limit 90 120)
-  run_send "$dir" "$err" -- t1 "steer" || fail "idle 90 under a 120 minute limit must send"
-
   # Guard disabled without the flag file.
   dir=$(idle_case idle-off 500 off)
   run_send "$dir" "$err" -- t1 "steer" || fail "without config/idle-steer-guard nothing is guarded"
@@ -652,11 +648,7 @@ test_idle_steer_guard_per_harness() {
   dir=$(idle_case idle-pi-other 50)
   fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi" "model=other/model"
   run_send "$dir" "$err" -- t1 "steer" || fail "pi on another provider idle 50m must send"
-  # A per-harness line in the flag file overrides the default.
-  dir=$(idle_case idle-override 50 "codex=60")
-  fm_write_meta "$dir/home/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=codex"
-  run_send "$dir" "$err" -- t1 "steer" || fail "codex=60 must let codex idle 50m send"
-  pass "fm-send: the idle-steer guard threshold follows the worker harness (claude 60, codex 40) and the config override"
+  pass "fm-send: the idle-steer guard threshold follows the worker harness (claude 60, codex 40)"
 }
 
 test_text_steer_rides_inbox
