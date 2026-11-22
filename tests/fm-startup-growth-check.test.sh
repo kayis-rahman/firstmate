@@ -321,11 +321,13 @@ test_over_long_finding_set_is_capped_with_the_shared_marker() {
     seg="${seg}memory"
   done
   deep="$home/data"
-  while [ "${#deep}" -lt 1200 ]; do
+  while [ "${#deep}" -lt 850 ]; do
     deep="$deep/$seg"
   done
   mkdir -p "$deep"
-  ln -s "$home/data/captain.md" "$deep/learnings.md"
+  for file in projects.md secondmates.md captain.md captain-shared.md learnings.md; do
+    ln -s "$home/data/captain.md" "$deep/$file"
+  done
   out=$(FM_ROOT_OVERRIDE="$root" FM_HOME="$home" FM_DATA_OVERRIDE="$deep" FM_STARTUP_GROWTH_NOW=1000 \
     "$CHECK" check 2>/dev/null) || fail "capped check failed"
   assert_contains "$out" 'unsafe memory data/learnings.md' "the leading finding was lost"

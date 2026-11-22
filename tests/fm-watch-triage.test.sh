@@ -3156,12 +3156,12 @@ test_term_stops_a_watcher_whose_cleanup_marker_lock_is_held() {
 
 # The cleanup bound is decimal seconds: a zero spelled with leading zeros falls
 # back to the 2s default instead of giving up at its first contended attempt,
-# so it retries after that failed attempt, and a leading-zero value such as 08
-# is an 8s bound rather than an invalid octal literal or the 2s default, so it
-# still outwaits a marker lock freed 3s after the cleanup's contended retry.
+# so it retries after that failed attempt, and a leading-zero value such as 018
+# is an 18s bound rather than an invalid octal literal or the 2s default, so it
+# outwaits a marker lock freed 3s after contention even on a loaded host.
 test_cleanup_marker_lock_bound_is_decimal_with_zero_default() {
   local bound ticks dir state
-  for bound in 00:0 08:30; do
+  for bound in 00:0 018:30; do
     ticks=${bound#*:}; bound=${bound%%:*}
     dir=$(make_case "term-marker-lock-bound-$bound"); state="$dir/state"
     FM_WATCHER_CLEANUP_LOCK_BOUND=$bound term_watcher_with_held_marker_lock "$dir" "$ticks"

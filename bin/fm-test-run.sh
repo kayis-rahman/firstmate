@@ -705,17 +705,22 @@ is_proven_isolated_script() {
 # and other unproven work stays here. Derived rather than enumerated so a newly added test
 # lands here by default instead of falling out of every lane.
 list_portable_serial() {
-  local s base fam
+  local s base fam proven
+  proven=$(list_proven_isolated) || return 1
   while IFS= read -r s; do
     [ -n "$s" ] || continue
-    base=$(basename "$s")
+    base=${s##*/}
     fam=$(family_for_basename "$base")
     if [ "$fam" = "real-herdr-gated" ]; then
       continue
     fi
-    if is_proven_isolated_script "$s"; then
-      continue
-    fi
+    case "
+$proven
+" in
+      *"
+$s
+"*) continue ;;
+    esac
     printf '%s\n' "$s"
   done < <(all_repo_tests)
 }
@@ -2216,7 +2221,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     --proven-isolated)
       [ -z "$MODE" ] || die "only one selection mode is allowed"
-      MODE=proven-isolated
+      MODE='proven-isolated'
       shift
       ;;
     --changed)

@@ -1356,6 +1356,8 @@ The optional local, gitignored `config/self-update-source` changes where `/updat
 It suits a home that runs its own fixes before upstream merges them, by following a branch that holds upstream's default branch plus those fixes, for example a `carry` branch on a fork.
 It holds one line, `<remote> <branch>`, for example `fork carry`, naming a remote that already exists in this repository and a branch on that remote.
 When the file is absent, `/updatefirstmate` fast-forwards from `origin` exactly as before.
+If an `upstream` remote exists, the updater separately compares its freshly fetched default branch with the fork's `origin` default branch and reports both upstream-ahead and fork-only commit counts, or an unavailable comparison.
+This report does not merge upstream or change the configured update target; the [`updatefirstmate` skill](../.agents/skills/updatefirstmate/SKILL.md) describes the guarded fork-PR route.
 
 When it is present, [`bin/fm-update.sh`](../bin/fm-update.sh) fetches only that branch and fast-forwards the primary to it under the same guards as the origin path: a dirty, off-default, or diverged primary is skipped and left untouched, so the named branch must only ever move forward.
 Local secondmate homes then advance to the primary's resulting default-branch commit, the same commit the startup secondmate sync follows, and a standalone-clone home that lacks that commit imports it from the primary first.
