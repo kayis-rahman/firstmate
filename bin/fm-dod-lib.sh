@@ -843,17 +843,23 @@ fm_dod_pr_thin_testing_rows() {
       c = tolower(cell)
       gsub(/[*`_]/, "", c)
       sub(/^[^a-z0-9]+/, "", c)
-      if (c ~ /^(untested|unproven|not tested|not proven|not run|inconclusive|failed|fail|pending|skipped)([^a-z0-9]|$)/) return 1
+      if (c ~ /^(untested|unproven|not tested|not proven|not run|inconclusive|failed|fail|pending|skipped)([,.;:(]|[ \t]+[-:(]|[ \t]*$)/) return 1
       return 0
     }
-    /^[ \t]*#+[ \t]/ { in_testing = (tolower($0) ~ /test/); row = 0; next }
-    /^[ \t]*\*\*[^*]*\*\*[ \t]*:?[ \t]*$/ { in_testing = (tolower($0) ~ /test/); row = 0; next }
+    function is_testing(s) { return (tolower(s) ~ /(^|[^a-z0-9])(testing|tests|test evidence)([^a-z0-9]|$)/) }
+    /^[ \t]*#+[ \t]/ { in_testing = is_testing($0); row = 0; next }
+    /^[ \t]*\*\*[^*]*\*\*[ \t]*:?[ \t]*$/ { in_testing = is_testing($0); row = 0; next }
     in_testing && /^[ \t]*\|/ {
       row++
-      if (row <= 2) next
       n = split($0, cell, "|")
+      if (row == 1) {
+        statuscol = 0
+        for (i = 2; i < n; i++) if (tolower(trim(cell[i])) ~ /^(status|result|results|outcome|state|verdict)$/) { statuscol = i; break }
+      }
+      if (row <= 2) next
       scenario = trim(cell[2])
       for (i = 3; i < n; i++) {
+        if (statuscol && i != statuscol) continue
         if (status_of(cell[i])) { print scenario " (" trim(cell[i]) ")"; found = 1; break }
       }
       next

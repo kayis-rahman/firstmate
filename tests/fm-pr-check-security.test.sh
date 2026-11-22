@@ -829,6 +829,16 @@ test_thin_testing_pull_request_is_not_armed() {
     > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused a fully proven Testing table: $(cat "$dir/stderr")"
   [ -f "$dir/home/state/task-a.check.sh" ] || fail "a fully proven PR was not armed"
 
+  dir=$(make_case thin-latest-heading)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$'## Latest CI\n\n| Job | Result |\n| --- | --- |\n| lint | Failed |\n' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused a table under a heading that only contains 'test' inside another word: $(cat "$dir/stderr")"
+
+  dir=$(make_case thin-evidence-prose)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$'## Testing\n\n| Scenario | Evidence | Result |\n| --- | --- | --- |\n| Guard | fail-closed path verified | Pass |\n| Login | Failed login rejected | Pass |\n' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused proven rows whose evidence prose mentions failure: $(cat "$dir/stderr")"
+
   dir=$(make_case thin-no-table)
   write_task_meta "$dir"
   FM_TEST_GH_BODY=$'## Summary\nno table here' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \

@@ -2477,17 +2477,20 @@ busy_stream_snapshot_current() {  # <task> <observed snapshot>
 # while the away-mode flag exists it returns before any read, so away mode keeps
 # today's declared-wait pause cadence on every path.
 paused_wait_superseded() {  # <window> <task>
-  local win=$1 task=$2 line statusf key last run state reason rest part marker
+  local win=$1 task=$2 line statusf key last run state reason rest part marker sig
   [ ! -e "$CONFIG/no-paused-wait-supersession" ] && ! afk_present || return 1
   statusf="$STATE/$task.status"
   last=$(status_declared_wait_line "$statusf")
   status_is_paused "$last" || return 1
   marker="$STATE/.paused-supersede-read-$(window_key "$win")"
+  sig=$(fm_wake_signal_sig "$statusf" || true)
   if [ -e "$marker" ] && [ "$(age_of "$marker")" -lt "$PAUSE_SUPERSEDE_CHECK_SECS" ]; then
-    [ "$(cat "$marker" 2>/dev/null || true)" = 1 ]
-    return
+    case "$(cat "$marker" 2>/dev/null || true)" in
+      "1 $sig") return 0 ;;
+      "0 $sig") return 1 ;;
+    esac
   fi
-  printf '0' > "$marker"
+  printf '0 %s' "$sig" > "$marker"
   line=$("$FM_CREW_STATE_BIN" "$task" 2>/dev/null) || line=''
   if run=$(crew_gate_awaits_human_decision "$task" "$line") \
     && ! status_has_open_needs_decision "$statusf" "$run"; then
@@ -2508,9 +2511,9 @@ paused_wait_superseded() {  # <window> <task>
     state="terminal${run:+:$run}"
   fi
   key=$(window_key "$win")
-  printf '1' > "$marker"
+  printf '1 %s' "$sig" > "$marker"
   resurface_absorbed "$win" "$STATE/.paused-resurfaced-$key" 0 "$reason" \
-    "declared:$(fm_wake_signal_sig "$statusf" || true):$state" 0
+    "declared:$sig:$state" 0
   triage_log "checked declared wait supersession ($state): $win"
   return 0
 }
