@@ -54,6 +54,15 @@
 #                          to carry the name, and no other reason carries it: the
 #                          deferral, dead-record and declared-wait recheck
 #                          reasons below keep their wording.
+#                          A worker stopped at its harness usage limit
+#                          (fm_usage_limit_screen in bin/fm-composer-lib.sh)
+#                          surfaces at once as "stale: <win> (usage limit
+#                          reached, resets <when>; ...)", naming the worker and
+#                          the same-account bin/fm-control.sh relaunch to run
+#                          after the reset (never another account or runtime),
+#                          once per distinct notice and again each
+#                          FM_PAUSE_RESURFACE_SECS while it stays on screen
+#                          (handle_usage_limit).
 #                          Unless afk is active. A pane about to escalate
 #                          that can account for its quiet - a `paused:` external
 #                          wait or a verified `captain-held` transfer its worker
@@ -474,6 +483,12 @@ case "$SECONDMATE_LIVENESS_WINDOW_SECS" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_WI
 # invisibly - except an item held for the captain while the away-posture record
 # exists, which is never rechecked (away_record_present below).
 PAUSE_RESURFACE_SECS=${FM_PAUSE_RESURFACE_SECS:-$FM_PAUSE_RESURFACE_SECS_DEFAULT}
+# A declared wait whose named clearing time passed this long ago with the pane
+# still unchanged has outlived its window: handle_paused_stale wakes once more
+# with that evidence rather than waiting out the flat cadence. The crew-state
+# read behind paused_wait_superseded runs at most this often per window.
+PAUSE_QUIET_GRACE_SECS=${FM_PAUSE_QUIET_GRACE_SECS:-1800}
+PAUSE_SUPERSEDE_CHECK_SECS=${FM_PAUSE_SUPERSEDE_CHECK_SECS:-300}
 # A declared wait that names WHEN it clears (`paused: ... until <UTC ISO 8601>`,
 # status_paused_until in fm-classify-lib.sh) is condition-aware: it is not
 # rechecked before that time, and it is rechecked once as soon as that time
@@ -2452,17 +2467,30 @@ busy_stream_snapshot_current() {  # <task> <observed snapshot>
 # gate nobody has been told about, or when the run is terminal. Surface those
 # authoritative changes once per declaration and run, then use the same bounded
 # recheck cadence for repeats. The shared predicates bind the gate to this run.
-# OFF unless the home creates config/paused-wait-supersession: absent the flag it
-# returns before any read, so the watcher spends no crew-state read here and
-# keeps the unchanged declared-wait cadence and wording. This applies to the
-# foreground watcher only: while the away-mode flag exists it also returns before
-# any read, so away mode keeps today's declared-wait pause cadence on every path.
+# ON by default, because a declared wait that outlives the run it named otherwise
+# sits unnoticed for the whole FM_PAUSE_RESURFACE_SECS cadence; a home opts out
+# with config/no-paused-wait-supersession, which returns before any read so the
+# watcher keeps the unchanged declared-wait cadence and wording. The
+# crew-state read is the costly part, so it runs at most once per window every
+# FM_PAUSE_SUPERSEDE_CHECK_SECS (the marker records the last verdict, and a
+# throttled poll repeats it). This applies to the foreground watcher only:
+# while the away-mode flag exists it returns before any read, so away mode keeps
+# today's declared-wait pause cadence on every path.
 paused_wait_superseded() {  # <window> <task>
-  local win=$1 task=$2 line statusf key last run state reason rest part
-  [ -e "$CONFIG/paused-wait-supersession" ] && ! afk_present || return 1
+  local win=$1 task=$2 line statusf key last run state reason rest part marker sig
+  [ ! -e "$CONFIG/no-paused-wait-supersession" ] && ! afk_present || return 1
   statusf="$STATE/$task.status"
   last=$(status_declared_wait_line "$statusf")
   status_is_paused "$last" || return 1
+  marker="$STATE/.paused-supersede-read-$(window_key "$win")"
+  sig=$(fm_wake_signal_sig "$statusf" || true)
+  if [ -e "$marker" ] && [ "$(age_of "$marker")" -lt "$PAUSE_SUPERSEDE_CHECK_SECS" ]; then
+    case "$(cat "$marker" 2>/dev/null || true)" in
+      "1 $sig") return 0 ;;
+      "0 $sig") return 1 ;;
+    esac
+  fi
+  printf '0 %s' "$sig" > "$marker"
   line=$("$FM_CREW_STATE_BIN" "$task" 2>/dev/null) || line=''
   if run=$(crew_gate_awaits_human_decision "$task" "$line") \
     && ! status_has_open_needs_decision "$statusf" "$run"; then
@@ -2483,8 +2511,9 @@ paused_wait_superseded() {  # <window> <task>
     state="terminal${run:+:$run}"
   fi
   key=$(window_key "$win")
+  printf '1 %s' "$sig" > "$marker"
   resurface_absorbed "$win" "$STATE/.paused-resurfaced-$key" 0 "$reason" \
-    "declared:$(fm_wake_signal_sig "$statusf" || true):$state" 0
+    "declared:$sig:$state" 0
   triage_log "checked declared wait supersession ($state): $win"
   return 0
 }
@@ -2505,6 +2534,29 @@ paused_recheck_silent() {  # <window> <statusf> <key> <declaration> <status-age>
     && [ -z "$(status_own_open_decisions "$statusf")" ] \
     || return 1
   printf '%s' "$declaration" > "$marker"
+}
+
+# A worker stopped at its harness usage limit is an actionable event, not quiet:
+# nothing moves it again until the limit resets, and it can sit for hours. Wake
+# firstmate once per distinct limit notice, naming the worker and the reset time
+# the pane shows, and again on the FM_PAUSE_RESURFACE_SECS cadence while the
+# notice stays on screen. The remedy is the guarded relaunch on the SAME account
+# once the limit has reset (the captain's standing rule: a Claude worker waits
+# for its own reset and is never moved to another account or runtime), so this
+# only names it; it never relaunches, repins, or changes a credential.
+# The idle-cache rule applies: relaunch with a resume note when state is on disk.
+# Returns 0 when it handled the window, 1 when the screen shows no limit.
+handle_usage_limit() {  # <window> <task> <screen>
+  local win=$1 task=$2 screen=$3 key limit since
+  key=$(window_key "$win")
+  limit=$(fm_usage_limit_screen "$screen") || return 1
+  since="$STATE/.usage-limit-since-$key"
+  [ -e "$since" ] || date +%s > "$since"
+  resurface_absorbed "$win" "$STATE/.usage-limit-resurfaced-$key" 0 \
+    "stale: $win (usage limit reached, $limit; worker $task is stopped until then - once reset, relaunch it on the same account with bin/fm-control.sh $task relaunch --note <resume note>; never move it to another account or runtime)" \
+    "usage-limit:$limit" 0
+  triage_log "absorbed usage-limit stop ($limit): $win"
+  return 0
 }
 
 # Absorb a stale pane under a declared external-wait pause (paused:) or a
@@ -2574,6 +2626,14 @@ handle_paused_stale() {  # <window> <task> <hash>
       detail="paused, declared time beyond recheck cadence"
       silent=1
       reason="paused ${age}s, awaiting external - the declared time is beyond the recheck cadence; confirm the wait still holds"
+    elif [ "$(( now - until ))" -ge "$PAUSE_QUIET_GRACE_SECS" ]; then
+      # The declared time passed well ago and the pane has not changed since:
+      # the wait has outlived its window. One more wake per declaration, with
+      # that evidence, ahead of the flat cadence.
+      detail="paused, declared time passed and output quiet"
+      reason="paused ${age}s, awaiting external - the declared clearing time passed $(( now - until ))s ago and the worker's output has not changed since, so the wait has outlived its window; check what it was waiting on, then steer or release it"
+      declaration="$declaration:quiet"
+      min_age=0
     else
       # The declared time has passed: recheck now, once per declaration, then
       # hold the cadence.
@@ -4640,6 +4700,14 @@ EOF
     # content cannot suppress stale detection. Read once per window per poll and
     # reused below so a busy verdict is consistent within one cycle.
     if window_is_busy "$w" "$tail40"; then busy_now=0; else busy_now=1; fi
+    if [ "$kind" != secondmate ] && [ -n "$task" ]; then
+      if [ "$busy_now" -ne 0 ] && handle_usage_limit "$w" "$task" "$tail40"; then
+        continue
+      fi
+      # Not stopped at a limit now: a later notice, even with the same reset
+      # text, is a new event.
+      [ ! -e "$STATE/.usage-limit-since-$key" ] || rm -f "$STATE/.usage-limit-since-$key" "$STATE/.usage-limit-resurfaced-$key"
+    fi
     if [ "$h" = "$prev" ]; then
       n=$(( $(cat "$cf" 2>/dev/null || echo 0) + 1 ))
       echo "$n" > "$cf"

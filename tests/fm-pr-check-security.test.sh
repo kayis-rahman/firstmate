@@ -172,6 +172,10 @@ case "${1:-} ${2:-}" in
         esac
         exit 0
         ;;
+      *" --json body "*)
+        printf '%s\n' "${FM_TEST_GH_BODY:-}"
+        exit 0
+        ;;
       *" --json isDraft "*)
         case "$*" in *"${FM_TEST_GH_SLOW_URL:-no-slow-url}"*) sleep "${FM_TEST_GH_SLOW_SECONDS:-30}" ;; esac
         printf '%s\n' "{\"isDraft\":${FM_TEST_GH_DRAFT:-false}}"
@@ -793,6 +797,64 @@ test_draft_pull_request_is_not_armed() {
     > "$dir/stdout" 2> "$dir/stderr" || fail "an unreadable draft state blocked arming"
   [ -f "$dir/home/state/task-a.check.sh" ] || fail "an unreadable draft state was not armed"
   pass "arming refuses a draft pull request, naming it, and arms a ready or unreadable one"
+}
+
+# A no-mistakes PR whose Testing table still has untested or unproven rows is
+# not ready, whatever its checks say: arming refuses before recording anything
+# and names the rows; a fully proven table, no table, an unreadable body, a
+# non-no-mistakes task, and the merge-time re-record are not held.
+test_thin_testing_pull_request_is_not_armed() {
+  local dir rc thin proven
+  thin=$'## Testing\n\n| Scenario | Command | Result |\n| --- | --- | --- |\n| Login flow | run login | Pass - live |\n| Offline mode | run off | **Untested** |\n| Edge case | run edge | unproven: needs device |\n'
+  proven=$'## Testing\n\n| Scenario | Command | Result |\n| --- | --- | --- |\n| Login flow | run login | Pass - live |\n| Failure path | run fail | Pass, failure path handled |\n'
+
+  dir=$(make_case thin-refused)
+  write_task_meta "$dir"
+  cp "$dir/home/state/task-a.meta" "$dir/meta.before"
+  set +e
+  FM_TEST_GH_BODY=$thin run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr"; rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "arming accepted a PR with untested Testing rows"
+  grep -qF 'needs-more-testing' "$dir/stderr" || fail "the refusal did not say needs-more-testing: $(cat "$dir/stderr")"
+  grep -qF 'Offline mode (**Untested**)' "$dir/stderr" || fail "the refusal did not name the untested row"
+  grep -qF 'Edge case (unproven: needs device)' "$dir/stderr" || fail "the refusal did not name the unproven row"
+  grep -qF 'Login flow' "$dir/stderr" && fail "the refusal named a proven row"
+  cmp -s "$dir/meta.before" "$dir/home/state/task-a.meta" || fail "a refused thin PR changed the task metadata"
+  [ ! -e "$dir/home/state/task-a.check.sh" ] || fail "a refused thin PR armed a poll"
+
+  dir=$(make_case thin-proven)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$proven run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused a fully proven Testing table: $(cat "$dir/stderr")"
+  [ -f "$dir/home/state/task-a.check.sh" ] || fail "a fully proven PR was not armed"
+
+  dir=$(make_case thin-latest-heading)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$'## Latest CI\n\n| Job | Result |\n| --- | --- |\n| lint | Failed |\n' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused a table under a heading that only contains 'test' inside another word: $(cat "$dir/stderr")"
+
+  dir=$(make_case thin-evidence-prose)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$'## Testing\n\n| Scenario | Evidence | Result |\n| --- | --- | --- |\n| Guard | fail-closed path verified | Pass |\n| Login | Failed login rejected | Pass |\n' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused proven rows whose evidence prose mentions failure: $(cat "$dir/stderr")"
+
+  dir=$(make_case thin-no-table)
+  write_task_meta "$dir"
+  FM_TEST_GH_BODY=$'## Summary\nno table here' run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "arming refused a PR with no Testing table"
+
+  dir=$(make_case thin-direct-pr)
+  fm_write_meta "$dir/home/state/task-a.meta" "window=firstmate:fm-task-a" "endpoint_task_id=task-a" \
+    "worktree=$dir/wt" "project=$dir/project" "kind=ship" "mode=direct-PR"
+  FM_TEST_GH_BODY=$thin run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "a direct-PR task was held by the no-mistakes testing gate"
+
+  dir=$(make_case thin-merge-rerecord)
+  write_task_meta "$dir"
+  FM_PR_CHECK_MERGE=1 FM_TEST_GH_BODY=$thin run_check_entry "$dir" task-a https://github.com/o/r/pull/9 \
+    > "$dir/stdout" 2> "$dir/stderr" || fail "the merge-time re-record was held by the testing gate"
+  pass "arming refuses a no-mistakes PR with untested or unproven Testing rows, naming them, and arms every other case"
 }
 
 # A secondmate is a persistent worker, not a delivery lane: it never owns a
@@ -5713,6 +5775,7 @@ test_retirement_queue_failure_and_receipt_tampering
 test_gitlab_merged_poll_retires
 test_invalid_entrypoints_have_zero_side_effects
 test_draft_pull_request_is_not_armed
+test_thin_testing_pull_request_is_not_armed
 test_secondmate_record_refuses_a_pr_watch
 test_unpushed_named_head_refuses_registration
 test_direct_pr_unpushed_commit_refuses_registration

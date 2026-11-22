@@ -824,6 +824,51 @@ fm_dod_should_gate_ship_done() {  # <kind> <mode> <line>
   esac
 }
 
+# Thin-PR readiness. Reads a PR body on stdin and prints, one per line, every
+# row of its Testing table whose status cell reports the scenario untested,
+# unproven, not run, inconclusive, failed, pending, or skipped, as
+# "<scenario> (<status>)". Exit 0 when at least one such row exists (the PR is
+# thin), 1 otherwise, including when the body has no Testing table at all: a
+# project that keeps no table is not held here. The table is the one under a
+# heading or bold line that names testing; the first row of each table is its
+# header and the second its separator. Only a status cell that STARTS with one of
+# those words counts, so evidence prose that merely mentions a failure path does
+# not. bin/fm-pr-check.sh is the caller: a no-mistakes PR with such rows is not
+# armed as ready and the refusal names them, so the supervisor can steer the
+# worker. It never replaces the named-head gate above.
+fm_dod_pr_thin_testing_rows() {
+  awk '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function status_of(cell,   c) {
+      c = tolower(cell)
+      gsub(/[*`_]/, "", c)
+      sub(/^[^a-z0-9]+/, "", c)
+      if (c ~ /^(untested|unproven|not tested|not proven|not run|inconclusive|failed|fail|pending|skipped)([,.;:(]|[ \t]+[-:(]|[ \t]*$)/) return 1
+      return 0
+    }
+    function is_testing(s) { return (tolower(s) ~ /(^|[^a-z0-9])(testing|tests|test evidence)([^a-z0-9]|$)/) }
+    /^[ \t]*#+[ \t]/ { in_testing = is_testing($0); row = 0; next }
+    /^[ \t]*\*\*[^*]*\*\*[ \t]*:?[ \t]*$/ { in_testing = is_testing($0); row = 0; next }
+    in_testing && /^[ \t]*\|/ {
+      row++
+      n = split($0, cell, "|")
+      if (row == 1) {
+        statuscol = 0
+        for (i = 2; i < n; i++) if (tolower(trim(cell[i])) ~ /^(status|result|results|outcome|state|verdict)$/) { statuscol = i; break }
+      }
+      if (row <= 2) next
+      scenario = trim(cell[2])
+      for (i = 3; i < n; i++) {
+        if (statuscol && i != statuscol) continue
+        if (status_of(cell[i])) { print scenario " (" trim(cell[i]) ")"; found = 1; break }
+      }
+      next
+    }
+    { row = 0 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
 # The PR/MR URL from a `done: PR <url>...` note, or empty.
 fm_dod_pr_url_from_done_note() {  # <note>
   local note=$1 url
