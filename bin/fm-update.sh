@@ -84,6 +84,10 @@
 # fm-procevent-when.sh rebind-all to republish those bindings against the new
 # bytes; a failure there is swallowed rather than failing the update.
 #
+# If an upstream remote exists, report freshly fetched upstream and origin
+# default-branch divergence without changing either branch. A failed comparison
+# is reported as unavailable and never affects the normal update.
+#
 # Usage: fm-update.sh [--help]
 set -eu
 
@@ -186,6 +190,38 @@ if [ "$FF_STATUS" = "updated" ]; then
   # this test suite uses to point fm-update.sh at a fixture checkout).
   FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" "$SCRIPT_DIR/fm-procevent-when.sh" rebind-all || true
 fi
+
+# Compare the fork's published default branch, not the local update target.
+# Fetch failures must not turn stale tracking refs into a purported live count.
+report_upstream_divergence() {
+  local origin_branch upstream_head upstream_branch counts fork_only upstream_ahead
+  git -C "$FM_ROOT" remote get-url upstream >/dev/null 2>&1 || return 0
+  origin_branch=$(default_branch "$FM_ROOT") || {
+    echo "upstream comparison: unavailable (origin default branch unknown)"; return 0;
+  }
+  upstream_head=$(git -C "$FM_ROOT" ls-remote --symref upstream HEAD 2>/dev/null) || upstream_head=""
+  upstream_branch=$(printf '%s\n' "$upstream_head" | awk '/^ref: refs\/heads\/.*[[:space:]]HEAD$/ {sub(/^ref: refs\/heads\//, ""); sub(/[[:space:]]HEAD$/, ""); print; exit}')
+  if [ -z "$upstream_branch" ] || ! git check-ref-format "refs/heads/$upstream_branch" >/dev/null 2>&1 ||
+    ! git -C "$FM_ROOT" fetch --quiet --no-tags origin "refs/heads/$origin_branch:refs/remotes/origin/$origin_branch" 2>/dev/null ||
+    ! git -C "$FM_ROOT" fetch --quiet --no-tags upstream "refs/heads/$upstream_branch:refs/remotes/upstream/$upstream_branch" 2>/dev/null; then
+    echo "upstream comparison: unavailable (fetch or default branch discovery failed)"
+    return 0
+  fi
+  if ! git -C "$FM_ROOT" merge-base "refs/remotes/origin/$origin_branch" "refs/remotes/upstream/$upstream_branch" >/dev/null 2>&1; then
+    echo "upstream comparison: unavailable (no common history)"
+    return 0
+  fi
+  counts=$(git -C "$FM_ROOT" rev-list --left-right --count "refs/remotes/origin/$origin_branch...refs/remotes/upstream/$upstream_branch" 2>/dev/null) || counts=""
+  if [ -z "$counts" ]; then
+    echo "upstream comparison: unavailable (history comparison failed)"
+    return 0
+  fi
+  read -r fork_only upstream_ahead <<EOF
+$counts
+EOF
+  echo "upstream comparison: upstream/$upstream_branch ahead: $upstream_ahead; origin/$origin_branch fork-only: $fork_only"
+}
+report_upstream_divergence
 
 # --- secondmates -----------------------------------------------------------
 # Every live secondmate this pass leaves on the update target is restarted,

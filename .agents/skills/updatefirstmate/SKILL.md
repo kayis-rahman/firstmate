@@ -44,6 +44,9 @@ This touches only the firstmate repo and its own worktrees, never anything under
    ```
    It fast-forwards this firstmate repo's default branch from origin, or from the configured self-update source, then updates every registered local or remote secondmate home through its placement-specific guarded path.
    When a source is configured it prints a `self-update source:` line first, and an unusable config file stops the whole update before anything moves; report that file to the captain rather than editing or removing it.
+   When an `upstream` remote exists (a home whose origin is a fork), it also prints one `upstream comparison:` line with freshly fetched upstream-ahead and fork-only commit counts, or why that comparison is unavailable; it never merges upstream or changes the update target.
+   Report both counts to the captain in plain outcomes.
+   When upstream is ahead, follow "Bringing upstream into a fork" below instead of treating the fast-forward as the whole update.
    It prints one status line per target (`updated <old>..<new>` / `reconciled redundant divergence <old>..<new>` / `already current` / `skipped: <reason>`), followed by three action lines that tell you exactly what to do next:
    - `reread-firstmate: yes|no`
    - `restart-secondmates: fm-<id>...|none`
@@ -93,6 +96,17 @@ This touches only the firstmate repo and its own worktrees, never anything under
    For example: "Captain, firstmate and both second mates are now on the latest."
    Say plainly when a mate got the message rather than a clean reload, and why - never let a partial reload read as a full one.
    Surface any skipped target whose reason needs the captain's attention - for instance a home with its own un-landed changes (diverged) or local edits (dirty), which were left untouched on purpose.
+
+## Bringing upstream into a fork
+
+The fast-forward above only moves this home to the fork's own default branch.
+Upstream commits reach the fork through a reviewed pull request to the fork, never by a direct push:
+
+1. Ask the captain before starting, naming the upstream-ahead count and the fork-only count from the `upstream comparison:` line.
+2. Delegate the merge to a worker as an ordinary ship task for this repository, delivered to the fork only (`firstmate-self-repo` owns the publication boundary; nothing is pushed, opened, or commented on the upstream repository).
+   The worker branches from the fork's freshly fetched default branch, runs `git merge upstream/<default-branch>` as a merge commit (never a rebase, never `--force`), resolves every conflict keeping both sides' intent, runs the test and lint suites, and opens the PR against the fork's default branch.
+3. Merge that PR only with the authority section 7 of `AGENTS.md` grants; never push the fork's default branch directly.
+4. After it lands, run `bin/fm-update.sh` again: the ordinary fast-forward now brings the merged upstream history into this home and its secondmates, and the next `upstream comparison:` line reports upstream ahead: 0.
 
 ## Safety
 

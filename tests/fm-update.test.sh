@@ -691,6 +691,29 @@ test_self_update_source_rewrite_is_skipped() {
   pass "T15 a non-fast-forward self-update source is skipped, never forced"
 }
 
+test_upstream_divergence_reporting() {
+  local w out before
+  w=$(new_world upstream-report)
+  git clone -q --bare "$w/origin.git" "$w/upstream.git"
+  git clone -q "$w/upstream.git" "$w/upstream-work"
+  printf 'upstream\n' >> "$w/upstream-work/README.md"
+  git -C "$w/upstream-work" add README.md
+  git -C "$w/upstream-work" commit -qm upstream-change
+  git -C "$w/upstream-work" push -q origin main
+  bump_origin "$w" bin
+  git -C "$w/main" remote add upstream "$w/upstream.git"
+  out=$(run_update "$w")
+  assert_contains "$out" 'upstream comparison: upstream/main ahead: 1; origin/main fork-only: 1' 'divergence counts use fresh remote branches'
+  before=$(git -C "$w/main" rev-parse HEAD)
+  assert_equals "$before" "$(git -C "$w/main" rev-parse origin/main)" 'comparison must not merge upstream'
+  git -C "$w/main" remote set-url upstream "$w/missing.git"
+  out=$(run_update "$w")
+  assert_contains "$out" 'upstream comparison: unavailable' 'unreachable upstream is not reported with stale counts'
+  assert_equals "$(git -C "$w/main" rev-parse HEAD)" "$before" 'failed comparison does not move the primary'
+  pass 'upstream divergence reports live counts and handles an unavailable remote'
+}
+
+test_upstream_divergence_reporting
 test_updates_main_and_secondmate
 test_reread_gate_is_instruction_only
 test_bin_only_advance_restarts
