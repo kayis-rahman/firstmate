@@ -1655,6 +1655,65 @@ WRAPPER
   pass "the away spend cap is rechecked under the task-set lock so concurrent spawns cannot both publish"
 }
 
+# A routine outcome that repeats the task's latest one with nothing changed in
+# between is stored once more as a silent, counted repeat instead of a fresh
+# visible note (the model's own silent judgment is not relied on).
+test_outcome_unchanged_repeats_are_coalesced() {
+  local home outcome out rows
+  home="$TMP_ROOT/store-coalesce-home"
+  mkdir -p "$home/state"
+  outcome="$ROOT/bin/fm-branch-outcome.sh"
+  printf 'blocked: waiting on the captain decision\n' > "$home/state/task-a.status"
+
+  FM_HOME="$home" "$outcome" append --task task-a --verdict routine \
+    --summary 'Still blocked on the captain decision; no action taken.' >/dev/null || fail "first outcome append failed"
+  out=$(FM_HOME="$home" "$outcome" append --task task-a --verdict routine \
+    --summary 'still blocked on the  captain decision; no action taken.' 2>&1) || fail "repeat append failed"
+  assert_contains "$out" "coalesced: outcome 2 repeats seq 1 (x1)" "repeat append did not report the coalescing"
+  FM_HOME="$home" "$outcome" append --task task-a --verdict routine \
+    --summary 'Still blocked on the captain decision; no action taken.' >/dev/null || fail "second repeat append failed"
+
+  rows=$(FM_HOME="$home" "$outcome" list)
+  [ "$(printf '%s\n' "$rows" | jq -s 'length')" = 3 ] || fail "coalescing dropped or merged stored rows: $rows"
+  [ "$(printf '%s\n' "$rows" | jq -s -r 'map(.silent) | join(",")')" = "false,true,true" ] \
+    || fail "only the first outcome should be visible: $rows"
+  assert_contains "$(printf '%s\n' "$rows" | jq -s -r '.[2].summary')" "[repeat x2 of seq 1: unchanged]" \
+    "second repeat lost its repeat count"
+  assert_not_contains "$(FM_HOME="$home" "$outcome" startup-replay)" "repeat x" "startup replay rendered a coalesced repeat"
+
+  # A new status line, a different summary, and captain rows are never coalesced.
+  printf 'working: decision answered\n' >> "$home/state/task-a.status"
+  FM_HOME="$home" "$outcome" append --task task-a --verdict routine \
+    --summary 'Still blocked on the captain decision; no action taken.' >/dev/null || fail "post-change append failed"
+  FM_HOME="$home" "$outcome" append --task task-a --verdict routine --summary 'Worker resumed.' >/dev/null || fail "new summary append failed"
+  FM_HOME="$home" "$outcome" append --task task-a --verdict captain --summary 'Worker resumed.' >/dev/null || fail "captain append failed"
+  FM_HOME="$home" "$outcome" append --task task-a --verdict captain --summary 'Worker resumed.' >/dev/null || fail "captain repeat append failed"
+  [ "$(FM_HOME="$home" "$outcome" list --recent 4 | jq -s -r 'map(.silent) | join(",")')" = "false,false,false,false" ] \
+    || fail "a changed status, new summary, or captain outcome was coalesced"
+  pass "unchanged routine repeats are stored silent with a repeat count; changes and captain rows stay visible"
+}
+
+# The host's report command must treat a store-coalesced repeat as silent: after
+# the captain returned it queues no relay wake for it.
+test_report_does_not_queue_a_coalesced_repeat() {
+  local home turn out
+  home="$TMP_ROOT/report-coalesce-home"
+  mkdir -p "$home/state"
+  printf 'blocked: waiting\n' > "$home/state/task-a.status"
+  printf 'turn=t1\nposture=away\nunscoped=1\nwake=signal\n' > "$home/state/.supervision-host-turn"
+  turn() {
+    FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 \
+      "$ROOT/bin/fm-branch-report.sh" --task task-a --verdict routine --summary 'Still blocked; no action taken.' 2>&1
+  }
+  out=$(turn) || fail "first report failed: $out"
+  assert_contains "$out" "queued for MAIN to relay" "the first report should be relayed"
+  out=$(turn) || fail "repeat report failed: $out"
+  assert_contains "$out" "silent outcome remains in the outcome store" "a coalesced repeat was not treated as silent: $out"
+  [ "$(grep -c 'supervision-host-return' "$home/state/.wake-queue")" = 1 ] \
+    || fail "a coalesced repeat was queued as a fresh wake: $(cat "$home/state/.wake-queue")"
+  pass "the report command does not relay a coalesced repeat"
+}
+
 test_branch_prompt_is_byte_stable_and_above_cache_floor
 test_branch_prompt_home_include_is_appended_last
 test_branch_prompt_routes_completed_scouts_through_guarded_cleanup
@@ -1664,6 +1723,8 @@ test_outcome_tail_keeps_whole_newest_rows_within_its_byte_budget
 test_outcome_seed_tail_creates_only_an_absent_display_tail
 test_outcome_seed_tail_only_reads_bounded_suffix
 test_outcome_startup_replay_preserves_silence
+test_outcome_unchanged_repeats_are_coalesced
+test_report_does_not_queue_a_coalesced_repeat
 test_outcome_startup_replay_stops_at_captain_barrier
 test_outcome_cursor_corruption_fails_closed
 test_cursor_advancement_refuses_ahead_processed_marker

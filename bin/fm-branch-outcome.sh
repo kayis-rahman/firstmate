@@ -17,6 +17,14 @@
 #     entirely in the cursor sidecar so marking outcomes read cannot disturb
 #     the log. Retention: the log is small (one line per handled fleet event)
 #     and truncation, if ever needed, is a captain-approved manual act.
+#   - Coalescing: a routine append whose task's latest stored row is a routine
+#     row with the same summary (case and whitespace normalized) recorded at the
+#     same status position (nothing new in the task's status log) is stored with
+#     `silent` true and the suffix " [repeat xN of seq M: unchanged]", where M is
+#     the first row of the run and N counts the repeats. Nothing else changes: the
+#     row is still appended, so the sequence stays gap-free, and it is never
+#     rendered, queued, or replayed. Captain rows, a changed summary, a new
+#     status line, and legacy rows without status provenance never coalesce.
 #   - Cursor: $STATE/.branch-outcomes-cursor holds the highest seq presented
 #     by Pi as a routine merge note or sequence-keyed visible captain entry,
 #     emitted by Pi's locked session-start replay, silently consumed there
@@ -292,6 +300,28 @@ capture_status_position() { # <task>
   CAPTURED_STATUS_IDENT=$ident
 }
 
+# Repeat suffix a coalesced outcome carries (see unchanged_repeat).
+REPEAT_SUFFIX_RE=' \[repeat x[0-9]+ of seq [0-9]+: unchanged\]$'
+
+# unchanged_repeat <task> <summary> <endpoint> <ident>: print "<first seq> <repeat
+# number>" when the task's latest outcome is a routine row with the same
+# (case- and whitespace-normalized) summary recorded at the same status position,
+# i.e. nothing changed since it. Prints nothing otherwise; legacy rows without
+# status provenance never coalesce. Reads the store only; the caller holds the lock.
+unchanged_repeat() {
+  [ -s "$STORE" ] || return 0
+  jq -rn --arg t "$1" --arg s "$2" --argjson ep "$3" --arg id "$4" --arg re "$REPEAT_SUFFIX_RE" '
+    def norm: ascii_downcase | gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
+    ([inputs | select(.task == $t)] | last) as $p
+    | if $p == null or $p.verdict != "routine"
+        or ($p.statusEndpoint // null) != $ep or ($p.statusIdent // null) != $id
+        or (($p.summary | sub($re; "") | norm) != ($s | norm))
+      then empty
+      else ([$p.summary | capture(" \\[repeat x(?<n>[0-9]+) of seq (?<m>[0-9]+): unchanged\\]$")] | first) as $c
+        | if $c == null then "\($p.seq) 1" else "\($c.m) \(($c.n | tonumber) + 1)" end
+      end' "$STORE"
+}
+
 write_outcome_index() { # <task> <seq> [<endpoint> <identity>]
   local task=$1 seq=$2 endpoint=${3:-$CAPTURED_STATUS_ENDPOINT} ident=${4:-$CAPTURED_STATUS_IDENT} path tmp record
   path=$(outcome_index_path "$task") || return 1
@@ -535,6 +565,15 @@ case "$CMD" in
     fi
     SEQ=$(( LAST_SEQ + 1 ))
     capture_status_position "$TASK"
+    if [ "$VERDICT" = routine ] && [ "$SILENT" = false ] \
+        && REPEAT=$(unchanged_repeat "$TASK" "$SUMMARY" "$CAPTURED_STATUS_ENDPOINT" "$CAPTURED_STATUS_IDENT") \
+        && [ -n "$REPEAT" ]; then
+      # Coalesce: an unchanged repeat is stored once more, silent and carrying
+      # its repeat count, instead of rendering or queueing a fresh note.
+      SILENT=true
+      SUMMARY="$SUMMARY [repeat x${REPEAT#* } of seq ${REPEAT%% *}: unchanged]"
+      echo "coalesced: outcome $SEQ repeats seq ${REPEAT%% *} (x${REPEAT#* }) with no change; stored silent" >&2
+    fi
     rm -f -- "$OUTCOME_INDEX_READY" || { fm_lock_release "$LOCK"; exit 1; }
     printf '{"seq":%s,"epoch":%s,"task":"%s","wake":"%s","verdict":"%s","summary":"%s","silent":%s,"statusEndpoint":%s,"statusIdent":"%s"}\n' \
       "$SEQ" "$(date +%s)" "$(json_escape "$TASK")" "$(json_escape "$WAKE")" \

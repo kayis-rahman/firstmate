@@ -39,7 +39,8 @@
 # append, so every visible row is in the brief, queued, or both: the relay does
 # not depend on the host surviving its turn or on its owner delivering the
 # host's own handback. Silent outcomes remain in the store but are not queued
-# or relayed as notes. An attended turn queues nothing: its captain rows reach
+# or relayed as notes; that includes a routine repeat the store coalesced because
+# nothing changed since the task's latest outcome. An attended turn queues nothing: its captain rows reach
 # MAIN through the host's branch-outcome exit and the drain's BRANCH OUTCOMES
 # section (bin/fm-wake-drain.sh), and its routine rows stay in the store.
 set -u
@@ -127,6 +128,12 @@ printf '%s\t%s\t%s\t%s\n' "$TURN" "$SEQ" "$VERDICT" "$TASK" >> "$RECEIPTS" || {
   echo "recorded seq $SEQ, but the host receipt could not be written; the host will hand this wake to MAIN" >&2
   exit 1
 }
+# The store coalesces an unchanged repeat into a silent row; honor that here so
+# a repeat is never queued or relayed as a fresh note.
+if [ "$SILENT" = false ] && [ "$VERDICT" = routine ] \
+    && [ "$("$SCRIPT_DIR/fm-branch-outcome.sh" lookup --seqs "$SEQ" 2>/dev/null | jq -r '.silent')" = true ]; then
+  SILENT=true
+fi
 if [ "$SILENT" = true ]; then
   printf 'recorded seq %s [routine]; silent outcome remains in the outcome store\n' "$SEQ"
   exit 0
