@@ -34,6 +34,12 @@
 # skips this refusal, because its own merge-time draft refusal is authoritative.
 # That merge-time re-record also skips the degraded baseline read below, so it
 # makes no forge read the merge's own live reads would duplicate.
+# A no-mistakes pull request whose Testing table has rows marked untested,
+# unproven, not run, inconclusive, failed, pending, or skipped
+# (fm_dod_pr_thin_testing_rows in bin/fm-dod-lib.sh) is refused the same way,
+# with an error that begins "needs-more-testing:" and names the rows, so the
+# supervisor steers the worker instead of treating the PR as ready for the
+# captain; only a positive reading refuses, and the merge-time re-record skips it.
 # The recorded pr= also frees the task's place in a declared project capacity
 # (bin/fm-project-capacity-lib.sh).
 #
@@ -297,6 +303,25 @@ if [ "$PROVIDER" = github ] && [ "${FM_PR_CHECK_MERGE:-}" != 1 ] && command -v g
     echo "error: $URL is a draft pull request; a draft cannot be merged, so merge monitoring would wait for an event that cannot occur - mark it ready for review and arm again, or declare a wait instead of done if the draft is deliberate" >&2
     exit 1
   fi
+fi
+
+# Thin-PR readiness: a no-mistakes pull request whose Testing table still has
+# untested or unproven rows is not ready for the captain, whatever its checks
+# say. It is refused here, naming the rows, so the supervisor steers the worker
+# to prove them live; arming retries silently once the body is fixed. Only a
+# positive reading refuses: an unreadable body does not block arming, and a
+# merge-time re-record trusts the merge's own live reads.
+# bin/fm-dod-lib.sh (fm_dod_pr_thin_testing_rows) owns what counts as thin.
+if [ "$PROVIDER" = github ] && [ "${FM_PR_CHECK_MERGE:-}" != 1 ] && command -v gh >/dev/null 2>&1; then
+  case "$(grep '^mode=' "$META" | tail -1 | cut -d= -f2- || true)" in
+    no-mistakes|'')
+      if THIN_BODY=$(gh pr view "$URL" --json body -q .body 2>/dev/null) \
+        && THIN_ROWS=$(printf '%s\n' "$THIN_BODY" | fm_dod_pr_thin_testing_rows); then
+        echo "error: needs-more-testing: $URL is not ready, its Testing table has rows not proven live: $(printf '%s' "$THIN_ROWS" | paste -sd ';' - | sed 's/;/; /g') - steer the worker to prove them live and update the PR body" >&2
+        exit 1
+      fi
+      ;;
+  esac
 fi
 
 "$FM_ROOT/bin/fm-guard.sh" || true
