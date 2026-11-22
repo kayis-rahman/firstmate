@@ -1457,7 +1457,7 @@ test_superseded_wait_verdict_is_invalidated_by_a_new_status_signature() {
   state="$dir/state"
   # Call the check directly: it reads crew state at most once per window, and a
   # cached verdict must not outlive the status signature it was taken against.
-  reads() { [ ! -f "$dir/crew-state.log" ] && echo 0 || wc -l < "$dir/crew-state.log" | tr -d ' '; }
+  reads() { if [ -f "$dir/crew-state.log" ]; then wc -l < "$dir/crew-state.log" | tr -d ' '; else echo 0; fi; }
   supersede_check() {  # <crew-state-line>
     PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$dir/config" FM_HOME="$dir" \
       FM_CREW_STATE_BIN="$dir/fakebin/fm-crew-state.sh" FM_FAKE_CREW_STATE="$1" FM_FAKE_CREW_STATE_LOG="$dir/crew-state.log" \
