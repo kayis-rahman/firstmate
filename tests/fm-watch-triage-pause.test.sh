@@ -1451,6 +1451,29 @@ test_superseded_wait_read_is_throttled() {
   pass "the superseded-wait crew-state read is throttled and a throttled poll keeps the last verdict"
 }
 
+test_superseded_wait_verdict_is_invalidated_by_a_new_status_signature() {
+  local dir state reads
+  dir=$(make_superseded_pause_case sigkey 'paused: waiting for validation run R')
+  state="$dir/state"
+  # Call the check directly: it reads crew state at most once per window, and a
+  # cached verdict must not outlive the status signature it was taken against.
+  reads() { [ ! -f "$dir/crew-state.log" ] && echo 0 || wc -l < "$dir/crew-state.log" | tr -d ' '; }
+  supersede_check() {  # <crew-state-line>
+    PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$dir/config" FM_HOME="$dir" \
+      FM_CREW_STATE_BIN="$dir/fakebin/fm-crew-state.sh" FM_FAKE_CREW_STATE="$1" FM_FAKE_CREW_STATE_LOG="$dir/crew-state.log" \
+      FM_PAUSE_SUPERSEDE_CHECK_SECS=300 \
+      bash -c '. "$1"; paused_wait_superseded test:fm-superseded paused' _ "$WATCH"
+  }
+  supersede_check 'state: done · source: run-step · run: R' || fail "a terminal run did not supersede the declared wait"
+  [ "$(reads)" = 1 ] || fail "first check should read crew state once, read $(reads)"
+  supersede_check 'state: working · source: active run' || fail "the cached verdict was not held for an unchanged status"
+  [ "$(reads)" = 1 ] || fail "an unchanged status re-read crew state inside the window"
+  printf 'paused: waiting for validation run S\n' >> "$state/paused.status"
+  supersede_check 'state: working · source: active run' && fail "a new paused line kept the stale superseded verdict"
+  [ "$(reads)" = 2 ] || fail "a new paused line did not trigger a fresh crew-state read, reads=$(reads)"
+  pass "a cached supersession verdict is invalidated when the status signature changes"
+}
+
 test_pause_ceiling_dated_overdue_pause_opens_one_decision() {
   local dir state class
   dir=$(paused_until_fixture until-overdue "$(( $(date +%s) - 90000 ))" 90000); state="$dir/state"
@@ -2134,6 +2157,7 @@ fm_test_run \
   test_declared_wait_surfaces_superseding_state \
   test_superseded_wait_check_can_be_opted_out \
   test_superseded_wait_read_is_throttled \
+  test_superseded_wait_verdict_is_invalidated_by_a_new_status_signature \
   test_usage_limit_stop_surfaces_with_reset_time_and_relaunch \
   test_usage_limit_screen_recognizes_each_known_phrasing \
   test_superseded_wait_check_skips_away_mode \
