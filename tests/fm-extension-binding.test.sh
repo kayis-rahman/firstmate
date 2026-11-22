@@ -2298,11 +2298,6 @@ assert_contains "$orphan_reconcile" "uncertain=0" "recovered extension sources r
 # their verdicts in turn under this home's extension lifecycle lock, so a loaded
 # host stretches the pair past any fixed marker poll. Wait for the recorded
 # runner groups to exit instead, and stop any survivor before failing.
-orphan_runners=()
-for orphan_source in orphan-first orphan-second; do
-  orphan_runner=$(sed -n '2p' "$FM_PROCEVENT_CLAIM_ROOT/$orphan_source.claim" 2>/dev/null || true)
-  [ -z "$orphan_runner" ] || orphan_runners+=("$orphan_source:$orphan_runner")
-done
 orphan_wait_seconds=$EXTENSION_SECTION_LANE_MAX_SECONDS
 if [ -n "${FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH:-}" ]; then
   orphan_remaining=$((FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH - $(date +%s) - 3))
@@ -2310,10 +2305,18 @@ if [ -n "${FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH:-}" ]; then
   [ "$orphan_wait_seconds" -ge 1 ] || orphan_wait_seconds=1
 fi
 orphan_deadline=$((SECONDS + orphan_wait_seconds))
+# A runner records its group only after launch is confirmed, so the pair is
+# re-read each poll and terminal retirement (claim removed) is the completion
+# signal; a not-yet-recorded runner can never be mistaken for a finished one.
+orphan_runners=()
 while :; do
   orphan_live=()
-  for orphan_runner in "${orphan_runners[@]+"${orphan_runners[@]}"}"; do
-    kill -0 -"${orphan_runner#*:}" 2>/dev/null && orphan_live+=("$orphan_runner")
+  for orphan_source in orphan-first orphan-second; do
+    orphan_claim="$FM_PROCEVENT_CLAIM_ROOT/$orphan_source.claim"
+    [ -e "$orphan_claim" ] || continue
+    orphan_runner=$(sed -n '2p' "$orphan_claim" 2>/dev/null || true)
+    [ -z "$orphan_runner" ] || orphan_runners+=("$orphan_source:$orphan_runner")
+    orphan_live+=("$orphan_source:$orphan_runner")
   done
   [ "${#orphan_live[@]}" -gt 0 ] && [ "$SECONDS" -lt "$orphan_deadline" ] || break
   sleep 0.1
@@ -2321,7 +2324,7 @@ done
 if [ "${#orphan_live[@]}" -gt 0 ]; then
   # Killing the runner groups strands their detached invocation groups, which
   # the home sweep's invocation cleanup then reclaims as host-crash residue.
-  for orphan_runner in "${orphan_live[@]}"; do
+  for orphan_runner in "${orphan_runners[@]+"${orphan_runners[@]}"}"; do
     kill -KILL -"${orphan_runner#*:}" 2>/dev/null || true
   done
   FM_HOME="$H_ORPHAN_READY" "$PROCEVENT" sweep-home >/dev/null 2>&1 || true
