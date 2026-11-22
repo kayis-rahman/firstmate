@@ -690,6 +690,17 @@ printf '%s\n' '      PID    PPID    PGID     WINPID   TTY         UID    STIME C
 printf '%s\n' '  4201508       0       0       7204  ?              0 22:24:48 C:\Users\u\AppData\Roaming\npm\pi.exe'
 SH
   chmod +x "$fakebin/uname" "$fakebin/ps"
+  if ! stat -c %Y "$fakebin" >/dev/null 2>&1; then
+    cat > "$fakebin/stat" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = -c ] && [ "${2:-}" = %Y ]; then
+  shift 2
+  exec /usr/bin/stat -f %m "$@"
+fi
+exec /usr/bin/stat "$@"
+SH
+    chmod +x "$fakebin/stat"
+  fi
   printf '%s\n' "$fakebin"
 }
 

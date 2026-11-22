@@ -646,8 +646,9 @@ write_forgejo_status_json() {
   if [ "$total" = 0 ]; then
     printf '{"state":"","total_count":0,"statuses":[]}\n' > "$file"
   else
-    printf '{"state":"%s","total_count":%s,"statuses":[%s]}\n' "$state" "$total" \
-      "$(seq "$total" | sed "s/.*/{\"context\":\"ci-&\",\"status\":\"$state\"}/" | paste -sd, -)" \
+    # shellcheck disable=SC2016 # jq variables belong to the jq program.
+    "$JQ_BIN" -n --arg state "$state" --argjson total "$total" \
+      '{state: $state, total_count: $total, statuses: [range(1; $total + 1) | {context: ("ci-" + tostring), status: $state}]}' \
       > "$file"
   fi
 }
@@ -2350,7 +2351,7 @@ test_forgejo_url_resolves_and_merges() {
   rc=$?
   set -e
 
-  expect_code 0 "$rc" "forgejo-merges: a well-formed pull request URL should merge, not error"
+  expect_code 0 "$rc" "forgejo-merges: a well-formed pull request URL should merge, not error: $(cat "$case_dir/stderr")"
   assert_grep "pr=$FJ_URL" "$case_dir/state/task-x1.meta" \
     "forgejo-merges: pr= was not recorded before merging"
   assert_grep "--login $FJ_LOGIN --repo $FJ_OWNER/$FJ_REPO /repos/{owner}/{repo}/pulls/9" "$case_dir/tea.log" \

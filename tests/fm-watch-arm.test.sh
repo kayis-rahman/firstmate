@@ -947,7 +947,7 @@ test_append_wakes_live_announced_watcher() {
 test_append_wakes_handling_successor() {
   local phase=$1 seq_state=${2:-intact} repeat=${3:-fresh}
   local dir home state fakebin predecessor successor generation watcher_pid pair sequence
-  local new_key=inbox:second new_payload='check: captain inbox note second' datebin real_date inherited_row
+  local new_key=inbox:second new_payload='check: captain inbox note second' datebin real_date inherited_row inherited_epoch
   dir=$(make_case "append-handling-$phase-$seq_state-$repeat")
   home="$dir/home"
   state="$dir/state"
@@ -990,10 +990,11 @@ test_append_wakes_handling_successor() {
     datebin="$dir/datebin"
     mkdir -p "$datebin"
     real_date=$(command -v date)
+    inherited_epoch=$(printf '%s\n' "$inherited_row" | cut -f 1)
     cat > "$datebin/date" <<SH
 #!/usr/bin/env bash
 if [ "\${1:-}" = +%s ]; then
-  printf '%s\n' "${inherited_row%%$'\t'*}"
+  printf '%s\n' "$inherited_epoch"
 else
   exec "$real_date" "\$@"
 fi
@@ -1003,7 +1004,7 @@ SH
   PATH="${datebin:+$datebin:}$PATH" append_wake "$state" check "$new_key" "$new_payload"
   if [ "$repeat" = identical ]; then
     [ "$(head -n 1 "$state/.wake-queue")" = "$inherited_row" ] \
-      || fail "re-append was not byte-identical to the inherited row"
+      || fail "re-append was not byte-identical: inherited '$inherited_row', new '$(head -n 1 "$state/.wake-queue")'"
   fi
   if [ "$phase" = before-ack ]; then
     FM_STATE_OVERRIDE="$state" "$DRAIN" --ack-through "$sequence" --recovery-generation "$generation"

@@ -28,6 +28,7 @@ Usage: fm-procinfo.py <pid>
 """
 import ctypes
 import ctypes.util
+import locale
 import os
 import struct
 import sys
@@ -145,16 +146,12 @@ def _procargs(pid):
 
 
 def _ps_visible(raw):
-    result = []
-    for byte in raw:
-        if byte >= 128:
-            result.append("M-")
-            byte -= 128
-        if byte < 32 or byte == 127:
-            result.append("^" + chr(byte ^ 64))
-        else:
-            result.append(chr(byte))
-    return "".join(result)
+    # macOS ps uses vis with TAB, NL and NOSLASH, in the active locale.
+    buf = ctypes.create_string_buffer(4 * len(raw) + 1)
+    size = libc().strvisx(buf, raw, len(raw), 0x0008 | 0x0010 | 0x0040)
+    if size < 0:
+        raise ValueError("cannot render process identity")
+    return buf.raw[:size]
 
 
 def main():
@@ -173,11 +170,13 @@ def main():
         # there - substituting a resolved path from elsewhere would
         # hand the two routes different facts about one process.
         return 1
+    try:
+        locale.setlocale(locale.LC_CTYPE, "")
+    except locale.Error:
+        return 1
     comm = _ps_visible(argv[0])
-    while argv and not argv[-1]:
-        argv.pop()
     args = _ps_visible(b" ".join(argv))
-    sys.stdout.write("%d\t%s\t%s\n" % (ppid, comm, args))
+    sys.stdout.buffer.write(str(ppid).encode("ascii") + b"\t" + comm + b"\t" + args + b"\n")
     return 0
 
 
