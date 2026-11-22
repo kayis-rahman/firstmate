@@ -54,6 +54,15 @@
 #                          to carry the name, and no other reason carries it: the
 #                          deferral, dead-record and declared-wait recheck
 #                          reasons below keep their wording.
+#                          A worker stopped at its harness usage limit
+#                          (fm_usage_limit_screen in bin/fm-composer-lib.sh)
+#                          surfaces at once as "stale: <win> (usage limit
+#                          reached, resets <when>; ...)", naming the worker and
+#                          the same-account bin/fm-control.sh relaunch to run
+#                          after the reset (never another account or runtime),
+#                          once per distinct notice and again each
+#                          FM_PAUSE_RESURFACE_SECS while it stays on screen
+#                          (handle_usage_limit).
 #                          Unless afk is active. A pane about to escalate
 #                          that can account for its quiet - a `paused:` external
 #                          wait or a verified `captain-held` transfer its worker
@@ -2524,6 +2533,29 @@ paused_recheck_silent() {  # <window> <statusf> <key> <declaration> <status-age>
   printf '%s' "$declaration" > "$marker"
 }
 
+# A worker stopped at its harness usage limit is an actionable event, not quiet:
+# nothing moves it again until the limit resets, and it can sit for hours. Wake
+# firstmate once per distinct limit notice, naming the worker and the reset time
+# the pane shows, and again on the FM_PAUSE_RESURFACE_SECS cadence while the
+# notice stays on screen. The remedy is the guarded relaunch on the SAME account
+# once the limit has reset (the captain's standing rule: a Claude worker waits
+# for its own reset and is never moved to another account or runtime), so this
+# only names it; it never relaunches, repins, or changes a credential.
+# The idle-cache rule applies: relaunch with a resume note when state is on disk.
+# Returns 0 when it handled the window, 1 when the screen shows no limit.
+handle_usage_limit() {  # <window> <task> <screen>
+  local win=$1 task=$2 screen=$3 key limit since
+  key=$(window_key "$win")
+  limit=$(fm_usage_limit_screen "$screen") || return 1
+  since="$STATE/.usage-limit-since-$key"
+  [ -e "$since" ] || date +%s > "$since"
+  resurface_absorbed "$win" "$STATE/.usage-limit-resurfaced-$key" 0 \
+    "stale: $win (usage limit reached, $limit; worker $task is stopped until then - once reset, relaunch it on the same account with bin/fm-control.sh $task relaunch --note <resume note>; never move it to another account or runtime)" \
+    "usage-limit:$limit" 0
+  triage_log "absorbed usage-limit stop ($limit): $win"
+  return 0
+}
+
 # Absorb a stale pane under a declared external-wait pause (paused:) or a
 # dead-agent captain-held transfer. Non-overdue waits re-surface every
 # PAUSE_RESURFACE_SECS; an overdue pause opens a keyed blocked decision and stays
@@ -4665,6 +4697,14 @@ EOF
     # content cannot suppress stale detection. Read once per window per poll and
     # reused below so a busy verdict is consistent within one cycle.
     if window_is_busy "$w" "$tail40"; then busy_now=0; else busy_now=1; fi
+    if [ "$kind" != secondmate ] && [ -n "$task" ]; then
+      if [ "$busy_now" -ne 0 ] && handle_usage_limit "$w" "$task" "$tail40"; then
+        continue
+      fi
+      # Not stopped at a limit now: a later notice, even with the same reset
+      # text, is a new event.
+      [ ! -e "$STATE/.usage-limit-since-$key" ] || rm -f "$STATE/.usage-limit-since-$key" "$STATE/.usage-limit-resurfaced-$key"
+    fi
     if [ "$h" = "$prev" ]; then
       n=$(( $(cat "$cf" 2>/dev/null || echo 0) + 1 ))
       echo "$n" > "$cf"

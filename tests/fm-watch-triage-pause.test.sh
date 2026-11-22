@@ -1384,6 +1384,56 @@ test_paused_until_long_passed_with_quiet_output_wakes_with_evidence() {
   pass "a declared wait long past its time with unchanged output wakes once with that evidence"
 }
 
+# A worker stopped at its harness usage limit wakes firstmate once per notice,
+# naming the worker and the reset time and offering the same-account relaunch,
+# and never a possible-wedge alarm. A limit phrase quoted above a live composer
+# is not that notice.
+test_usage_limit_stop_surfaces_with_reset_time_and_relaunch() {
+  local dir state
+  dir=$(make_superseded_pause_case usage-limit 'working: implementing')
+  state="$dir/state"
+  printf 'earlier output\n\n  You have hit your limit · resets 3pm (Europe/London)\n' > "$dir/pane.txt"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' exit \
+    || fail "a worker stopped at its usage limit did not surface"
+  grep -F 'usage limit reached, resets 3pm (Europe/London)' "$dir/watch.out" >/dev/null \
+    || fail "the wake did not name the reset time: $(cat "$dir/watch.out")"
+  grep -F 'bin/fm-control.sh paused relaunch --note' "$dir/watch.out" >/dev/null \
+    || fail "the wake did not offer the guarded relaunch for the worker: $(cat "$dir/watch.out")"
+  grep -F 'same account' "$dir/watch.out" >/dev/null || fail "the wake did not keep the relaunch on the same account"
+  grep -F 'possible wedge' "$dir/watch.out" >/dev/null && fail "a usage-limit stop was mislabeled a possible wedge"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the usage-limit wake"
+  : > "$dir/watch.out"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' absorb \
+    || fail "the repeated poll failed"
+  [ ! -s "$state/.wake-queue" ] || fail "the same usage-limit notice woke again inside the cadence"
+
+  dir=$(make_superseded_pause_case usage-limit-quoted 'working: implementing')
+  state="$dir/state"
+  { printf 'usage limit reached - quoted from a test fixture\n'; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do printf 'line %s\n' "$i"; done; printf '❯ ready\n'; } > "$dir/pane.txt"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' absorb \
+    || fail "the quoted-phrase poll failed"
+  [ ! -s "$state/.wake-queue" ] || fail "a limit phrase quoted above a live composer woke firstmate"
+  pass "a worker stopped at a usage limit wakes once with its reset time and the same-account relaunch; quoted text does not"
+}
+
+test_usage_limit_screen_recognizes_each_known_phrasing() {
+  local want got screen
+  for want in \
+    'resets 3pm (Europe/London)|You have hit your limit · resets 3pm (Europe/London)' \
+    'resets 2am|5-hour limit reached ∙ resets 2am' \
+    'resets 3pm|Claude usage limit reached. Your limit will reset at 3pm.' \
+    'resets Nov 22nd, 2026 3:04 AM|You have hit your usage limit. Upgrade to Pro.'$'\n'' try again at Nov 22nd, 2026 3:04 AM.' \
+    'reset time not shown|You have hit your limit'; do
+    screen=${want#*|}
+    got=$(bash -c '. "$1"; fm_usage_limit_screen "$2"' _ "$ROOT/bin/fm-composer-lib.sh" "$screen") \
+      || fail "phrasing was not recognized as a usage limit: $screen"
+    [ "$got" = "${want%%|*}" ] || [ "$got" = "resets ${want%%|*}" ] || fail "wrong reset text for [$screen]: [$got]"
+  done
+  bash -c '. "$1"; fm_usage_limit_screen "$2"' _ "$ROOT/bin/fm-composer-lib.sh" 'a note about a limit
+❯ ready' >/dev/null && fail "an ordinary screen was recognized as a usage limit"
+  pass "every known usage-limit phrasing yields its reset text and an ordinary screen yields none"
+}
+
 # The superseded-wait crew-state read is throttled per window, and a throttled
 # poll repeats the last verdict instead of falling back to the plain cadence.
 test_superseded_wait_read_is_throttled() {
@@ -2084,6 +2134,8 @@ fm_test_run \
   test_declared_wait_surfaces_superseding_state \
   test_superseded_wait_check_can_be_opted_out \
   test_superseded_wait_read_is_throttled \
+  test_usage_limit_stop_surfaces_with_reset_time_and_relaunch \
+  test_usage_limit_screen_recognizes_each_known_phrasing \
   test_superseded_wait_check_skips_away_mode \
   test_exited_declared_pause_is_bounded_but_live_gate_surfaces \
   test_own_work_wait_keeps_first_alert_then_long_cadence \
