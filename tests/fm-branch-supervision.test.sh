@@ -1696,7 +1696,7 @@ test_outcome_unchanged_repeats_are_coalesced() {
 # The host's report command must treat a store-coalesced repeat as silent: after
 # the captain returned it queues no relay wake for it.
 test_report_does_not_queue_a_coalesced_repeat() {
-  local home turn out
+  local home out
   home="$TMP_ROOT/report-coalesce-home"
   mkdir -p "$home/state"
   printf 'blocked: waiting\n' > "$home/state/task-a.status"
