@@ -235,6 +235,8 @@ Outcomes are written to the store before delivery to Pi.
 A captain row advances the cursor only after its matching visible session entry exists.
 Locked session-start replay stops before the first captain row, so it cannot acknowledge that outcome through prose alone.
 
+A routine outcome that repeats the task's latest one with no new status line since is coalesced by the store into a silent, counted repeat of the first row, so a blocked task does not raise a fresh note or wake each time the branch re-reports it.
+
 A routine note has no such sequence-keyed record.
 If its cursor write fails after the note was delivered, the next reconciliation sends that note once more.
 That asymmetry is a known limitation of the routine delivery representation rather than of the ordering above.

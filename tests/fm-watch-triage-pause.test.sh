@@ -1362,6 +1362,118 @@ test_paused_until_that_passed_is_rechecked_before_the_cadence() {
   pass "a declared wait whose until time has passed is rechecked at once, then held to the cadence"
 }
 
+# A declared time that passed well beyond the grace with the pane still unchanged
+# wakes once more, naming that evidence, instead of waiting out the flat cadence.
+test_paused_until_long_passed_with_quiet_output_wakes_with_evidence() {
+  local dir state
+  dir=$(paused_until_fixture until-long-passed "$(( $(date +%s) - 4000 ))" 60); state="$dir/state"
+  until_watch "$dir" 999
+  wait_for_exit "$UNTIL_PID" 100 || { reap "$UNTIL_PID"; fail "a declared wait long past its time with quiet output was not surfaced"; }
+  grep -F 'outlived its window' "$dir/watch.out" >/dev/null \
+    || fail "the wake did not say the wait outlived its window: $(cat "$dir/watch.out")"
+  grep -F "output has not changed since" "$dir/watch.out" >/dev/null \
+    || fail "the wake did not cite the quiet output: $(cat "$dir/watch.out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the outlived-wait wake"
+  : > "$dir/watch.out"
+  until_watch "$dir" 999
+  if ! wait_poll_cycle "$state" "$UNTIL_PID" || ! wait_poll_cycle "$state" "$UNTIL_PID"; then
+    reap "$UNTIL_PID"; fail "the outlived-wait wake repeated on every poll: $(cat "$dir/watch.out")"
+  fi
+  [ ! -s "$state/.wake-queue" ] || fail "the outlived-wait wake was queued again for the same declaration"
+  reap "$UNTIL_PID"
+  pass "a declared wait long past its time with unchanged output wakes once with that evidence"
+}
+
+# A worker stopped at its harness usage limit wakes firstmate once per notice,
+# naming the worker and the reset time and offering the same-account relaunch,
+# and never a possible-wedge alarm. A limit phrase quoted above a live composer
+# is not that notice.
+test_usage_limit_stop_surfaces_with_reset_time_and_relaunch() {
+  local dir state
+  dir=$(make_superseded_pause_case usage-limit 'working: implementing')
+  state="$dir/state"
+  printf 'earlier output\n\n  You have hit your limit · resets 3pm (Europe/London)\n' > "$dir/pane.txt"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' exit \
+    || fail "a worker stopped at its usage limit did not surface"
+  grep -F 'usage limit reached, resets 3pm (Europe/London)' "$dir/watch.out" >/dev/null \
+    || fail "the wake did not name the reset time: $(cat "$dir/watch.out")"
+  grep -F 'bin/fm-control.sh paused relaunch --note' "$dir/watch.out" >/dev/null \
+    || fail "the wake did not offer the guarded relaunch for the worker: $(cat "$dir/watch.out")"
+  grep -F 'same account' "$dir/watch.out" >/dev/null || fail "the wake did not keep the relaunch on the same account"
+  grep -F 'possible wedge' "$dir/watch.out" >/dev/null && fail "a usage-limit stop was mislabeled a possible wedge"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the usage-limit wake"
+  : > "$dir/watch.out"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' absorb \
+    || fail "the repeated poll failed"
+  [ ! -s "$state/.wake-queue" ] || fail "the same usage-limit notice woke again inside the cadence"
+
+  dir=$(make_superseded_pause_case usage-limit-quoted 'working: implementing')
+  state="$dir/state"
+  { printf 'usage limit reached - quoted from a test fixture\n'; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13; do printf 'line %s\n' "$i"; done; printf '❯ ready\n'; } > "$dir/pane.txt"
+  superseded_pause_round "$dir" 'state: unknown · source: none · no current-state source available' absorb \
+    || fail "the quoted-phrase poll failed"
+  [ ! -s "$state/.wake-queue" ] || fail "a limit phrase quoted above a live composer woke firstmate"
+  pass "a worker stopped at a usage limit wakes once with its reset time and the same-account relaunch; quoted text does not"
+}
+
+test_usage_limit_screen_recognizes_each_known_phrasing() {
+  local want got screen
+  for want in \
+    'resets 3pm (Europe/London)|You have hit your limit · resets 3pm (Europe/London)' \
+    'resets 2am|5-hour limit reached ∙ resets 2am' \
+    'resets 3pm|Claude usage limit reached. Your limit will reset at 3pm.' \
+    'resets Nov 22nd, 2026 3:04 AM|You have hit your usage limit. Upgrade to Pro.'$'\n'' try again at Nov 22nd, 2026 3:04 AM.' \
+    'reset time not shown|You have hit your limit'; do
+    screen=${want#*|}
+    got=$(bash -c '. "$1"; fm_usage_limit_screen "$2"' _ "$ROOT/bin/fm-composer-lib.sh" "$screen") \
+      || fail "phrasing was not recognized as a usage limit: $screen"
+    [ "$got" = "${want%%|*}" ] || [ "$got" = "resets ${want%%|*}" ] || fail "wrong reset text for [$screen]: [$got]"
+  done
+  bash -c '. "$1"; fm_usage_limit_screen "$2"' _ "$ROOT/bin/fm-composer-lib.sh" 'a note about a limit
+❯ ready' >/dev/null && fail "an ordinary screen was recognized as a usage limit"
+  pass "every known usage-limit phrasing yields its reset text and an ordinary screen yields none"
+}
+
+# The superseded-wait crew-state read is throttled per window, and a throttled
+# poll repeats the last verdict instead of falling back to the plain cadence.
+test_superseded_wait_read_is_throttled() {
+  local dir state first
+  dir=$(make_superseded_pause_case throttled 'paused: waiting for validation run R')
+  state="$dir/state"
+  FM_TEST_SUPERSEDE_CHECK_SECS=300 superseded_pause_round "$dir" 'state: done · source: run-step · run: R' exit \
+    || fail "terminal run did not supersede the declared wait"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the superseded wake"
+  first=$(wc -l < "$dir/crew-state.log" | tr -d ' ')
+  FM_TEST_SUPERSEDE_CHECK_SECS=300 superseded_pause_round "$dir" 'state: done · source: run-step · run: R' absorb \
+    || fail "the throttled poll failed"
+  [ "$(wc -l < "$dir/crew-state.log" | tr -d ' ')" = "$first" ] || fail "the throttled poll read crew state again"
+  [ ! -s "$state/.wake-queue" ] || fail "the throttled poll queued a duplicate wake"
+  pass "the superseded-wait crew-state read is throttled and a throttled poll keeps the last verdict"
+}
+
+test_superseded_wait_verdict_is_invalidated_by_a_new_status_signature() {
+  local dir state reads
+  dir=$(make_superseded_pause_case sigkey 'paused: waiting for validation run R')
+  state="$dir/state"
+  # Call the check directly: it reads crew state at most once per window, and a
+  # cached verdict must not outlive the status signature it was taken against.
+  reads() { if [ -f "$dir/crew-state.log" ]; then wc -l < "$dir/crew-state.log" | tr -d ' '; else echo 0; fi; }
+  supersede_check() {  # <crew-state-line>
+    PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$dir/config" FM_HOME="$dir" \
+      FM_CREW_STATE_BIN="$dir/fakebin/fm-crew-state.sh" FM_FAKE_CREW_STATE="$1" FM_FAKE_CREW_STATE_LOG="$dir/crew-state.log" \
+      FM_PAUSE_SUPERSEDE_CHECK_SECS=300 \
+      bash -c '. "$1"; paused_wait_superseded test:fm-superseded paused' _ "$WATCH"
+  }
+  supersede_check 'state: done · source: run-step · run: R' || fail "a terminal run did not supersede the declared wait"
+  [ "$(reads)" = 1 ] || fail "first check should read crew state once, read $(reads)"
+  supersede_check 'state: working · source: active run' || fail "the cached verdict was not held for an unchanged status"
+  [ "$(reads)" = 1 ] || fail "an unchanged status re-read crew state inside the window"
+  printf 'paused: waiting for validation run S\n' >> "$state/paused.status"
+  supersede_check 'state: working · source: active run' && fail "a new paused line kept the stale superseded verdict"
+  [ "$(reads)" = 2 ] || fail "a new paused line did not trigger a fresh crew-state read, reads=$(reads)"
+  pass "a cached supersession verdict is invalidated when the status signature changes"
+}
+
 test_pause_ceiling_dated_overdue_pause_opens_one_decision() {
   local dir state class
   dir=$(paused_until_fixture until-overdue "$(( $(date +%s) - 90000 ))" 90000); state="$dir/state"
@@ -1864,13 +1976,13 @@ test_required_captain_hold_tests_fail_without_tasks_axi() {
   pass "all four required captain-hold tests fail when tasks-axi is unavailable"
 }
 
-# The superseded-wait check is opt-in through config/paused-wait-supersession;
-# cases arm it unless asked for the flag-absent default.
+# The superseded-wait check is on by default and a home opts out with
+# config/no-paused-wait-supersession; cases keep it unless asked for the opt-out.
 make_superseded_pause_case() {  # <name> <status-line> [armed|unarmed]
   local name=$1 status_line=$2 arm=${3:-armed} dir state window key sig
   dir=$(make_case "$name"); state="$dir/state"; window="test:fm-superseded"
   mkdir -p "$dir/config"
-  [ "$arm" = unarmed ] || : > "$dir/config/paused-wait-supersession"
+  [ "$arm" = armed ] || : > "$dir/config/no-paused-wait-supersession"
   printf 'idle at declared wait\n' > "$dir/pane.txt"
   printf 'window=%s\nkind=ship\nharness=grok\nbackend=tmux\n' "$window" > "$state/paused.meta"
   printf '%s\n' "$status_line" > "$state/paused.status"
@@ -1892,7 +2004,7 @@ superseded_pause_round() {  # <dir> <crew-state-line> <exit|absorb> [busy]
     FM_FAKE_CREW_STATE="$crew_state" FM_WATCH_HANDLING_SUCCESSOR=1 \
     FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$dir/config" \
     FM_CREW_STATE_BIN="$dir/fakebin/fm-crew-state.sh" FM_FAKE_CREW_STATE_LOG="$dir/crew-state.log" \
-    FM_BUSY_TURN_MAX_SECS="$busy_max" FM_PAUSE_RESURFACE_SECS=240 \
+    FM_BUSY_TURN_MAX_SECS="$busy_max" FM_PAUSE_RESURFACE_SECS=240 FM_PAUSE_SUPERSEDE_CHECK_SECS="${FM_TEST_SUPERSEDE_CHECK_SECS:-0}" \
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
     "$WATCH" >> "$out" 2>&1 &
   pid=$!
@@ -1977,11 +2089,11 @@ test_declared_wait_surfaces_superseding_state() {
   pass "declared waits surface unreported gates and terminal runs once, while working runs and answered gates keep the pause cadence on idle and busy paths"
 }
 
-# Absent config/paused-wait-supersession the same superseding states keep main's
+# With config/no-paused-wait-supersession the same superseding states keep main's
 # declared-wait handling: no superseded wake, nothing queued, and no crew-state
 # read beyond the one the idle declared-wait recheck already spends (none on the
 # busy paths), counted through the stub's read log.
-test_superseded_wait_check_is_opt_in() {
+test_superseded_wait_check_can_be_opted_out() {
   local c n crew_state busy reads got dir state
   for c in "idle-gate|state: parked · source: run-step · ask-user: authority decision · run: R|no|1" \
            "idle-terminal|state: done · source: run-step · run: R|no|1" \
@@ -1992,7 +2104,7 @@ test_superseded_wait_check_is_opt_in() {
     state="$dir/state"
     [ "$busy" != yes ] || set_mtime "$(( $(date +%s) - 500 ))" "$state/paused.meta"
     superseded_pause_round "$dir" "$crew_state" absorb "$busy" \
-      || fail "$n: flag-absent watcher round failed"
+      || fail "$n: opted-out watcher round failed"
     ! grep -F 'paused wait superseded' "$dir/watch.out" >/dev/null \
       || fail "$n: flag-absent watcher surfaced a superseded wait"
     [ ! -s "$state/.wake-queue" ] || fail "$n: flag-absent watcher queued a wake"
@@ -2000,7 +2112,7 @@ test_superseded_wait_check_is_opt_in() {
     [ ! -f "$dir/crew-state.log" ] || got=$(wc -l < "$dir/crew-state.log" | tr -d ' ')
     [ "$got" = "$reads" ] || fail "$n: flag-absent watcher read crew state $got times, want $reads"
   done
-  pass "without config/paused-wait-supersession superseding states keep the declared-wait cadence and spend no extra crew-state read"
+  pass "with config/no-paused-wait-supersession superseding states keep the declared-wait cadence and spend no extra crew-state read"
 }
 
 # The flag scopes the check to the foreground watcher: while the away-mode flag
@@ -2043,7 +2155,11 @@ fm_test_run \
   test_nonterminal_stale_not_working_surfaced \
   test_nonterminal_stale_paused_absorbed_then_resurfaced \
   test_declared_wait_surfaces_superseding_state \
-  test_superseded_wait_check_is_opt_in \
+  test_superseded_wait_check_can_be_opted_out \
+  test_superseded_wait_read_is_throttled \
+  test_superseded_wait_verdict_is_invalidated_by_a_new_status_signature \
+  test_usage_limit_stop_surfaces_with_reset_time_and_relaunch \
+  test_usage_limit_screen_recognizes_each_known_phrasing \
   test_superseded_wait_check_skips_away_mode \
   test_exited_declared_pause_is_bounded_but_live_gate_surfaces \
   test_own_work_wait_keeps_first_alert_then_long_cadence \
@@ -2069,6 +2185,7 @@ fm_test_run \
   test_paused_until_near_future_is_quiet_before_the_cadence \
   test_paused_until_wrong_year_is_bounded_by_the_cadence \
   test_paused_until_that_passed_is_rechecked_before_the_cadence \
+  test_paused_until_long_passed_with_quiet_output_wakes_with_evidence \
   test_pause_ceiling_dated_overdue_pause_opens_one_decision \
   test_pause_ceiling_absent_keeps_old_pauses_on_the_recheck \
   test_overdue_resume_race_uses_pause_snapshot \

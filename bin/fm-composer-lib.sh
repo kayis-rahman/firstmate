@@ -2243,6 +2243,48 @@ fm_composer_blocking_dialog() {  # <screen> -> dialog name
   return 1
 }
 
+# fm_usage_limit_screen: name a pane that is stopped at a harness usage-limit
+# notice. Prints "resets <when as the pane words it>" (or "reset time not shown")
+# and returns 0 only when a limit sentence is among the last 12 non-blank rows,
+# where a stopped harness renders it; a limit phrase quoted higher up, in a diff
+# or a note above a live composer, is not that notice. The reset time is read
+# from the limit row itself or the three rows after it. Prints nothing and
+# returns 1 on a miss. The wording is vendor-emitted and NOT live-verified here:
+# the phrasings matched are the ones reported by the Claude and Codex TUIs,
+# "You've hit your limit . resets 3pm", "5-hour limit reached - resets 2am",
+# "Claude usage limit reached. Your limit will reset at 3pm", and "You've hit your
+# usage limit ... try again at <date>". The watcher's pane-stale path is the only
+# caller, and tests/fm-watch-triage-pause.test.sh pins each phrasing; refresh them
+# against the installed harness versions before trusting a new one.
+fm_usage_limit_screen() {  # <screen> -> resets <when>
+  local screen=${1-} out
+  [ -n "$screen" ] || return 1
+  out=$(printf '%s\n' "$screen" | fm_composer_strip_ansi | LC_ALL=C awk '
+    /[^ \t\r]/ { n++; row[n] = $0 }
+    END {
+      first = n - 11; if (first < 1) first = 1
+      for (i = first; i <= n; i++) {
+        l = tolower(row[i])
+        if (l ~ /hit your (usage )?limit/ || l ~ /usage limit (reached|exceeded|hit)/ || l ~ /[0-9a-z]-hour limit reached/ || l ~ /(weekly|daily|monthly) limit reached/) {
+          for (j = i; j <= i + 3 && j <= n; j++) {
+            r = tolower(row[j])
+            if (match(r, /(will reset|resets?|try again)( at| in| on)?[ :]+/)) {
+              when = substr(row[j], RSTART + RLENGTH)
+              gsub(/^[ \t.·∙-]+|[ \t.]+$/, "", when)
+              print "resets " substr(when, 1, 60)
+              exit 0
+            }
+          }
+          print "reset time not shown"
+          exit 0
+        }
+      }
+      exit 1
+    }
+  ') || return 1
+  printf '%s' "$out"
+}
+
 # A command substitution drops a shell variable, and every composer read runs
 # inside one. The name is therefore written to FM_COMPOSER_DIALOG_SINK when
 # that path is set. The classifier verdict is unchanged. When the sink is

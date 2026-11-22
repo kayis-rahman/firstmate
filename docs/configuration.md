@@ -1131,14 +1131,16 @@ With the flag absent the wedge timer spends no read for it and keeps the unchang
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
 [`architecture.md`](architecture.md) owns the wait-evidence contract and `bin/fm-classify-lib.sh`'s `status_worker_wait_verb` owns which lines count.
 
-## Superseded declared-wait wake (config/paused-wait-supersession)
+## Superseded declared-wait wake (config/no-paused-wait-supersession)
 
-The optional local, gitignored `config/paused-wait-supersession` presence flag opts this home into a default-off check in the watcher's declared-wait handling.
-With it present, a pane whose worker's newest wait line is a `paused:` declaration is surfaced ahead of the `FM_PAUSE_RESURFACE_SECS` recheck cadence when its crew's own current state shows the wait no longer explains the quiet: the run is parked at a human-owed gate with no open `needs-decision` for that run, or the run is terminal.
+The watcher's declared-wait handling is on by default for a check that surfaces a stale declared wait.
+A pane whose worker's newest wait line is a `paused:` declaration is surfaced ahead of the `FM_PAUSE_RESURFACE_SECS` recheck cadence when its crew's own current state shows the wait no longer explains the quiet: the run is parked at a human-owed gate with no open `needs-decision` for that run, or the run is terminal.
 Each superseding state surfaces once per declaration and run on both the idle and busy paths, and repeats use the same bounded recheck cadence.
-It stays opt-in because it adds a wake reason that fires ahead of that cadence and spends a current-state read on each paused poll, so which lanes pay that read for earlier notice is a home's choice.
+The current-state read behind it runs at most once per window every `FM_PAUSE_SUPERSEDE_CHECK_SECS` (default 300 seconds), and a poll inside that interval repeats the last verdict.
+A declared `until` time that passed at least `FM_PAUSE_QUIET_GRACE_SECS` (default 1800 seconds) ago with the pane still unchanged wakes once more per declaration, naming that evidence, rather than waiting out the flat cadence.
 
-With the flag absent the watcher spends no current-state read for it and keeps the unchanged declared-wait cadence and wording. The flag affects the foreground watcher only; away mode keeps today's declared-wait pause cadence.
+The optional local, gitignored `config/no-paused-wait-supersession` presence flag opts a home out of the current-state check.
+With it present the watcher spends no current-state read for it and keeps the unchanged declared-wait cadence and wording. The check affects the foreground watcher only; away mode keeps today's declared-wait pause cadence.
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
 [`architecture.md`](architecture.md) owns the declared-wait contract and `bin/fm-watch.sh`'s `paused_wait_superseded` owns the exact derivation, reasons, and throttle.
 
