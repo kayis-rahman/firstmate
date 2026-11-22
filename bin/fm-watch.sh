@@ -474,6 +474,12 @@ case "$SECONDMATE_LIVENESS_WINDOW_SECS" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_WI
 # invisibly - except an item held for the captain while the away-posture record
 # exists, which is never rechecked (away_record_present below).
 PAUSE_RESURFACE_SECS=${FM_PAUSE_RESURFACE_SECS:-$FM_PAUSE_RESURFACE_SECS_DEFAULT}
+# A declared wait whose named clearing time passed this long ago with the pane
+# still unchanged has outlived its window: handle_paused_stale wakes once more
+# with that evidence rather than waiting out the flat cadence. The crew-state
+# read behind paused_wait_superseded runs at most this often per window.
+PAUSE_QUIET_GRACE_SECS=${FM_PAUSE_QUIET_GRACE_SECS:-1800}
+PAUSE_SUPERSEDE_CHECK_SECS=${FM_PAUSE_SUPERSEDE_CHECK_SECS:-300}
 # A declared wait that names WHEN it clears (`paused: ... until <UTC ISO 8601>`,
 # status_paused_until in fm-classify-lib.sh) is condition-aware: it is not
 # rechecked before that time, and it is rechecked once as soon as that time
@@ -2452,17 +2458,27 @@ busy_stream_snapshot_current() {  # <task> <observed snapshot>
 # gate nobody has been told about, or when the run is terminal. Surface those
 # authoritative changes once per declaration and run, then use the same bounded
 # recheck cadence for repeats. The shared predicates bind the gate to this run.
-# OFF unless the home creates config/paused-wait-supersession: absent the flag it
-# returns before any read, so the watcher spends no crew-state read here and
-# keeps the unchanged declared-wait cadence and wording. This applies to the
-# foreground watcher only: while the away-mode flag exists it also returns before
-# any read, so away mode keeps today's declared-wait pause cadence on every path.
+# ON by default, because a declared wait that outlives the run it named otherwise
+# sits unnoticed for the whole FM_PAUSE_RESURFACE_SECS cadence; a home opts out
+# with config/no-paused-wait-supersession, which returns before any read so the
+# watcher keeps the unchanged declared-wait cadence and wording. The
+# crew-state read is the costly part, so it runs at most once per window every
+# FM_PAUSE_SUPERSEDE_CHECK_SECS (the marker records the last verdict, and a
+# throttled poll repeats it). This applies to the foreground watcher only:
+# while the away-mode flag exists it returns before any read, so away mode keeps
+# today's declared-wait pause cadence on every path.
 paused_wait_superseded() {  # <window> <task>
-  local win=$1 task=$2 line statusf key last run state reason rest part
-  [ -e "$CONFIG/paused-wait-supersession" ] && ! afk_present || return 1
+  local win=$1 task=$2 line statusf key last run state reason rest part marker
+  [ ! -e "$CONFIG/no-paused-wait-supersession" ] && ! afk_present || return 1
   statusf="$STATE/$task.status"
   last=$(status_declared_wait_line "$statusf")
   status_is_paused "$last" || return 1
+  marker="$STATE/.paused-supersede-read-$(window_key "$win")"
+  if [ -e "$marker" ] && [ "$(age_of "$marker")" -lt "$PAUSE_SUPERSEDE_CHECK_SECS" ]; then
+    [ "$(cat "$marker" 2>/dev/null || true)" = 1 ]
+    return
+  fi
+  printf '0' > "$marker"
   line=$("$FM_CREW_STATE_BIN" "$task" 2>/dev/null) || line=''
   if run=$(crew_gate_awaits_human_decision "$task" "$line") \
     && ! status_has_open_needs_decision "$statusf" "$run"; then
@@ -2483,6 +2499,7 @@ paused_wait_superseded() {  # <window> <task>
     state="terminal${run:+:$run}"
   fi
   key=$(window_key "$win")
+  printf '1' > "$marker"
   resurface_absorbed "$win" "$STATE/.paused-resurfaced-$key" 0 "$reason" \
     "declared:$(fm_wake_signal_sig "$statusf" || true):$state" 0
   triage_log "checked declared wait supersession ($state): $win"
@@ -2574,6 +2591,14 @@ handle_paused_stale() {  # <window> <task> <hash>
       detail="paused, declared time beyond recheck cadence"
       silent=1
       reason="paused ${age}s, awaiting external - the declared time is beyond the recheck cadence; confirm the wait still holds"
+    elif [ "$(( now - until ))" -ge "$PAUSE_QUIET_GRACE_SECS" ]; then
+      # The declared time passed well ago and the pane has not changed since:
+      # the wait has outlived its window. One more wake per declaration, with
+      # that evidence, ahead of the flat cadence.
+      detail="paused, declared time passed and output quiet"
+      reason="paused ${age}s, awaiting external - the declared clearing time passed $(( now - until ))s ago and the worker's output has not changed since, so the wait has outlived its window; check what it was waiting on, then steer or release it"
+      declaration="$declaration:quiet"
+      min_age=0
     else
       # The declared time has passed: recheck now, once per declaration, then
       # hold the cadence.
