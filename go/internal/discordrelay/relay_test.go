@@ -13,7 +13,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unicode/utf16"
 )
 
 const (
@@ -71,8 +70,12 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 		for i := len(f.msgs) - 1; i >= 0; i-- { // newest first, like Discord
 			m := f.msgs[i]
 			if after == "" || snowLess(after, m.ID) {
-				out = append(out, map[string]any{"id": m.ID, "channel_id": m.ChannelID, "content": m.Content,
-					"timestamp": m.At.Format(time.RFC3339), "author": map[string]any{"id": m.AuthorID, "bot": m.Bot}})
+				row := map[string]any{"id": m.ID, "channel_id": m.ChannelID, "content": m.Content,
+					"timestamp": m.At.Format(time.RFC3339), "author": map[string]any{"id": m.AuthorID, "bot": m.Bot}}
+				if m.ReplyTo != "" {
+					row["message_reference"] = map[string]any{"message_id": m.ReplyTo, "channel_id": m.ChannelID}
+				}
+				out = append(out, row)
 			}
 		}
 		json.NewEncoder(w).Encode(out)
@@ -338,7 +341,7 @@ func TestDuplicateDeliveryAndEventDedupe(t *testing.T) {
 	if g.box.calls != 1 {
 		t.Fatalf("duplicate message enqueued again, calls=%d", g.box.calls)
 	}
-	ev := EventIn{ID: "pr-7", Kind: "review-ready", Task: "t1", Text: "PR ready"}
+	ev := EventIn{ID: "pr-7", Kind: "review-ready", Text: "PR ready"}
 	for i := 0; i < 2; i++ {
 		if err := g.emit(ev); err != nil {
 			t.Fatal(err)
@@ -371,37 +374,10 @@ func TestUnauthorizedSenderAndBots(t *testing.T) {
 	}
 }
 
-func TestUrgentImmediateRoutineBatched(t *testing.T) {
-	g := newRig(t)
-	g.baseline()
-	g.emit(EventIn{ID: "a", Kind: "progress", Task: "t1", Text: "tests green"})
-	g.emit(EventIn{ID: "b", Kind: "progress", Task: "t1", Text: "tests green"})
-	g.emit(EventIn{ID: "c", Kind: "blocker", Task: "t2", Text: "login needed"})
-	g.now = g.now.Add(time.Minute) // less than the batch window since zero? LastBatchAt is zero so first digest is due
-	g.r.St.S.LastBatchAt = g.now
-	g.tick()
-	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || ps[0].Silent || !strings.Contains(ps[0].Content, "login needed") {
-		t.Fatalf("want one immediate loud blocker alert, got %+v", ps)
-	}
-	g.now = g.now.Add(11 * time.Minute)
-	g.tick()
-	ps = g.f.postsSnapshot()
-	last := ps[0]
-	for _, p := range ps {
-		if strings.HasPrefix(p.Content, "Fleet update") {
-			last = p
-		}
-	}
-	if !last.Silent || !strings.Contains(last.Content, "t1: tests green (x2)") {
-		t.Fatalf("want one quiet collapsed digest, got %+v", last)
-	}
-}
-
 func alertRig(t *testing.T) (*rig, int) {
 	g := newRig(t)
 	g.baseline()
-	g.emit(EventIn{ID: "d1", Kind: "decision", Task: "t1", Text: "pick option"})
+	g.emit(EventIn{ID: "d1", Kind: "decision", Text: "pick option"})
 	g.tick()
 	return g, len(g.f.postsSnapshot())
 }
@@ -425,25 +401,33 @@ func TestReminderSentOnceAfterAMinute(t *testing.T) {
 	}
 }
 
-func TestReminderSuppressedWhenAnsweredOrActive(t *testing.T) {
-	g, n := alertRig(t)
-	g.now = g.now.Add(30 * time.Second)
-	g.f.say("5100", owner, "go with option 2", g.now)
-	g.tick() // answered: captured, receipt posted
-	g.now = g.now.Add(5 * time.Minute)
-	g.tick()
-	for _, p := range g.f.postsSnapshot()[n:] {
-		if strings.HasPrefix(p.Content, "Still waiting") {
-			t.Fatal("reminded after the captain answered")
-		}
+func TestOnlyReferencedAlertIsAnswered(t *testing.T) {
+	g, _ := alertRig(t)
+	if err := g.emit(EventIn{ID: "second", Kind: "blocker", Text: "second alert"}); err != nil {
+		t.Fatal(err)
 	}
-
-	g2, n2 := alertRig(t)
-	g2.r.St.S.LastOwnerAt = g2.now.Add(50 * time.Second) // chatting about something else
-	g2.now = g2.now.Add(70 * time.Second)
-	g2.tick()
-	if len(g2.f.postsSnapshot()) != n2 {
-		t.Fatal("reminded while captain is active in chat")
+	g.tick()
+	first := g.r.St.S.Events["d1"].MsgID
+	second := g.r.St.S.Events["second"].MsgID
+	g.now = g.now.Add(30 * time.Second)
+	g.f.say("5100", owner, "unrelated chat", g.now)
+	g.f.msgs = append(g.f.msgs, Message{ID: "5101", ChannelID: channel, AuthorID: owner, Content: "answer", ReplyTo: first, At: g.now})
+	g.tick()
+	g.open()
+	if !g.r.St.S.Events["d1"].Answered || g.r.St.S.Events["second"].Answered {
+		t.Fatal("expected only the referenced alert to be answered")
+	}
+	n := len(g.f.postsSnapshot())
+	g.now = g.now.Add(time.Minute)
+	g.tick()
+	if len(g.f.postsSnapshot()) != n {
+		t.Fatal("reminded while the owner was active")
+	}
+	g.now = g.now.Add(time.Minute)
+	g.tick()
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != n+1 || ps[n].ReplyTo != second {
+		t.Fatalf("expected one reminder for only the unanswered alert: %+v", ps)
 	}
 }
 
@@ -621,24 +605,24 @@ func TestStartupEmptyOwnerMessageCountsAsPresence(t *testing.T) {
 	}
 }
 
-func TestDigestCarriesOverflowAndCapsUnicode(t *testing.T) {
+func TestUnknownAlertKindRejectedByEmitAndSpool(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
-	for i, body := range []string{strings.Repeat("😀", 1100), "second", "second"} {
-		if err := g.emit(EventIn{ID: itoa(i), Kind: "progress", Text: body}); err != nil {
-			t.Fatal(err)
-		}
+	e := EventIn{ID: "typo", Kind: "blokcer", Text: "not an alert"}
+	if err := g.emit(e); err == nil {
+		t.Fatal("emit accepted unknown alert kind")
+	}
+	b, err := json.Marshal(queuedEvent{Scope: g.r.St.S.Scope, EventIn: e})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(g.r.St.eventsDir(), "typo.json")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	g.tick()
-	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || !strings.HasPrefix(ps[0].Content, "Fleet update (1)") || len(utf16.Encode([]rune(ps[0].Content))) > 2000 {
-		t.Fatalf("expected one bounded first digest, got %d posts", len(ps))
-	}
-	g.open()
-	g.now = g.now.Add(batchWindow)
-	g.tick()
-	if ps := g.f.postsSnapshot(); len(ps) != 2 || ps[1].Content != "Fleet update (2)\n• second (x2)" {
-		t.Fatalf("overflow did not survive for the next digest: %+v", ps)
+	if _, err := os.Stat(path + ".rejected"); err != nil || len(g.f.postsSnapshot()) != 0 {
+		t.Fatalf("expected unknown kind quarantined without delivery: %v", err)
 	}
 }
 
@@ -686,7 +670,7 @@ func TestFailedInboundStillPushesAlertAndHoldsReminder(t *testing.T) {
 	for _, failSave := range []bool{false, true} {
 		g, n := alertRig(t)
 		g.now = g.now.Add(time.Minute)
-		g.f.say("5100", owner, "the answer", g.now)
+		g.f.msgs = append(g.f.msgs, Message{ID: "5100", ChannelID: channel, AuthorID: owner, Content: "the answer", ReplyTo: g.r.St.S.Events["d1"].MsgID, At: g.now})
 		if err := g.emit(EventIn{ID: "next", Kind: "blocker", Text: "new blocker"}); err != nil {
 			t.Fatal(err)
 		}

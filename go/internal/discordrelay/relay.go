@@ -12,20 +12,13 @@ import (
 	"time"
 )
 
-// Urgent kinds are delivered immediately with a push; everything else is a
-// routine update that is batched into a quiet digest.
-var urgentKinds = map[string]bool{"decision": true, "review-ready": true, "login": true, "blocker": true}
-
-var (
-	idRe   = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,120}$`)
-	kindRe = regexp.MustCompile(`^[a-z][a-z-]{0,31}$`)
-)
+var alertKinds = map[string]bool{"decision": true, "review-ready": true, "login": true, "blocker": true}
+var idRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,120}$`)
 
 // EventIn is the input to emit.
 type EventIn struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
-	Task string `json:"task,omitempty"`
 	Text string `json:"text"`
 }
 
@@ -45,8 +38,8 @@ func WriteEvent(dir string, scope Scope, e EventIn) error {
 	if !idRe.MatchString(e.ID) {
 		return errors.New("event id must match " + idRe.String())
 	}
-	if !kindRe.MatchString(e.Kind) {
-		return errors.New("event kind must match " + kindRe.String())
+	if !alertKinds[e.Kind] {
+		return fmt.Errorf("unknown alert kind %q", e.Kind)
 	}
 	if strings.TrimSpace(e.Text) == "" {
 		return errors.New("event text is empty")
@@ -116,13 +109,7 @@ func (r *Relay) pollInbound() error {
 			continue
 		}
 		s.Cursor = m.ID
-		if m.ChannelID != r.Cfg.ChannelID || m.Bot {
-			continue
-		}
-		if m.AuthorID != r.Cfg.OwnerID {
-			if !first {
-				r.logf("rejected message %s from non-owner", m.ID)
-			}
+		if m.ChannelID != r.Cfg.ChannelID || m.Bot || m.AuthorID != r.Cfg.OwnerID {
 			continue
 		}
 		if m.At.After(s.LastOwnerAt) {
@@ -132,8 +119,11 @@ func (r *Relay) pollInbound() error {
 			continue
 		}
 		s.Messages[m.ID] = &InMsg{Text: m.Content}
+		if m.ReplyTo == "" {
+			continue
+		}
 		for _, e := range s.Events {
-			if e.Urgent && e.Posted && snowLess(e.MsgID, m.ID) {
+			if alertKinds[e.Kind] && e.Posted && e.MsgID == m.ReplyTo && snowLess(e.MsgID, m.ID) {
 				e.Answered = true
 			}
 		}
@@ -297,17 +287,13 @@ func (r *Relay) ingestEvents() error {
 		if err != nil {
 			return err
 		}
-		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != e.ID+".json" || !kindRe.MatchString(e.Kind) || strings.TrimSpace(e.Text) == "" {
+		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != e.ID+".json" || !alertKinds[e.Kind] || strings.TrimSpace(e.Text) == "" {
 			r.logf("rejecting malformed event file %s", filepath.Base(f))
 			_ = os.Rename(f, f+".rejected")
 			continue
 		}
 		if _, dup := r.St.S.Events[e.ID]; !dup {
-			ev := &Event{Kind: e.Kind, Task: e.Task, Text: e.Text, Urgent: urgentKinds[e.Kind]}
-			r.St.S.Events[e.ID] = ev
-			if !ev.Urgent {
-				r.St.S.Batch = append(r.St.S.Batch, e.ID)
-			}
+			r.St.S.Events[e.ID] = &Event{Kind: e.Kind, Text: e.Text}
 			if err := r.St.Save(); err != nil {
 				return err
 			}
@@ -317,19 +303,11 @@ func (r *Relay) ingestEvents() error {
 	return nil
 }
 
-func eventLine(e *Event) string {
-	if e.Task != "" {
-		return e.Task + ": " + e.Text
-	}
-	return e.Text
-}
-
 func (r *Relay) dispatchEvents() error {
 	s := &r.St.S
-	now := r.Now()
 	ids := make([]string, 0)
 	for id, e := range s.Events {
-		if e.Urgent && !e.Posted {
+		if alertKinds[e.Kind] && !e.Posted {
 			ids = append(ids, id)
 		}
 	}
@@ -337,7 +315,7 @@ func (r *Relay) dispatchEvents() error {
 	var errs []error
 	for _, id := range ids {
 		e := s.Events[id]
-		msg := "🔔 " + e.Kind + " — " + eventLine(e)
+		msg := "🔔 " + e.Kind + " — " + e.Text
 		mid, err := r.Chat.Post(msg, "", r.active(r.Now()), "")
 		if err != nil {
 			errs = append(errs, fmt.Errorf("alert %s: %w", id, err))
@@ -348,63 +326,7 @@ func (r *Relay) dispatchEvents() error {
 			return err
 		}
 	}
-	if len(s.Batch) > 0 && now.Sub(s.LastBatchAt) >= batchWindow {
-		body, n := digest(s.Batch, s.Events)
-		if _, err := r.Chat.Post(body, "", true, ""); err != nil {
-			errs = append(errs, fmt.Errorf("digest: %w", err))
-		} else {
-			for _, id := range s.Batch[:n] {
-				s.Events[id].Posted = true
-			}
-			s.Batch, s.LastBatchAt = s.Batch[n:], now
-			if err := r.St.Save(); err != nil {
-				return err
-			}
-		}
-	}
 	return errors.Join(errs...)
-}
-
-const batchWindow = 10 * time.Minute
-
-func digest(batch []string, events map[string]*Event) (string, int) {
-	counts := map[string]int{}
-	var order []string
-	budget := messageLimit - len(fmt.Sprintf("Fleet update (%d)", len(batch)))
-	n := 0
-	suffix := func(count int) string {
-		if count < 2 {
-			return ""
-		}
-		return fmt.Sprintf(" (x%d)", count)
-	}
-	for _, id := range batch {
-		line := "\n• " + Redact(eventLine(events[id]))
-		if n == 0 {
-			line = clip(line, budget)
-		}
-		count := counts[line]
-		cost := len(suffix(count+1)) - len(suffix(count))
-		if count == 0 {
-			cost += textUnits(line)
-		}
-		if cost > budget {
-			break
-		}
-		if count == 0 {
-			order = append(order, line)
-		}
-		counts[line]++
-		budget -= cost
-		n++
-	}
-	var body strings.Builder
-	fmt.Fprintf(&body, "Fleet update (%d)", n)
-	for _, line := range order {
-		body.WriteString(line)
-		body.WriteString(suffix(counts[line]))
-	}
-	return body.String(), n
 }
 
 func (r *Relay) remind() error {
@@ -415,7 +337,7 @@ func (r *Relay) remind() error {
 	}
 	ids := make([]string, 0)
 	for id, e := range s.Events {
-		if e.Urgent && e.Posted && !e.Answered && !e.Reminded && now.Sub(e.PostedAt) >= time.Minute {
+		if alertKinds[e.Kind] && e.Posted && !e.Answered && !e.Reminded && now.Sub(e.PostedAt) >= time.Minute {
 			ids = append(ids, id)
 		}
 	}
@@ -423,7 +345,7 @@ func (r *Relay) remind() error {
 	var errs []error
 	for _, id := range ids {
 		e := s.Events[id]
-		if _, err := r.Chat.Post("Still waiting on you: "+e.Kind+" — "+eventLine(e), e.MsgID, false, ""); err != nil {
+		if _, err := r.Chat.Post("Still waiting on you: "+e.Kind+" — "+e.Text, e.MsgID, false, ""); err != nil {
 			errs = append(errs, fmt.Errorf("reminder %s: %w", id, err))
 			continue
 		}

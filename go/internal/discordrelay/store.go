@@ -19,12 +19,10 @@ type InMsg struct {
 	Acked     bool   `json:"acked,omitempty"` // firstmate handled the note and the mark landed
 }
 
-// Event is an outbound alert or routine update.
+// Event is an outbound alert.
 type Event struct {
 	Kind     string    `json:"kind"`
-	Task     string    `json:"task,omitempty"`
 	Text     string    `json:"text"`
-	Urgent   bool      `json:"urgent"`
 	Posted   bool      `json:"posted"`
 	PostedAt time.Time `json:"posted_at"`
 	MsgID    string    `json:"msg_id,omitempty"`
@@ -46,8 +44,6 @@ type State struct {
 	ReplyCursor string            `json:"reply_cursor"`
 	SentReplies map[string]bool   `json:"sent_replies"`
 	Events      map[string]*Event `json:"events"`
-	Batch       []string          `json:"batch"`
-	LastBatchAt time.Time         `json:"last_batch_at"`
 	LastOwnerAt time.Time         `json:"last_owner_at"`
 }
 

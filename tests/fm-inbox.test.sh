@@ -380,7 +380,7 @@ env = dict(os.environ, FM_HOME=home, FM_STATE_OVERRIDE=home + "/state",
            FM_DATA_OVERRIDE=home + "/data", FM_CONFIG_OVERRIDE=home + "/config")
 inbox = Path(home) / "state/inbox"
 blocked = subprocess.run([binary, "receipts", "--all-replies"],
-                         env=dict(env, PATH=lock_fail_bin + os.pathsep + env["PATH"]),
+                         env=dict(env, FM_LOCK_STALE_AFTER="3600", PATH=lock_fail_bin + os.pathsep + env["PATH"]),
                          capture_output=True, text=True, timeout=10)
 assert blocked.returncode == 1 and not blocked.stdout, blocked
 assert "could not lock replies for receipts" in blocked.stderr, blocked.stderr

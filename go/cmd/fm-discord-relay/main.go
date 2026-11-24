@@ -2,7 +2,7 @@
 //
 //	fm-discord-relay run    loop until SIGINT/SIGTERM
 //	fm-discord-relay once   one pass (shadow/testing)
-//	fm-discord-relay emit   -kind K [-task T] -id ID text...
+//	fm-discord-relay emit   -kind K -id ID text...
 //
 // It is off unless the config file says "enabled": true. See
 // docs/discord-relay.md. The bot token is read from FM_DISCORD_RELAY_TOKEN.
@@ -54,8 +54,7 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	var event discordrelay.EventIn
 	if cmd == "emit" {
-		fs.StringVar(&event.Kind, "kind", "", "decision|review-ready|login|blocker or a routine kind")
-		fs.StringVar(&event.Task, "task", "", "task id")
+		fs.StringVar(&event.Kind, "kind", "", "decision|review-ready|login|blocker")
 		fs.StringVar(&event.ID, "id", "", "required occurrence id")
 	}
 	_ = fs.Parse(os.Args[2:])

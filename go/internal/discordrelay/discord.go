@@ -20,6 +20,7 @@ type Message struct {
 	AuthorID  string
 	Bot       bool
 	At        time.Time
+	ReplyTo   string
 }
 
 // Chat is the Discord transport, replaceable by a fake in tests.
@@ -97,7 +98,12 @@ func (h *HTTPChat) Fetch(after string, limit int) ([]Message, error) {
 		Content   string    `json:"content"`
 		ChannelID string    `json:"channel_id"`
 		Timestamp time.Time `json:"timestamp"`
-		Author    struct {
+		Reference struct {
+			Type      int    `json:"type"`
+			MessageID string `json:"message_id"`
+			ChannelID string `json:"channel_id"`
+		} `json:"message_reference"`
+		Author struct {
 			ID  string `json:"id"`
 			Bot bool   `json:"bot"`
 		} `json:"author"`
@@ -107,7 +113,11 @@ func (h *HTTPChat) Fetch(after string, limit int) ([]Message, error) {
 	}
 	out := make([]Message, 0, len(raw))
 	for _, m := range raw {
-		out = append(out, Message{m.ID, m.ChannelID, m.Content, m.Author.ID, m.Author.Bot, m.Timestamp})
+		msg := Message{ID: m.ID, ChannelID: m.ChannelID, Content: m.Content, AuthorID: m.Author.ID, Bot: m.Author.Bot, At: m.Timestamp}
+		if m.Reference.Type == 0 && (m.Reference.ChannelID == "" || m.Reference.ChannelID == m.ChannelID) {
+			msg.ReplyTo = m.Reference.MessageID
+		}
+		out = append(out, msg)
 	}
 	return out, nil
 }

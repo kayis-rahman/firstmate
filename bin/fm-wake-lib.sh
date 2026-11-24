@@ -1725,6 +1725,7 @@ fm_lock_acquire_wait_max() {  # <lockdir> <max-seconds>
   deadline=$((SECONDS + seconds))
   while ! fm_lock_try_acquire "$lockdir"; do
     if [ "$SECONDS" -ge "$deadline" ]; then
+      [ -e "$lockdir" ] || [ -L "$lockdir" ] || return 1
       pid=$(cat "$lockdir/pid" 2>/dev/null || true)
       case "$pid" in
         ''|*[!0-9]*)

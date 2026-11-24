@@ -1,6 +1,6 @@
 // Package discordrelay is a deterministic, zero-model-token Discord relay for
 // firstmate: captain-only capture into bin/fm-inbox.sh, threaded replies,
-// urgent alerts, batched routine updates and one unanswered-question reminder.
+// urgent alerts and an unanswered-question reminder.
 package discordrelay
 
 import (
