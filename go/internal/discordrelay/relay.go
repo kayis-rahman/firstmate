@@ -93,7 +93,7 @@ func snowLess(a, b string) bool {
 func (r *Relay) Tick() error {
 	inboundErr := r.pollInbound()
 	err := errors.Join(inboundErr, r.markSeen(), r.enqueue(), r.markHandled(), r.pollReplies(), r.ingestEvents(),
-		r.dispatchEvents(inboundErr == nil))
+		r.dispatchEvents())
 	if inboundErr == nil {
 		err = errors.Join(err, r.remind())
 	}
@@ -324,7 +324,7 @@ func eventLine(e *Event) string {
 	return e.Text
 }
 
-func (r *Relay) dispatchEvents(presenceKnown bool) error {
+func (r *Relay) dispatchEvents() error {
 	s := &r.St.S
 	now := r.Now()
 	ids := make([]string, 0)
@@ -338,7 +338,7 @@ func (r *Relay) dispatchEvents(presenceKnown bool) error {
 	for _, id := range ids {
 		e := s.Events[id]
 		msg := "🔔 " + e.Kind + " — " + eventLine(e)
-		mid, err := r.Chat.Post(msg, "", !presenceKnown || r.active(r.Now()), "")
+		mid, err := r.Chat.Post(msg, "", r.active(r.Now()), "")
 		if err != nil {
 			errs = append(errs, fmt.Errorf("alert %s: %w", id, err))
 			continue

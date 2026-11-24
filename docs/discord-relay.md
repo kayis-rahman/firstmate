@@ -17,7 +17,7 @@ Buttons and select menus, and replacing the front-desk mate, are follow-ups.
 | Seen | The relay adds a 👀 reaction after it saves the capture, even if inbox enqueue or wake fails. |
 | Acknowledged | The relay adds a ✅ reaction only after `fm-inbox.sh receipts --all-handled` reports the note handled. Both reactions are idempotent and recorded in `state.json` only after Discord accepts them. |
 | Answers | Reads `fm-inbox.sh receipts --all-replies --after <cursor>` and posts native threaded replies. A stable nonce deduplicates retries within Discord’s short nonce window; a later retry after an ambiguous send can duplicate the reply. If the parent is missing, that answer stays queued and the error is logged; other mapped answers can still post. No standalone answer is posted. |
-| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. They post silently if the captain chatted within the last two minutes or the inbound pass failed. |
+| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. They post silently if the most recent observed captain message was within the last two minutes. A failed inbound pass does not itself mute the push. |
 | Routine batching | Other event kinds are posted in silent “Fleet update” digests at ten-minute intervals, with identical lines collapsed. Updates that do not fit stay queued for the next digest; an oversized individual line is shortened. |
 | Reminder | An urgent alert without a later captain text message gets a threaded “Still waiting on you” reminder after one minute. Recent owner activity or an unsuccessful inbound pass holds the reminder without canceling it. Rejected sends remain eligible; the relay records completion only after Discord accepts the reminder. |
 | Secrets | All posts have mentions disabled, a fixed length cap, and best-effort credential redaction. Do not send sensitive text or rely on the filter to make it safe. |
@@ -52,11 +52,11 @@ bin/go-pilot/discord-relay run
 bin/go-pilot/discord-relay emit -kind blocker -task <task-id> -id <occurrence-id> "short text"
 ```
 
-`FM_HOME` selects the operational home for both configuration and inbox data. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. Set `FM_ROOT_OVERRIDE` when running the binary outside that layout. The relay does not pass the state, data, or config directory overrides to the inbox wrapper.
+`FM_HOME` selects the operational home for both configuration and inbox data. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. Set `FM_ROOT_OVERRIDE` when running the binary outside that layout. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
 
 ## Event hooks
 
-`emit` is the only supported event producer. First start the relay to bind the state directory; `emit` refuses an unbound directory or a mismatch in channel, owner, or inbox home. After binding, it can queue events whether or not the reader is running.
+Use `emit` to queue events. The private, scope-checked `events/` directory is the producer trust boundary; grant write access only to trusted producers. First start the relay to bind the state directory; `emit` refuses an unbound directory or a mismatch in channel, owner, or inbox home. After binding, it can queue events whether or not the reader is running.
 The relay stores events durably before delivery and deduplicates by occurrence ID.
 Use an explicit occurrence ID, reusing it only when retrying the same occurrence.
 Alerts and reminders are delivered at least once: a crash after Discord accepts the post but before local state is saved can duplicate it.
@@ -66,7 +66,7 @@ This release is shadow-only. Connecting the live Firstmate status producer is a 
 
 Shadow test (needs the captain's word; nothing here is done by the build):
 
-1. Use a separate captain-only test channel and bot token. Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Unset `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, and `FM_CONFIG_OVERRIDE` before using the inbox wrapper manually.
+1. Use a separate captain-only test channel and bot token. Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Unset `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_CONFIG_OVERRIDE`, `FM_WAKE_QUEUE`, and `FM_WAKE_QUEUE_LOCK` before using the inbox wrapper manually.
 2. Run `bin/go-pilot/discord-relay once` before sending a captain message to establish the baseline. Send the message, then run `once` again; confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
 3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and run `once` to see the answer in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>`, then run `once` to see ✅.
 4. Start `bin/go-pilot/discord-relay run` and leave it running for this check. After two quiet minutes, emit a decision and a routine event with distinct occurrence IDs from another shell using the same `FM_HOME`. Check for one push, one quiet digest, and a reminder after about a minute if unanswered.
@@ -81,7 +81,7 @@ Rollback:
 
 1. Stop the relay (`SIGTERM`; state is durable).
 2. Restart the old watcher: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.firstmate.discord-watcher.plist`.
-3. Successfully enqueued messages are already in the Firstmate inbox. Captures not yet enqueued may exist only in relay state; keep that directory and reconcile those messages before deleting it. Messages sent while neither ran are picked up by the old bridge according to its own cursor.
+3. Successfully enqueued messages are already in the Firstmate inbox. Captures not yet enqueued may exist only in relay state; keep that directory and reconcile those messages before deleting it. Messages sent while neither ran are picked up by the old bridge according to its own cursor. The old watcher may also repost an answer already delivered by the Go relay because it uses a separate reply cursor.
 Keep `state_dir` for diagnosis; delete it only to force a fresh baseline.
 
 ## Failure behaviour

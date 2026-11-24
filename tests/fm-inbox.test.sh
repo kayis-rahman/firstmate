@@ -347,6 +347,25 @@ expect_code 1 "$conflict_code" "a second reply for the same note is refused"
 assert_contains "$conflict" "already recorded" "the refusal names the existing record"
 pass "the reply channel is durable and its cursor is a strict order"
 
+snapshot_bin="$TMP_ROOT/snapshot-bin"
+mkdir -p "$snapshot_bin"
+FM_TEST_REAL_PYTHON=$(command -v python3)
+export FM_TEST_REAL_PYTHON
+cat > "$snapshot_bin/python3" <<'SH'
+#!/bin/sh
+pid=$(cat "$FM_HOME/state/inbox/.replies.lock/pid") || exit 70
+kill -0 "$pid" || exit 71
+exec "$FM_TEST_REAL_PYTHON" "$@"
+SH
+chmod +x "$snapshot_bin/python3"
+snapshot=$(PATH="$snapshot_bin:$PATH" run_inbox "$home" receipts --all-replies --after "$first_cursor") \
+  || fail "the receipts reader must hold the writer lock throughout the scan"
+assert_equals "$later" "$(printf '%s' "$snapshot" | json_get replies 0 id)" \
+  "the locked snapshot preserves cursor filtering"
+[ ! -e "$home/state/inbox/.replies.lock" ] && [ ! -L "$home/state/inbox/.replies.lock" ] \
+  || fail "receipts left the reply lock held"
+pass "receipts scan under the shared reply writer lock"
+
 # A lost sequence counter must not move the cursor backwards: the next reply
 # still sorts after every reply a client has already read.
 lost_cursor=$(printf '%s' "$replies" | python3 -c 'import json,sys

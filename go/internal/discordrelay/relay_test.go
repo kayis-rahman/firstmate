@@ -682,7 +682,7 @@ func TestEmitRequiresBoundScope(t *testing.T) {
 	}
 }
 
-func TestFailedInboundSendsQuietAlertAndHoldsReminder(t *testing.T) {
+func TestFailedInboundStillPushesAlertAndHoldsReminder(t *testing.T) {
 	for _, failSave := range []bool{false, true} {
 		g, n := alertRig(t)
 		g.now = g.now.Add(time.Minute)
@@ -706,8 +706,8 @@ func TestFailedInboundSendsQuietAlertAndHoldsReminder(t *testing.T) {
 			restore()
 		}
 		ps := g.f.postsSnapshot()
-		if len(ps) != n+1 || !ps[n].Silent || !strings.Contains(ps[n].Content, "new blocker") {
-			t.Fatalf("expected only a quiet new alert during inbound failure (save failure=%v): %+v", failSave, ps)
+		if len(ps) != n+1 || ps[n].Silent || !strings.Contains(ps[n].Content, "new blocker") {
+			t.Fatalf("expected only a new alert with a push during inbound failure (save failure=%v): %+v", failSave, ps)
 		}
 		g.f.fetchStatus = 0
 		g.tick()
@@ -752,12 +752,12 @@ func TestBlockedReplyDoesNotBlockMappedAnswer(t *testing.T) {
 func TestExecInboxAgainstStub(t *testing.T) {
 	dir := t.TempDir()
 	stub := filepath.Join(dir, "fm-inbox.sh")
-	for _, key := range []string{"FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN"} {
+	for _, key := range []string{"FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN", "FM_WAKE_QUEUE", "FM_WAKE_QUEUE_LOCK"} {
 		t.Setenv(key, "not-the-bound-home")
 	}
 	script := `#!/bin/sh
 [ "$FM_HOME" = "${0%/*}" ] || exit 2
-[ -z "${FM_STATE_OVERRIDE+x}${FM_DATA_OVERRIDE+x}${FM_CONFIG_OVERRIDE+x}${FM_ROOT_OVERRIDE+x}${FM_DISCORD_RELAY_TOKEN+x}" ] || exit 2
+[ -z "${FM_STATE_OVERRIDE+x}${FM_DATA_OVERRIDE+x}${FM_CONFIG_OVERRIDE+x}${FM_ROOT_OVERRIDE+x}${FM_DISCORD_RELAY_TOKEN+x}${FM_WAKE_QUEUE+x}${FM_WAKE_QUEUE_LOCK+x}" ] || exit 2
 case "$1" in
 note)
   [ "$#" = 6 ] && [ "$2" = --request-id ] && [ "$3" = discord-1 ] &&

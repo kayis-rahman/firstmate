@@ -658,7 +658,7 @@ PY
 }
 
 cmd_receipts() {
-  local after="" all_pending=0 all_handled=0 all_replies=0
+  local after="" all_pending=0 all_handled=0 all_replies=0 status=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --after)
@@ -675,10 +675,13 @@ cmd_receipts() {
     esac
   done
   need_python
+  mkdir -p "$INBOX" || die "could not open inbox for receipts"
+  load_wake_lib || die "receipts need $FM_ROOT/bin/fm-wake-lib.sh"
+  fm_lock_acquire_wait "$REPLY_SEQ_LOCK" --refuse-unreapable || die "could not lock replies for receipts"
   python3 - "$INBOX" "$ANNOUNCED_DIR" "$REPLIES" "$FM_HOME" \
     "$RECEIPTS_PENDING_BOUND" "$RECEIPTS_HANDLED_BOUND" "$RECEIPTS_REPLIES_BOUND" \
     "$all_pending" "$all_handled" "$all_replies" "$after" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY' || status=$?
 import json, os, sys
 from pathlib import Path
 
@@ -847,6 +850,8 @@ json.dump({
 }, sys.stdout, separators=(",", ":"))
 sys.stdout.write("\n")
 PY
+  fm_lock_release "$REPLY_SEQ_LOCK"
+  return "$status"
 }
 
 cmd_ready() {

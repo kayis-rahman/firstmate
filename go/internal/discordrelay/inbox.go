@@ -39,7 +39,7 @@ func (e ExecInbox) run(stdin string, args ...string) ([]byte, int, error) {
 	for _, v := range os.Environ() {
 		key, _, _ := strings.Cut(v, "=")
 		switch key {
-		case "FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN":
+		case "FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN", "FM_WAKE_QUEUE", "FM_WAKE_QUEUE_LOCK":
 			continue
 		}
 		cmd.Env = append(cmd.Env, v)
