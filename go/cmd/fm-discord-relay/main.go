@@ -70,6 +70,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("fm-discord-relay: %v", err)
 	}
+	if !cfg.Enabled {
+		log.Fatalf("fm-discord-relay: disabled; set \"enabled\": true in %s", cfgPath)
+	}
 	scope := discordrelay.Scope{ChannelID: cfg.ChannelID, OwnerID: cfg.OwnerID, InboxHome: home}
 	if cmd == "emit" {
 		event.Text = strings.Join(fs.Args(), " ")
@@ -78,9 +81,6 @@ func main() {
 		}
 		fmt.Println(event.ID)
 		return
-	}
-	if !cfg.Enabled {
-		log.Fatalf("fm-discord-relay: disabled; set \"enabled\": true in %s to start it", cfgPath)
 	}
 	token := os.Getenv("FM_DISCORD_RELAY_TOKEN")
 	if token == "" {

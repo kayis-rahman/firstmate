@@ -529,7 +529,7 @@ func TestFailedSaveDoesNotConsumeEventOrExposeCapture(t *testing.T) {
 	if g.box.calls != 0 || len(g.f.postsSnapshot()) != 0 {
 		t.Fatal("uncommitted capture or alert was dispatched")
 	}
-	if _, err := os.Stat(filepath.Join(g.r.St.eventsDir(), "pending.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(g.r.St.eventsDir(), eventFilename(e.ID))); err != nil {
 		t.Fatal(err)
 	}
 	restore()
@@ -616,13 +616,36 @@ func TestUnknownAlertKindRejectedByEmitAndSpool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(g.r.St.eventsDir(), "typo.json")
+	path := filepath.Join(g.r.St.eventsDir(), eventFilename(e.ID))
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	g.tick()
 	if _, err := os.Stat(path + ".rejected"); err != nil || len(g.f.postsSnapshot()) != 0 {
 		t.Fatalf("expected unknown kind quarantined without delivery: %v", err)
+	}
+}
+
+func TestCaseDistinctOccurrenceIDsBothDeliver(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	for _, id := range []string{"Review-7", "review-7", "Review-7"} {
+		if err := g.emit(EventIn{ID: id, Kind: "review-ready", Text: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := os.ReadDir(g.r.St.eventsDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || strings.EqualFold(files[0].Name(), files[1].Name()) {
+		t.Fatalf("spool filenames collide under case folding: %v", files)
+	}
+	g.tick()
+	g.tick()
+	ps := g.f.postsSnapshot()
+	if len(ps) != 2 || !strings.HasSuffix(ps[0].Content, "Review-7") || !strings.HasSuffix(ps[1].Content, "review-7") {
+		t.Fatalf("expected one delivery per exact ID: %+v", ps)
 	}
 }
 
@@ -643,7 +666,7 @@ func TestEmitRequiresBoundScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(g.r.St.eventsDir(), "a.json"), b, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(g.r.St.eventsDir(), eventFilename(e.ID)), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	g.tick()

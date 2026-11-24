@@ -1,6 +1,7 @@
 package discordrelay
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,10 @@ type queuedEvent struct {
 	EventIn
 }
 
+func eventFilename(id string) string {
+	return hex.EncodeToString([]byte(id)) + ".json"
+}
+
 // WriteEvent queues an event for an already bound relay.
 func WriteEvent(dir string, scope Scope, e EventIn) error {
 	if _, err := loadBoundState(dir, scope, &State{}); err != nil {
@@ -51,7 +56,7 @@ func WriteEvent(dir string, scope Scope, e EventIn) error {
 		return err
 	}
 	defer os.Remove(f.Name())
-	return publish(f, filepath.Join(eventsDir, e.ID+".json"), b)
+	return publish(f, filepath.Join(eventsDir, eventFilename(e.ID)), b)
 }
 
 // Relay wires transport, inbox and durable state.
@@ -287,7 +292,7 @@ func (r *Relay) ingestEvents() error {
 		if err != nil {
 			return err
 		}
-		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != e.ID+".json" || !alertKinds[e.Kind] || strings.TrimSpace(e.Text) == "" {
+		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != eventFilename(e.ID) || !alertKinds[e.Kind] || strings.TrimSpace(e.Text) == "" {
 			r.logf("rejecting malformed event file %s", filepath.Base(f))
 			_ = os.Rename(f, f+".rejected")
 			continue

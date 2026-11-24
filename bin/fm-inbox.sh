@@ -677,7 +677,7 @@ cmd_receipts() {
   need_python
   mkdir -p "$INBOX" || die "could not open inbox for receipts"
   load_wake_lib || die "receipts need $FM_ROOT/bin/fm-wake-lib.sh"
-  fm_lock_acquire_wait_max "$REPLY_SEQ_LOCK" 2 || die "could not lock replies for receipts: $REPLY_SEQ_LOCK"
+  fm_lock_acquire_wait_bounded "$REPLY_SEQ_LOCK" 2 || die "could not lock replies for receipts: $REPLY_SEQ_LOCK"
   snapshot=$(python3 - "$INBOX" "$ANNOUNCED_DIR" "$REPLIES" "$FM_HOME" \
     "$RECEIPTS_PENDING_BOUND" "$RECEIPTS_HANDLED_BOUND" "$RECEIPTS_REPLIES_BOUND" \
     "$all_pending" "$all_handled" "$all_replies" "$after" \

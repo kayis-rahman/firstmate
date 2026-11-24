@@ -379,11 +379,18 @@ binary, home, lock_fail_bin = sys.argv[1:]
 env = dict(os.environ, FM_HOME=home, FM_STATE_OVERRIDE=home + "/state",
            FM_DATA_OVERRIDE=home + "/data", FM_CONFIG_OVERRIDE=home + "/config")
 inbox = Path(home) / "state/inbox"
-blocked = subprocess.run([binary, "receipts", "--all-replies"],
-                         env=dict(env, FM_LOCK_STALE_AFTER="3600", PATH=lock_fail_bin + os.pathsep + env["PATH"]),
-                         capture_output=True, text=True, timeout=10)
-assert blocked.returncode == 1 and not blocked.stdout, blocked
-assert "could not lock replies for receipts" in blocked.stderr, blocked.stderr
+lock = inbox / ".replies.lock"
+for dangling, view in [(False, "--all-replies"), (True, "--all-handled")]:
+    if dangling:
+        lock.symlink_to(inbox / "missing-owner")
+    blocked = subprocess.run([binary, "receipts", view],
+                             env=dict(env, FM_LOCK_STALE_AFTER="3600",
+                                      PATH=lock_fail_bin + os.pathsep + env["PATH"]),
+                             capture_output=True, text=True, timeout=10)
+    assert blocked.returncode == 1 and not blocked.stdout, blocked
+    assert "could not lock replies for receipts" in blocked.stderr, blocked.stderr
+    if dangling:
+        lock.unlink(missing_ok=True)
 
 note_id = "1700000000-aaaaaa"
 (inbox / (note_id + ".note")).write_text(f"id={note_id}\n--\nreply here\n")

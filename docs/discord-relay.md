@@ -55,7 +55,7 @@ bin/go-pilot/discord-relay emit -kind blocker -id <occurrence-id> "short text"
 
 ## Event hooks
 
-Use `emit` to queue events. The private, scope-checked `events/` directory is the producer trust boundary; grant write access only to trusted producers. First start the relay to bind the state directory; `emit` refuses an unbound directory or a mismatch in channel, owner, or inbox home. After binding, it can queue events whether or not the reader is running.
+Use `emit` to queue events. The private, scope-checked `events/` directory is the producer trust boundary; grant write access only to trusted producers. First start the relay to bind the state directory; `emit` refuses an unbound directory or a mismatch in channel, owner, or inbox home. With `enabled: true`, it can queue events after binding whether or not the reader is running; it refuses when disabled. Spool filenames are the lowercase hex encoding of the exact occurrence ID followed by `.json`.
 The relay stores events durably before delivery and deduplicates by occurrence ID.
 Only `decision`, `review-ready`, `login`, and `blocker` are accepted alert kinds. Use an explicit occurrence ID, reusing it only when retrying the same occurrence.
 Alerts and reminders are delivered at least once: a crash after Discord accepts the post but before local state is saved can duplicate it.
@@ -65,7 +65,7 @@ This release is shadow-only. Connecting the live Firstmate status producer is a 
 
 Shadow test (needs the captain's word; nothing here is done by the build):
 
-1. Use a separate captain-only test channel and bot token. Before baselining a guild text channel, enable **Message Content Intent** for the bot in the Discord Developer Portal (and obtain approval if Discord requires it). Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Unset `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_CONFIG_OVERRIDE`, `FM_WAKE_QUEUE`, and `FM_WAKE_QUEUE_LOCK` before using the inbox wrapper manually.
+1. Use a separate captain-only test channel and bot token. Before baselining a guild text channel, enable **Message Content Intent** for the bot in the Discord Developer Portal (and obtain approval if Discord requires it). Before baselining, grant the bot **View Channel**, **Read Message History**, **Send Messages**, and **Add Reactions** in the shadow channel. Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Unset `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_CONFIG_OVERRIDE`, `FM_WAKE_QUEUE`, and `FM_WAKE_QUEUE_LOCK` before using the inbox wrapper manually.
 2. Run `bin/go-pilot/discord-relay once` before sending a captain message to establish the baseline. Send an ordinary captain message that does not mention the bot, then run `once` again; confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
 3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and run `once` to see the answer in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>`, then run `once` to see ✅.
 4. Start `bin/go-pilot/discord-relay run` and leave it running for this check. After two quiet minutes, emit a decision with an explicit occurrence ID from another shell using the same `FM_HOME`. Check for one push and a reminder after about a minute if unanswered.
