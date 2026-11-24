@@ -21,7 +21,7 @@ var (
 	kindRe = regexp.MustCompile(`^[a-z][a-z-]{0,31}$`)
 )
 
-// EventIn is the hook file format dropped into <state_dir>/events/.
+// EventIn is the input to emit.
 type EventIn struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
@@ -29,9 +29,19 @@ type EventIn struct {
 	Text string `json:"text"`
 }
 
-// WriteEvent durably drops an event file (write temp, then rename) so a hook
-// can hand work to the relay even when the relay is down.
-func WriteEvent(eventsDir string, e EventIn) error {
+type queuedEvent struct {
+	Scope Scope `json:"scope"`
+	EventIn
+}
+
+// WriteEvent queues an event for an already bound relay.
+func WriteEvent(dir string, scope Scope, e EventIn) error {
+	if _, err := loadBoundState(dir, scope, &State{}); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("state directory is unbound; start the relay before emitting events")
+		}
+		return err
+	}
 	if !idRe.MatchString(e.ID) {
 		return errors.New("event id must match " + idRe.String())
 	}
@@ -41,15 +51,14 @@ func WriteEvent(eventsDir string, e EventIn) error {
 	if strings.TrimSpace(e.Text) == "" {
 		return errors.New("event text is empty")
 	}
-	if err := os.MkdirAll(eventsDir, 0o700); err != nil {
+	eventsDir := filepath.Join(dir, "events")
+	b, _ := json.Marshal(queuedEvent{Scope: scope, EventIn: e})
+	f, err := os.CreateTemp(eventsDir, ".emit-*")
+	if err != nil {
 		return err
 	}
-	b, _ := json.Marshal(e)
-	tmp := filepath.Join(eventsDir, ".tmp-"+e.ID)
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, filepath.Join(eventsDir, e.ID+".json"))
+	defer os.Remove(f.Name())
+	return publish(f, filepath.Join(eventsDir, e.ID+".json"), b)
 }
 
 // Relay wires transport, inbox and durable state.
@@ -82,13 +91,13 @@ func snowLess(a, b string) bool {
 // Tick runs one full pass. Each stage persists before it advances, so a crash
 // anywhere is repaired by the next pass. Stage errors are joined, not fatal.
 func (r *Relay) Tick() error {
-	var errs []error
-	for _, step := range []func() error{r.pollInbound, r.markSeen, r.enqueue, r.markHandled, r.pollReplies, r.ingestEvents, r.dispatchEvents, r.remind} {
-		if err := step(); err != nil {
-			errs = append(errs, err)
-		}
+	inboundErr := r.pollInbound()
+	err := errors.Join(inboundErr, r.markSeen(), r.enqueue(), r.markHandled(), r.pollReplies(), r.ingestEvents(),
+		r.dispatchEvents(inboundErr == nil))
+	if inboundErr == nil {
+		err = errors.Join(err, r.remind())
 	}
-	return errors.Join(errs...)
+	return err
 }
 
 func (r *Relay) pollInbound() error {
@@ -112,7 +121,6 @@ func (r *Relay) pollInbound() error {
 		}
 		if m.AuthorID != r.Cfg.OwnerID {
 			if !first {
-				s.Rejected++
 				r.logf("rejected message %s from non-owner", m.ID)
 			}
 			continue
@@ -227,42 +235,69 @@ func (r *Relay) markHandled() error {
 func (r *Relay) pollReplies() error {
 	s := &r.St.S
 	byNote := map[string]string{}
+	unmapped := false
 	for id, m := range s.Messages {
 		if m.NoteID == "" {
-			return nil // a reply could belong to a note not yet mapped
+			unmapped = true
+		} else {
+			byNote[m.NoteID] = id
 		}
-		byNote[m.NoteID] = id
 	}
 	reps, err := r.Box.Replies(s.ReplyCursor)
 	if err != nil {
 		return err
 	}
 	sort.Slice(reps, func(i, j int) bool { return reps[i].Cursor < reps[j].Cursor })
+	var errs []error
+	blocked := false
 	for _, rep := range reps {
-		if origin, ok := byNote[rep.NoteID]; ok && !s.SentReplies[rep.NoteID] {
-			if _, err := r.Chat.Post(rep.Body, origin, false, rep.NoteID); err != nil {
-				return fmt.Errorf("reply %s: %w", rep.NoteID, err)
+		origin, mapped := byNote[rep.NoteID]
+		changed := false
+		if !s.SentReplies[rep.NoteID] {
+			if !mapped && unmapped {
+				blocked = true
+				continue
 			}
-			s.SentReplies[rep.NoteID] = true
+			if mapped {
+				if _, err := r.Chat.Post(rep.Body, origin, false, rep.NoteID); err != nil {
+					errs = append(errs, fmt.Errorf("reply %s: %w", rep.NoteID, err))
+					blocked = true
+					continue
+				}
+				s.SentReplies[rep.NoteID] = true
+				changed = true
+			}
 		}
-		s.ReplyCursor = rep.Cursor
-		if err := r.St.Save(); err != nil {
-			return err
+		if !blocked {
+			s.ReplyCursor = rep.Cursor
+			changed = true
+		}
+		if changed {
+			if err := r.St.Save(); err != nil {
+				return errors.Join(errors.Join(errs...), err)
+			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (r *Relay) ingestEvents() error {
-	files, _ := filepath.Glob(filepath.Join(r.St.EventsDir(), "*.json"))
-	sort.Strings(files)
-	for _, f := range files {
-		var e EventIn
-		b, err := os.ReadFile(f)
-		if err == nil {
-			err = json.Unmarshal(b, &e)
+	dir := r.St.eventsDir()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if !file.Type().IsRegular() || !strings.HasSuffix(file.Name(), ".json") {
+			continue
 		}
-		if err != nil || !idRe.MatchString(e.ID) || !kindRe.MatchString(e.Kind) || strings.TrimSpace(e.Text) == "" {
+		f := filepath.Join(dir, file.Name())
+		var e queuedEvent
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return err
+		}
+		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != e.ID+".json" || !kindRe.MatchString(e.Kind) || strings.TrimSpace(e.Text) == "" {
 			r.logf("rejecting malformed event file %s", filepath.Base(f))
 			_ = os.Rename(f, f+".rejected")
 			continue
@@ -289,7 +324,7 @@ func eventLine(e *Event) string {
 	return e.Text
 }
 
-func (r *Relay) dispatchEvents() error {
+func (r *Relay) dispatchEvents(presenceKnown bool) error {
 	s := &r.St.S
 	now := r.Now()
 	ids := make([]string, 0)
@@ -303,7 +338,7 @@ func (r *Relay) dispatchEvents() error {
 	for _, id := range ids {
 		e := s.Events[id]
 		msg := "🔔 " + e.Kind + " — " + eventLine(e)
-		mid, err := r.Chat.Post(msg, "", r.active(r.Now()), "") // quiet while he is in the chat
+		mid, err := r.Chat.Post(msg, "", !presenceKnown || r.active(r.Now()), "")
 		if err != nil {
 			errs = append(errs, fmt.Errorf("alert %s: %w", id, err))
 			continue
@@ -313,7 +348,7 @@ func (r *Relay) dispatchEvents() error {
 			return err
 		}
 	}
-	if len(s.Batch) > 0 && now.Sub(s.LastBatchAt) >= r.Cfg.batchWindow() {
+	if len(s.Batch) > 0 && now.Sub(s.LastBatchAt) >= batchWindow {
 		body, n := digest(s.Batch, s.Events)
 		if _, err := r.Chat.Post(body, "", true, ""); err != nil {
 			errs = append(errs, fmt.Errorf("digest: %w", err))
@@ -329,6 +364,8 @@ func (r *Relay) dispatchEvents() error {
 	}
 	return errors.Join(errs...)
 }
+
+const batchWindow = 10 * time.Minute
 
 func digest(batch []string, events map[string]*Event) (string, int) {
 	counts := map[string]int{}
@@ -378,7 +415,7 @@ func (r *Relay) remind() error {
 	}
 	ids := make([]string, 0)
 	for id, e := range s.Events {
-		if e.Urgent && e.Posted && !e.Answered && !e.Reminded && now.Sub(e.PostedAt) >= r.Cfg.reminderAfter() {
+		if e.Urgent && e.Posted && !e.Answered && !e.Reminded && now.Sub(e.PostedAt) >= time.Minute {
 			ids = append(ids, id)
 		}
 	}

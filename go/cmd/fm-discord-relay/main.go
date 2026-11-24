@@ -1,12 +1,11 @@
 // fm-discord-relay: deterministic, zero-model-token Discord relay for firstmate.
 //
-//	fm-discord-relay run    [-config f]   loop until SIGINT/SIGTERM
-//	fm-discord-relay once   [-config f]   one pass (shadow/testing)
-//	fm-discord-relay emit   [-config f] -kind K [-task T] -id ID text...
+//	fm-discord-relay run    loop until SIGINT/SIGTERM
+//	fm-discord-relay once   one pass (shadow/testing)
+//	fm-discord-relay emit   -kind K [-task T] -id ID text...
 //
 // It is off unless the config file says "enabled": true. See
-// docs/discord-relay.md. The bot token is read only from the environment
-// variable named by token_env and is never logged.
+// docs/discord-relay.md. The bot token is read from FM_DISCORD_RELAY_TOKEN.
 package main
 
 import (
@@ -25,7 +24,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: fm-discord-relay run|once|emit [-config file]")
+		fmt.Fprintln(os.Stderr, "usage: fm-discord-relay run|once|emit")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
@@ -53,50 +52,49 @@ func main() {
 		log.Fatal(err)
 	}
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
-	cfgPath := fs.String("config", filepath.Join(home, "config", "discord-relay.json"), "config file")
-	kind := fs.String("kind", "", "emit: decision|review-ready|login|blocker or a routine kind")
-	task := fs.String("task", "", "emit: task id")
-	id := fs.String("id", "", "emit: required occurrence id")
-	_ = fs.Parse(os.Args[2:])
-
-	cfg, err := discordrelay.LoadConfig(*cfgPath)
-	if err != nil {
-		log.Fatalf("fm-discord-relay: %v", err)
-	}
+	var event discordrelay.EventIn
 	if cmd == "emit" {
-		// Hooks must work even when the relay is disabled or down: the event
-		// file waits durably for the next pass.
-		text := strings.Join(fs.Args(), " ")
-		if err := discordrelay.WriteEvent(filepath.Join(cfg.StateDir, "events"), discordrelay.EventIn{ID: *id, Kind: *kind, Task: *task, Text: text}); err != nil {
-			log.Fatalf("fm-discord-relay emit: %v", err)
-		}
-		fmt.Println(*id)
-		return
+		fs.StringVar(&event.Kind, "kind", "", "decision|review-ready|login|blocker or a routine kind")
+		fs.StringVar(&event.Task, "task", "", "task id")
+		fs.StringVar(&event.ID, "id", "", "required occurrence id")
 	}
-	if !cfg.Enabled {
-		log.Fatalf("fm-discord-relay: disabled; set \"enabled\": true in %s to start it", *cfgPath)
-	}
-	token := os.Getenv(cfg.TokenEnv)
-	if token == "" {
-		log.Fatalf("fm-discord-relay: environment variable %s is empty", cfg.TokenEnv)
+	_ = fs.Parse(os.Args[2:])
+	if cmd != "emit" && fs.NArg() != 0 {
+		log.Fatalf("fm-discord-relay %s: unexpected arguments", cmd)
 	}
 	home, err = filepath.EvalSymlinks(home)
 	if err != nil {
 		log.Fatalf("fm-discord-relay inbox home: %v", err)
 	}
-	st, err := discordrelay.OpenStore(cfg.StateDir, discordrelay.Scope{
-		ChannelID: cfg.ChannelID, OwnerID: cfg.OwnerID, InboxHome: home,
-	})
+	cfgPath := filepath.Join(home, "config", "discord-relay.json")
+	cfg, err := discordrelay.LoadConfig(cfgPath)
+	if err != nil {
+		log.Fatalf("fm-discord-relay: %v", err)
+	}
+	scope := discordrelay.Scope{ChannelID: cfg.ChannelID, OwnerID: cfg.OwnerID, InboxHome: home}
+	if cmd == "emit" {
+		event.Text = strings.Join(fs.Args(), " ")
+		if err := discordrelay.WriteEvent(cfg.StateDir, scope, event); err != nil {
+			log.Fatalf("fm-discord-relay emit: %v", err)
+		}
+		fmt.Println(event.ID)
+		return
+	}
+	if !cfg.Enabled {
+		log.Fatalf("fm-discord-relay: disabled; set \"enabled\": true in %s to start it", cfgPath)
+	}
+	token := os.Getenv("FM_DISCORD_RELAY_TOKEN")
+	if token == "" {
+		log.Fatal("fm-discord-relay: environment variable FM_DISCORD_RELAY_TOKEN is empty")
+	}
+	st, err := discordrelay.OpenStore(cfg.StateDir, scope)
 	if err != nil {
 		log.Fatalf("fm-discord-relay: %v", err)
 	}
 	defer st.Close()
-	inbox := cfg.InboxCmd
-	if !filepath.IsAbs(inbox) {
-		inbox, err = filepath.Abs(filepath.Join(root, inbox))
-		if err != nil {
-			log.Fatal(err)
-		}
+	inbox, err := filepath.Abs(filepath.Join(root, "bin", "fm-inbox.sh"))
+	if err != nil {
+		log.Fatal(err)
 	}
 	r := &discordrelay.Relay{
 		Cfg:  cfg,
@@ -114,7 +112,7 @@ func main() {
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	t := time.NewTicker(time.Duration(cfg.PollSeconds) * time.Second)
+	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	for {
 		if err := r.Tick(); err != nil {

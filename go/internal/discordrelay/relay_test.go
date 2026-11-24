@@ -35,13 +35,15 @@ type post struct {
 
 // fakeDiscord is a real HTTP server so the REST client is exercised too.
 type fakeDiscord struct {
-	mu         sync.Mutex
-	msgs       []Message
-	posts      []post
-	next       int
-	srv        *httptest.Server
-	token      string
-	postStatus int
+	mu            sync.Mutex
+	msgs          []Message
+	posts         []post
+	next          int
+	srv           *httptest.Server
+	token         string
+	postStatus    int
+	fetchStatus   int
+	missingParent string
 }
 
 func newFake(t *testing.T) *fakeDiscord {
@@ -60,6 +62,10 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == "GET":
+		if f.fetchStatus != 0 {
+			w.WriteHeader(f.fetchStatus)
+			return
+		}
 		after := r.URL.Query().Get("after")
 		var out []map[string]any
 		for i := len(f.msgs) - 1; i >= 0; i-- { // newest first, like Discord
@@ -90,6 +96,10 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 		if b.Ref != nil {
 			p.ReplyTo = b.Ref.ID
 			p.RequireParent = b.Ref.RequireParent
+			if p.RequireParent && p.ReplyTo == f.missingParent {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 		}
 		f.posts = append(f.posts, p)
 		f.next++
@@ -174,7 +184,7 @@ type rig struct {
 }
 
 func newRig(t *testing.T) *rig {
-	g := &rig{t: t, f: newFake(t), box: &fakeInbox{}, dir: t.TempDir(), now: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
+	g := &rig{t: t, f: newFake(t), box: &fakeInbox{}, dir: filepath.Join(t.TempDir(), "relay[shadow]"), now: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
 	g.open()
 	return g
 }
@@ -201,6 +211,10 @@ func (g *rig) tick() {
 	if err := g.r.Tick(); err != nil {
 		g.t.Logf("tick: %v", err)
 	}
+}
+
+func (g *rig) emit(e EventIn) error {
+	return WriteEvent(g.dir, Scope{channel, owner, g.dir}, e)
 }
 
 func (g *rig) baseline() { g.tick() } // first tick sets the cursor on an empty channel
@@ -326,7 +340,7 @@ func TestDuplicateDeliveryAndEventDedupe(t *testing.T) {
 	}
 	ev := EventIn{ID: "pr-7", Kind: "review-ready", Task: "t1", Text: "PR ready"}
 	for i := 0; i < 2; i++ {
-		if err := WriteEvent(g.r.St.EventsDir(), ev); err != nil {
+		if err := g.emit(ev); err != nil {
 			t.Fatal(err)
 		}
 		g.tick()
@@ -352,17 +366,17 @@ func TestUnauthorizedSenderAndBots(t *testing.T) {
 	if g.box.calls != 0 || len(g.f.postsSnapshot()) != 0 {
 		t.Fatalf("unauthorized input acted on: calls=%d posts=%v", g.box.calls, g.f.postsSnapshot())
 	}
-	if g.r.St.S.Rejected != 1 || !g.r.St.S.LastOwnerAt.IsZero() {
-		t.Fatalf("rejection not counted or owner presence spoofed: %+v", g.r.St.S)
+	if !g.r.St.S.LastOwnerAt.IsZero() {
+		t.Fatalf("owner presence spoofed: %+v", g.r.St.S)
 	}
 }
 
 func TestUrgentImmediateRoutineBatched(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "a", Kind: "progress", Task: "t1", Text: "tests green"})
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "b", Kind: "progress", Task: "t1", Text: "tests green"})
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "c", Kind: "blocker", Task: "t2", Text: "login needed"})
+	g.emit(EventIn{ID: "a", Kind: "progress", Task: "t1", Text: "tests green"})
+	g.emit(EventIn{ID: "b", Kind: "progress", Task: "t1", Text: "tests green"})
+	g.emit(EventIn{ID: "c", Kind: "blocker", Task: "t2", Text: "login needed"})
 	g.now = g.now.Add(time.Minute) // less than the batch window since zero? LastBatchAt is zero so first digest is due
 	g.r.St.S.LastBatchAt = g.now
 	g.tick()
@@ -387,7 +401,7 @@ func TestUrgentImmediateRoutineBatched(t *testing.T) {
 func alertRig(t *testing.T) (*rig, int) {
 	g := newRig(t)
 	g.baseline()
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "d1", Kind: "decision", Task: "t1", Text: "pick option"})
+	g.emit(EventIn{ID: "d1", Kind: "decision", Task: "t1", Text: "pick option"})
 	g.tick()
 	return g, len(g.f.postsSnapshot())
 }
@@ -437,7 +451,7 @@ func TestAlertQuietWhileActive(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
 	g.f.say("5001", owner, "", g.now)
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "x", Kind: "login", Text: "login needed"})
+	g.emit(EventIn{ID: "x", Kind: "login", Text: "login needed"})
 	g.tick()
 	if ps := g.f.postsSnapshot(); len(ps) != 1 || !ps[0].Silent {
 		t.Fatalf("want a silent alert while active, got %+v", ps)
@@ -448,14 +462,14 @@ func TestRedactsSecretsAndRejectsBadEvents(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
 	hook := "https://discord.com/api/webhooks/123456789012345678/AbCdEfGh-token"
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "s", Kind: "blocker", Text: "see " + hook + " github_pat_abcde_abcdefghijklmno_abcdefghijklmnop token=abcdefgh12345"})
-	os.WriteFile(filepath.Join(g.r.St.EventsDir(), "bad.json"), []byte("{nope"), 0o600)
+	g.emit(EventIn{ID: "s", Kind: "blocker", Text: "see " + hook + " github_pat_abcde_abcdefghijklmno_abcdefghijklmnop token=abcdefgh12345"})
+	os.WriteFile(filepath.Join(g.r.St.eventsDir(), "bad.json"), []byte("{nope"), 0o600)
 	g.tick()
 	ps := g.f.postsSnapshot()
 	if len(ps) != 1 || strings.Contains(ps[0].Content, "webhooks") || strings.Contains(ps[0].Content, "abcdefgh12345") || strings.Contains(ps[0].Content, "github_pat_") {
 		t.Fatalf("secret leaked: %+v", ps)
 	}
-	if _, err := os.Stat(filepath.Join(g.r.St.EventsDir(), "bad.json.rejected")); err != nil {
+	if _, err := os.Stat(filepath.Join(g.r.St.eventsDir(), "bad.json.rejected")); err != nil {
 		t.Fatal("malformed event not quarantined")
 	}
 }
@@ -469,7 +483,7 @@ func TestSecondInstanceRefusedAndConfigValidation(t *testing.T) {
 	if c.Validate() == nil {
 		t.Fatal("non-snowflake owner accepted")
 	}
-	for _, field := range []string{"api_base", "receipt", "ack", "active_chat_seconds", "max_message_runes"} {
+	for _, field := range []string{"api_base", "receipt", "ack", "active_chat_seconds", "max_message_runes", "token_env", "inbox_cmd", "poll_seconds", "reminder_seconds", "batch_seconds"} {
 		path := filepath.Join(t.TempDir(), "config.json")
 		c := map[string]any{"channel_id": channel, "owner_id": owner, "state_dir": g.dir, field: "removed"}
 		b, err := json.Marshal(c)
@@ -520,7 +534,7 @@ func TestFailedSaveDoesNotConsumeEventOrExposeCapture(t *testing.T) {
 	restore := blockSave(t, g)
 	g.f.say("5001", owner, "capture", g.now)
 	e := EventIn{ID: "pending", Kind: "decision", Text: "decide"}
-	if err := WriteEvent(g.r.St.EventsDir(), e); err != nil {
+	if err := g.emit(e); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -531,7 +545,7 @@ func TestFailedSaveDoesNotConsumeEventOrExposeCapture(t *testing.T) {
 	if g.box.calls != 0 || len(g.f.postsSnapshot()) != 0 {
 		t.Fatal("uncommitted capture or alert was dispatched")
 	}
-	if _, err := os.Stat(filepath.Join(g.r.St.EventsDir(), "pending.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(g.r.St.eventsDir(), "pending.json")); err != nil {
 		t.Fatal(err)
 	}
 	restore()
@@ -598,7 +612,7 @@ func TestStartupEmptyOwnerMessageCountsAsPresence(t *testing.T) {
 	g := newRig(t)
 	g.f.say("4999", owner, "", g.now.Add(-time.Minute))
 	g.f.say("5000", other, "newer message", g.now)
-	if err := WriteEvent(g.r.St.EventsDir(), EventIn{ID: "a", Kind: "blocker", Text: "quiet"}); err != nil {
+	if err := g.emit(EventIn{ID: "a", Kind: "blocker", Text: "quiet"}); err != nil {
 		t.Fatal(err)
 	}
 	g.tick()
@@ -611,7 +625,7 @@ func TestDigestCarriesOverflowAndCapsUnicode(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
 	for i, body := range []string{strings.Repeat("😀", 1100), "second", "second"} {
-		if err := WriteEvent(g.r.St.EventsDir(), EventIn{ID: itoa(i), Kind: "progress", Text: body}); err != nil {
+		if err := g.emit(EventIn{ID: itoa(i), Kind: "progress", Text: body}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -621,17 +635,129 @@ func TestDigestCarriesOverflowAndCapsUnicode(t *testing.T) {
 		t.Fatalf("expected one bounded first digest, got %d posts", len(ps))
 	}
 	g.open()
-	g.now = g.now.Add(g.r.Cfg.batchWindow())
+	g.now = g.now.Add(batchWindow)
 	g.tick()
 	if ps := g.f.postsSnapshot(); len(ps) != 2 || ps[1].Content != "Fleet update (2)\n• second (x2)" {
 		t.Fatalf("overflow did not survive for the next digest: %+v", ps)
 	}
 }
 
+func TestEmitRequiresBoundScope(t *testing.T) {
+	g := newRig(t)
+	e := EventIn{ID: "a", Kind: "decision", Text: "private decision"}
+	scope := Scope{channel, owner, g.dir}
+	fresh := filepath.Join(t.TempDir(), "unbound")
+	if err := WriteEvent(fresh, scope, e); err == nil {
+		t.Fatal("emit accepted an unbound directory")
+	}
+	for _, wrong := range []Scope{{other, owner, g.dir}, {channel, other, g.dir}, {channel, owner, fresh}} {
+		if err := WriteEvent(g.dir, wrong, e); err == nil {
+			t.Fatalf("emit accepted mismatched scope %+v", wrong)
+		}
+	}
+	b, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(g.r.St.eventsDir(), "a.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g.tick()
+	if len(g.f.postsSnapshot()) != 0 {
+		t.Fatal("unscoped event was delivered")
+	}
+	results := make(chan error, 8)
+	for i := 0; i < cap(results); i++ {
+		go func() { results <- WriteEvent(g.dir, scope, e) }()
+	}
+	for i := 0; i < cap(results); i++ {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	g.tick()
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != 1 || !strings.Contains(ps[0].Content, e.Text) {
+		t.Fatalf("expected one delivery from the literal state directory: %+v", ps)
+	}
+}
+
+func TestFailedInboundSendsQuietAlertAndHoldsReminder(t *testing.T) {
+	for _, failSave := range []bool{false, true} {
+		g, n := alertRig(t)
+		g.now = g.now.Add(time.Minute)
+		g.f.say("5100", owner, "the answer", g.now)
+		if err := g.emit(EventIn{ID: "next", Kind: "blocker", Text: "new blocker"}); err != nil {
+			t.Fatal(err)
+		}
+		g.f.postStatus = http.StatusServiceUnavailable
+		g.f.fetchStatus = http.StatusTooManyRequests
+		g.tick()
+		g.f.postStatus = 0
+		var restore func()
+		if failSave {
+			g.f.fetchStatus = 0
+			restore = blockSave(t, g)
+		}
+		if err := g.r.Tick(); err == nil {
+			t.Fatal("inbound failure was not reported")
+		}
+		if restore != nil {
+			restore()
+		}
+		ps := g.f.postsSnapshot()
+		if len(ps) != n+1 || !ps[n].Silent || !strings.Contains(ps[n].Content, "new blocker") {
+			t.Fatalf("expected only a quiet new alert during inbound failure (save failure=%v): %+v", failSave, ps)
+		}
+		g.f.fetchStatus = 0
+		g.tick()
+		if !g.r.St.S.Events["d1"].Answered || g.r.St.S.Events["d1"].Reminded {
+			t.Fatal("expected a committed answer without a stale reminder")
+		}
+	}
+}
+
+func TestBlockedReplyDoesNotBlockMappedAnswer(t *testing.T) {
+	for _, blocker := range []string{"missing parent", "unmapped note"} {
+		t.Run(blocker, func(t *testing.T) {
+			g := newRig(t)
+			g.baseline()
+			g.f.say("5002", owner, "mapped", g.now)
+			g.tick()
+			if blocker == "missing parent" {
+				g.f.missingParent = "5003"
+			} else {
+				g.box.failing = true
+			}
+			g.f.say("5003", owner, "first note", g.now)
+			g.tick()
+			n := len(g.f.postsSnapshot())
+			g.box.replies = []Reply{{"note-discord-5003", "first reply", "1"}, {"note-discord-5002", "second reply", "2"}}
+			g.tick()
+			g.open()
+			g.tick()
+			if ps := g.f.postsSnapshot(); len(ps) != n+1 || ps[n].ReplyTo != "5002" || g.r.St.S.ReplyCursor != "" {
+				t.Fatalf("expected only the independent reply with the cursor pinned: %+v", ps)
+			}
+			g.box.failing = false
+			g.f.missingParent = ""
+			g.tick()
+			if ps := g.f.postsSnapshot(); len(ps) != n+2 || ps[n+1].ReplyTo != "5003" || g.r.St.S.ReplyCursor != "2" {
+				t.Fatalf("expected recovered reply and cursor progress without duplication: %+v", ps)
+			}
+		})
+	}
+}
+
 func TestExecInboxAgainstStub(t *testing.T) {
 	dir := t.TempDir()
 	stub := filepath.Join(dir, "fm-inbox.sh")
+	for _, key := range []string{"FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN"} {
+		t.Setenv(key, "not-the-bound-home")
+	}
 	script := `#!/bin/sh
+[ "$FM_HOME" = "${0%/*}" ] || exit 2
+[ -z "${FM_STATE_OVERRIDE+x}${FM_DATA_OVERRIDE+x}${FM_CONFIG_OVERRIDE+x}${FM_ROOT_OVERRIDE+x}${FM_DISCORD_RELAY_TOKEN+x}" ] || exit 2
 case "$1" in
 note)
   [ "$#" = 6 ] && [ "$2" = --request-id ] && [ "$3" = discord-1 ] &&

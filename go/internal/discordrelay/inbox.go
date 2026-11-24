@@ -36,7 +36,15 @@ func (e ExecInbox) run(stdin string, args ...string) ([]byte, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, e.Cmd, args...)
-	cmd.Env = append(os.Environ(), "FM_HOME="+e.Home)
+	for _, v := range os.Environ() {
+		key, _, _ := strings.Cut(v, "=")
+		switch key {
+		case "FM_HOME", "FM_STATE_OVERRIDE", "FM_DATA_OVERRIDE", "FM_CONFIG_OVERRIDE", "FM_ROOT_OVERRIDE", "FM_DISCORD_RELAY_TOKEN":
+			continue
+		}
+		cmd.Env = append(cmd.Env, v)
+	}
+	cmd.Env = append(cmd.Env, "FM_HOME="+e.Home)
 	var out bytes.Buffer
 	cmd.Stdin = strings.NewReader(stdin)
 	cmd.Stdout = &out

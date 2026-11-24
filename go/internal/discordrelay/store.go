@@ -49,7 +49,6 @@ type State struct {
 	Batch       []string          `json:"batch"`
 	LastBatchAt time.Time         `json:"last_batch_at"`
 	LastOwnerAt time.Time         `json:"last_owner_at"`
-	Rejected    int               `json:"rejected_count"`
 }
 
 // Store persists State and holds an exclusive process lock.
@@ -62,7 +61,7 @@ type Store struct {
 
 // OpenStore creates dir (0700), takes the single-instance lock and loads state.
 func OpenStore(dir string, scope Scope) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(dir, "events"), 0o700); err != nil {
+	if err := mkdirDurable(filepath.Join(dir, "events")); err != nil {
 		return nil, err
 	}
 	lf, err := os.OpenFile(filepath.Join(dir, "relay.lock"), os.O_CREATE|os.O_RDWR, 0o600)
@@ -74,17 +73,9 @@ func OpenStore(dir string, scope Scope) (*Store, error) {
 		return nil, fmt.Errorf("cannot acquire lock for state directory %s: %w", dir, err)
 	}
 	st := &Store{dir: dir, lock: lf}
-	b, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	b, err := loadBoundState(dir, scope, &st.S)
 	switch {
 	case err == nil:
-		if err := json.Unmarshal(b, &st.S); err != nil {
-			lf.Close()
-			return nil, errors.New("state.json is corrupt; restore a backup rather than guessing: " + err.Error())
-		}
-		if st.S.Scope != scope {
-			lf.Close()
-			return nil, errors.New("state directory is not bound to this channel, owner and inbox home; use a fresh state directory")
-		}
 		st.committed = b
 	case !os.IsNotExist(err):
 		lf.Close()
@@ -107,6 +98,20 @@ func OpenStore(dir string, scope Scope) (*Store, error) {
 		}
 	}
 	return st, nil
+}
+
+func loadBoundState(dir string, scope Scope, state *State) ([]byte, error) {
+	b, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, state); err != nil {
+		return nil, fmt.Errorf("state.json is corrupt; restore a backup rather than guessing: %w", err)
+	}
+	if state.Scope != scope {
+		return nil, errors.New("state directory is not bound to this channel, owner and inbox home")
+	}
+	return b, nil
 }
 
 // Save atomically replaces state.json.
@@ -133,6 +138,10 @@ func (s *Store) replace(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return publish(f, filepath.Join(s.dir, "state.json"), b)
+}
+
+func publish(f *os.File, dest string, b []byte) error {
 	if _, err := f.Write(b); err != nil {
 		f.Close()
 		return err
@@ -144,11 +153,43 @@ func (s *Store) replace(b []byte) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, filepath.Join(s.dir, "state.json"))
+	if err := os.Rename(f.Name(), dest); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(dest))
+}
+
+func syncDir(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}
+
+func mkdirDurable(path string) error {
+	info, err := os.Stat(path)
+	if err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("%s is not a directory", path)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+	parent := filepath.Dir(path)
+	if err := mkdirDurable(parent); err != nil {
+		return err
+	}
+	if err := os.Mkdir(path, 0o700); err != nil && !os.IsExist(err) {
+		return err
+	}
+	return syncDir(parent)
 }
 
 // Close releases the lock.
 func (s *Store) Close() { s.lock.Close() }
 
-// EventsDir is where hooks drop event files.
-func (s *Store) EventsDir() string { return filepath.Join(s.dir, "events") }
+func (s *Store) eventsDir() string { return filepath.Join(s.dir, "events") }
