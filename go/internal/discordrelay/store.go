@@ -15,6 +15,7 @@ type InMsg struct {
 	NoteID    string `json:"note_id,omitempty"`
 	Enqueued  bool   `json:"enqueued"`
 	Receipted bool   `json:"receipted"`
+	Acked     bool   `json:"acked,omitempty"` // firstmate handled the note and the mark landed
 	Rejected  bool   `json:"rejected,omitempty"`
 }
 

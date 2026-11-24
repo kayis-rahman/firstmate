@@ -24,7 +24,8 @@ type Config struct {
 	TokenEnv       string `json:"token_env"`
 	StateDir       string `json:"state_dir"`
 	InboxCmd       string `json:"inbox_cmd"`
-	Receipt        string `json:"receipt"` // reply | reaction | none
+	Receipt        string `json:"receipt"` // seen mark: reaction | reply | none
+	Ack            string `json:"ack"`     // handled mark: reaction | reply | none
 	PollSeconds    int    `json:"poll_seconds"`
 	ReminderSecs   int    `json:"reminder_seconds"`
 	ActiveSecs     int    `json:"active_chat_seconds"`
@@ -88,10 +89,17 @@ func (c *Config) Validate() error {
 	}
 	switch c.Receipt {
 	case "":
-		c.Receipt = "reply"
+		c.Receipt = "reaction"
 	case "reply", "reaction", "none":
 	default:
 		return errors.New("receipt must be reply, reaction or none")
+	}
+	switch c.Ack {
+	case "":
+		c.Ack = "reaction"
+	case "reply", "reaction", "none":
+	default:
+		return errors.New("ack must be reply, reaction or none")
 	}
 	return nil
 }

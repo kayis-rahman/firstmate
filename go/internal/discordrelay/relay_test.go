@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -82,7 +83,8 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"id": itoa(f.next)})
 	case r.Method == "PUT":
 		parts := strings.Split(r.URL.Path, "/")
-		f.posts = append(f.posts, post{Reaction: "x", ReactedTo: parts[4]})
+		emoji, _ := url.PathUnescape(parts[6])
+		f.posts = append(f.posts, post{Reaction: emoji, ReactedTo: parts[4]})
 		w.WriteHeader(204)
 	}
 }
@@ -107,6 +109,7 @@ type fakeInbox struct {
 	calls   int
 	failing bool
 	replies []Reply
+	handled map[string]bool // note ids firstmate has acknowledged
 }
 
 func (b *fakeInbox) Note(req, text string) (string, bool, error) {
@@ -123,6 +126,16 @@ func (b *fakeInbox) Note(req, text string) (string, bool, error) {
 		b.notes[req] = text
 	}
 	return "note-" + req, true, nil
+}
+
+func (b *fakeInbox) Handled() (map[string]bool, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	m := map[string]bool{}
+	for k := range b.handled {
+		m[k] = true
+	}
+	return m, nil
 }
 
 func (b *fakeInbox) Replies(after string) ([]Reply, error) {
@@ -180,6 +193,8 @@ func (g *rig) baseline() { g.tick() } // first tick sets the cursor on an empty 
 
 func TestCaptureAckAndThreadedReply(t *testing.T) {
 	g := newRig(t)
+	g.r.Cfg.Receipt = "reply"
+	g.r.Cfg.Ack = "none"
 	g.baseline()
 	g.f.say("5001", owner, "ship the thing", g.now)
 	g.tick()
@@ -206,8 +221,50 @@ func TestReactionReceipt(t *testing.T) {
 	g.f.say("5001", owner, "hi", g.now)
 	g.tick()
 	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || ps[0].Reaction == "" || ps[0].ReactedTo != "5001" {
+	if len(ps) != 1 || ps[0].Reaction != "👀" || ps[0].ReactedTo != "5001" {
 		t.Fatalf("want a reaction receipt, got %+v", ps)
+	}
+}
+
+func TestSeenThenAcknowledgedOnceAcrossRestart(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	g.f.say("5001", owner, "do it", g.now)
+	g.tick()
+	g.tick()
+	ps := g.f.postsSnapshot()
+	if len(ps) != 1 || ps[0].Reaction != "👀" || ps[0].ReactedTo != "5001" {
+		t.Fatalf("want exactly one seen mark and no ack yet, got %+v", ps)
+	}
+	g.box.handled = map[string]bool{"note-discord-5001": true}
+	g.tick()
+	g.open() // restart
+	g.tick()
+	g.tick()
+	ps = g.f.postsSnapshot()
+	if len(ps) != 2 || ps[1].Reaction != "✅" || ps[1].ReactedTo != "5001" {
+		t.Fatalf("want one seen and one ack, got %+v", ps)
+	}
+}
+
+func TestAckRetriedAfterFailureAndReplyMode(t *testing.T) {
+	g := newRig(t)
+	g.r.Cfg.Ack = "reply"
+	g.baseline()
+	g.f.say("5001", owner, "do it", g.now)
+	g.tick()
+	g.box.handled = map[string]bool{"note-discord-5001": true}
+	g.f.token = "rotated" // marks fail while the transport is broken
+	g.tick()
+	if g.r.St.S.Messages["5001"].Acked {
+		t.Fatal("acked despite failed mark")
+	}
+	g.f.token = "test-token-value"
+	g.tick()
+	g.tick()
+	ps := g.f.postsSnapshot()
+	if len(ps) != 2 || ps[1].Content != "Handled by firstmate." || ps[1].ReplyTo != "5001" || !ps[1].Silent {
+		t.Fatalf("want one silent threaded ack, got %+v", ps)
 	}
 }
 
@@ -404,7 +461,7 @@ func TestExecInboxAgainstStub(t *testing.T) {
 	script := `#!/bin/sh
 case "$1" in
 note) echo '{"id":"n-1","outcome":"created"}'; exit 3;;
-receipts) echo '{"replies":[{"id":"n-1","body":"hi","cursor":"000000000002"}]}';;
+receipts) echo '{"replies":[{"id":"n-1","body":"hi","cursor":"000000000002"}],"handled":[{"id":"n-1"}]}';;
 esac
 `
 	os.WriteFile(stub, []byte(script), 0o755)
@@ -412,6 +469,9 @@ esac
 	id, announced, err := e.Note("discord-1", "text")
 	if err != nil || id != "n-1" || announced {
 		t.Fatalf("note: %v %v %v", id, announced, err)
+	}
+	if h, err := e.Handled(); err != nil || !h["n-1"] {
+		t.Fatalf("handled: %v %v", h, err)
 	}
 	rs, err := e.Replies("")
 	if err != nil || len(rs) != 1 || rs[0].Body != "hi" {

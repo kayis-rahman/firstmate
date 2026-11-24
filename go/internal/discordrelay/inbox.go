@@ -24,6 +24,8 @@ type Inbox interface {
 	// is saved but its wake is not yet announced, so the caller must retry.
 	Note(reqID, text string) (noteID string, announced bool, err error)
 	Replies(after string) ([]Reply, error)
+	// Handled reports which of the given note ids firstmate has acknowledged.
+	Handled() (map[string]bool, error)
 }
 
 // ExecInbox shells out to fm-inbox.sh with FM_HOME set.
@@ -90,4 +92,25 @@ func (e ExecInbox) Replies(after string) ([]Reply, error) {
 		rs = append(rs, Reply{x.ID, x.Body, x.Cursor})
 	}
 	return rs, nil
+}
+
+// Handled implements Inbox from the receipts view of handled notes.
+func (e ExecInbox) Handled() (map[string]bool, error) {
+	out, code, err := e.run("receipts", "--all-handled")
+	if err != nil || code != 0 {
+		return nil, fmt.Errorf("fm-inbox receipts failed (code %d)", code)
+	}
+	var r struct {
+		Handled []struct {
+			ID string `json:"id"`
+		} `json:"handled"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), &r); err != nil {
+		return nil, err
+	}
+	m := make(map[string]bool, len(r.Handled))
+	for _, h := range r.Handled {
+		m[h.ID] = true
+	}
+	return m, nil
 }

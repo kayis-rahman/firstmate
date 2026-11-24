@@ -92,7 +92,7 @@ func snowLess(a, b string) bool {
 // anywhere is repaired by the next pass. Stage errors are joined, not fatal.
 func (r *Relay) Tick() error {
 	var errs []error
-	for _, step := range []func() error{r.pollInbound, r.enqueue, r.pollReplies, r.ingestEvents, r.dispatchEvents, r.remind} {
+	for _, step := range []func() error{r.pollInbound, r.enqueue, r.markHandled, r.pollReplies, r.ingestEvents, r.dispatchEvents, r.remind} {
 		if err := step(); err != nil {
 			errs = append(errs, err)
 		}
@@ -206,6 +206,48 @@ func (r *Relay) enqueue() error {
 			if err := r.St.Save(); err != nil {
 				return err
 			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// markHandled puts the acknowledged mark on every captured message whose note
+// firstmate has handled. Acked is persisted only after the mark lands, so a
+// failed mark is retried and a landed one is never repeated across restarts.
+func (r *Relay) markHandled() error {
+	s := &r.St.S
+	var ids []string
+	for id, m := range s.Messages {
+		if m.Enqueued && !m.Acked && m.NoteID != "" && !m.Rejected {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 || r.Cfg.Ack == "none" {
+		return nil
+	}
+	handled, err := r.Box.Handled()
+	if err != nil {
+		return err
+	}
+	sort.Slice(ids, func(i, j int) bool { return snowLess(ids[i], ids[j]) })
+	var errs []error
+	for _, id := range ids {
+		m := s.Messages[id]
+		if !handled[m.NoteID] {
+			continue
+		}
+		if r.Cfg.Ack == "reaction" {
+			err = r.Chat.React(id, "✅")
+		} else {
+			_, err = r.Chat.Post("Handled by firstmate.", id, true)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("ack %s: %w", id, err))
+			continue
+		}
+		m.Acked = true
+		if err := r.St.Save(); err != nil {
+			return err
 		}
 	}
 	return errors.Join(errs...)
