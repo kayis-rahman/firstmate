@@ -366,6 +366,43 @@ assert_equals "$later" "$(printf '%s' "$snapshot" | json_get replies 0 id)" \
   || fail "receipts left the reply lock held"
 pass "receipts scan under the shared reply writer lock"
 
+pressure_home=$(make_home receipts-pressure)
+lock_fail_bin="$TMP_ROOT/lock-fail-bin"
+mkdir -p "$pressure_home/state/inbox/handled" "$lock_fail_bin"
+printf '#!/bin/sh\nexit 1\n' > "$lock_fail_bin/mktemp"
+chmod +x "$lock_fail_bin/mktemp"
+python3 - "$INBOX_BIN" "$pressure_home" "$lock_fail_bin" <<'PY'
+import json, os, select, subprocess, sys
+from pathlib import Path
+
+binary, home, lock_fail_bin = sys.argv[1:]
+env = dict(os.environ, FM_HOME=home, FM_STATE_OVERRIDE=home + "/state",
+           FM_DATA_OVERRIDE=home + "/data", FM_CONFIG_OVERRIDE=home + "/config")
+inbox = Path(home) / "state/inbox"
+blocked = subprocess.run([binary, "receipts", "--all-replies"],
+                         env=dict(env, PATH=lock_fail_bin + os.pathsep + env["PATH"]),
+                         capture_output=True, text=True, timeout=10)
+assert blocked.returncode == 1 and not blocked.stdout, blocked
+assert "could not lock replies for receipts" in blocked.stderr, blocked.stderr
+
+note_id = "1700000000-aaaaaa"
+(inbox / (note_id + ".note")).write_text(f"id={note_id}\n--\nreply here\n")
+(inbox / "handled/1700000000-bbbbbb.note").write_text("--\n" + "x" * (4 * 1024 * 1024))
+with subprocess.Popen([binary, "receipts", "--all-handled"], env=env,
+                      stdout=subprocess.PIPE) as reader:
+    try:
+        assert select.select([reader.stdout], [], [], 10)[0], "no snapshot output"
+        assert reader.poll() is None, "expected a full, unread stdout pipe"
+        subprocess.run([binary, "reply", note_id, "answer"], env=env,
+                       capture_output=True, check=True, timeout=5)
+        output, _ = reader.communicate(timeout=10)
+        assert reader.returncode == 0 and json.loads(output)["replies"] == []
+    finally:
+        if reader.poll() is None:
+            reader.kill()
+PY
+pass "receipts fail without a lock and do not block reply writers on stdout"
+
 # A lost sequence counter must not move the cursor backwards: the next reply
 # still sorts after every reply a client has already read.
 lost_cursor=$(printf '%s' "$replies" | python3 -c 'import json,sys

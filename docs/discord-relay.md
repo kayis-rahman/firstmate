@@ -79,7 +79,7 @@ Cutover, only after the captain approves the shadow results and live producer wi
 
 Rollback:
 
-1. Stop the relay (`SIGTERM`; state is durable).
+1. Send `SIGTERM` to the Go relay and confirm the process has exited before restarting the old watcher. An in-progress pass can keep running after the signal.
 2. Restart the old watcher: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.firstmate.discord-watcher.plist`.
 3. Successfully enqueued messages are already in the Firstmate inbox. Captures not yet enqueued may exist only in relay state; keep that directory and reconcile those messages before deleting it. Messages sent while neither ran are picked up by the old bridge according to its own cursor. The old watcher may also repost an answer already delivered by the Go relay because it uses a separate reply cursor.
 Keep `state_dir` for diagnosis; delete it only to force a fresh baseline.
