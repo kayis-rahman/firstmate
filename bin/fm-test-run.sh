@@ -321,7 +321,7 @@ family_for_basename() {
     fm-codex-stop-park.test.sh|\
     fm-watch-inbox-meta.test.sh|fm-watch-open-decisions.test.sh|\
     fm-watch-triage.test.sh|fm-watch-triage-pause.test.sh|\
-    fm-watch-triage-wedge-defer.test.sh|fm-task-inbox.test.sh|\
+    fm-watch-triage-wedge-defer.test.sh|fm-watch-probe-timeout.test.sh|fm-task-inbox.test.sh|\
     fm-watcher-lock.test.sh|fm-inactive-reconcile.test.sh|fm-watch-wedge-cap.test.sh|\
     fm-watch-wedge-cap-unconfigured-parity.test.sh)
       printf '%s\n' watcher-wake-lock
@@ -1037,6 +1037,7 @@ tests/fm-watch-arm.test.sh 313983
 tests/fm-watch-checkpoint.test.sh 23716
 tests/fm-watch-inbox-meta.test.sh 533
 tests/fm-watch-open-decisions.test.sh 13507
+tests/fm-watch-probe-timeout.test.sh 8000
 tests/fm-watch-recovery-loop.test.sh 62151
 tests/fm-watch-triage-pause.test.sh 602995
 tests/fm-watch-triage-wedge-defer.test.sh 641428

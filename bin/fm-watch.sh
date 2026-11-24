@@ -460,6 +460,10 @@ case "$SECONDMATE_WAKE_STALL_SECS" in ''|*[!0-9]*|0) SECONDMATE_WAKE_STALL_SECS=
 # relaunch wake cannot restart the probe into a tight loop.
 SECONDMATE_LIVENESS_SECS=${FM_SECONDMATE_LIVENESS_SECS:-}
 case "$SECONDMATE_LIVENESS_SECS" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_SECS=60 ;; esac
+# Wall-clock bound on each per-cycle process-event reconcile, so a hung source
+# cannot stall the poll or its liveness beacon.
+PROCEVENT_RECONCILE_SECS=${FM_PROCEVENT_RECONCILE_SECS:-}
+case "$PROCEVENT_RECONCILE_SECS" in ''|*[!0-9]*|0) PROCEVENT_RECONCILE_SECS=60 ;; esac
 # Per-relaunch wall-clock bound, so a wedged spawn cannot stall the poll.
 SECONDMATE_LIVENESS_TIMEOUT=${FM_SECONDMATE_LIVENESS_TIMEOUT:-}
 case "$SECONDMATE_LIVENESS_TIMEOUT" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_TIMEOUT=120 ;; esac
@@ -4513,7 +4517,8 @@ while :; do
   # only republishes results already captured durably and restarts a source
   # whose owner is gone. It is a no-op with nothing registered.
   if [ -d "$STATE/procevent" ]; then
-    FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
+    # Hard-bounded so a hung source probe cannot stall the cycle's beacon.
+    fm_run_timed "$PROCEVENT_RECONCILE_SECS" env FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
   fi
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
