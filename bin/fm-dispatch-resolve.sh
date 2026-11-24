@@ -9,7 +9,9 @@
 # Opt-in gate: FM_DISPATCH_PROVIDER and FM_DISPATCH_MODEL select the provider
 #   and model from the environment or $FM_HOME/.env (environment wins). With no
 #   provider set, TypeSafe uses jev-latest. TYPESAFE_BASE selection and validation
-#   follow docs/configuration.md "Typed dispatch resolution".
+#   follow docs/configuration.md "Typed dispatch resolution". The optional
+#   TYPESAFE_PATH (same precedence, validated the same way) replaces /v1/systemone
+#   for the typesafe provider only; absent keeps /v1/systemone.
 #   OpenRouter and OpenAI require both their provider selection and a model.
 #   The generic systemone provider requires a model and FM_DISPATCH_BASE_URL
 #   (http:// or https://) and posts to <base>/v1/systemone; its optional
@@ -113,13 +115,14 @@
 #   Exit 2 only for a usage or configuration error (unreadable brief, an
 #   existing unreadable rules file, malformed rules, an unreadable or invalid
 #   credential source declaration, missing jq, an unknown provider, a selected
-#   non-typesafe provider without a model, an invalid TYPESAFE_BASE, or systemone
+#   non-typesafe provider without a model, an invalid TYPESAFE_BASE or
+#   TYPESAFE_PATH, or systemone
 #   without a valid base URL), which is actionable, never selected around.
 #   The capability probe is the one other exit: 1 for an unsupported source.
 #
 # Environment:
 #   FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL, FM_DISPATCH_BASE_URL,
-#   FM_DISPATCH_API_KEY, TYPESAFE_API_KEY, TYPESAFE_BASE, OPENROUTER_API_KEY, and
+#   FM_DISPATCH_API_KEY, TYPESAFE_API_KEY, TYPESAFE_BASE, TYPESAFE_PATH, OPENROUTER_API_KEY, and
 #   OPENAI_API_KEY are read from the environment or $FM_HOME/.env.
 #
 # Authority: this tool never replaces firstmate's judgment, quota-array-dispatch,
@@ -161,6 +164,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 CONFIDENCE_FLOOR=0.6
 TS_MODEL=jev-latest
 TS_BASE=https://api.typesafe.ai
+TS_PATH=/v1/systemone
 TS_TIMEOUT=5
 OR_BASE=https://openrouter.ai/api
 OR_TIMEOUT=10
@@ -308,6 +312,23 @@ select_typesafe_base() {
   TS_BASE=$base
 }
 
+# Select and validate the optional request path that replaces /v1/systemone.
+# Never echo a rejected value.
+select_typesafe_path() {
+  local path=${TYPESAFE_PATH:-}
+  [ -n "$path" ] || path=$(fmx_env_get TYPESAFE_PATH "$FM_HOME/.env")
+  [ -n "$path" ] || return 0
+  case "$path" in
+    /*) ;;
+    *) die "TYPESAFE_PATH must start with / and contain no whitespace, control characters, backslash, query, fragment, or dot segments" ;;
+  esac
+  case "$path" in
+    *[[:space:][:cntrl:]\\?#]*|*/./*|*/../*|*/.|*/..)
+      die "TYPESAFE_PATH must start with / and contain no whitespace, control characters, backslash, query, fragment, or dot segments" ;;
+  esac
+  TS_PATH=$path
+}
+
 DISPATCH_PROVIDER=${FM_DISPATCH_PROVIDER:-}
 [ -n "$DISPATCH_PROVIDER" ] || DISPATCH_PROVIDER=$(fmx_env_get FM_DISPATCH_PROVIDER "$FM_HOME/.env")
 DISPATCH_MODEL=${FM_DISPATCH_MODEL:-}
@@ -317,11 +338,13 @@ case "$DISPATCH_PROVIDER" in
     DISPATCH_PROVIDER=typesafe
     DISPATCH_MODEL=$TS_MODEL
     select_typesafe_base
+    select_typesafe_path
     select_key typesafe TYPESAFE_API_KEY TYPESAFE_API_KEY_PRIVATE
     ;;
   typesafe)
     [ -n "$DISPATCH_MODEL" ] || DISPATCH_MODEL=$TS_MODEL
     select_typesafe_base
+    select_typesafe_path
     select_key typesafe TYPESAFE_API_KEY TYPESAFE_API_KEY_PRIVATE
     ;;
   openrouter)
@@ -351,7 +374,7 @@ case "$DISPATCH_PROVIDER" in
   *) die "unknown FM_DISPATCH_PROVIDER: $DISPATCH_PROVIDER (expected typesafe, openrouter, systemone, or openai)" ;;
 esac
 case "$DISPATCH_PROVIDER" in
-  typesafe) ENDPOINT=$TS_BASE/v1/systemone TIMEOUT=$TS_TIMEOUT KEY_PRIVATE=$TYPESAFE_API_KEY_PRIVATE ;;
+  typesafe) ENDPOINT=$TS_BASE$TS_PATH TIMEOUT=$TS_TIMEOUT KEY_PRIVATE=$TYPESAFE_API_KEY_PRIVATE ;;
   openrouter) ENDPOINT=$OR_BASE/alpha/decisions TIMEOUT=$OR_TIMEOUT KEY_PRIVATE=$OPENROUTER_API_KEY_PRIVATE ;;
   systemone) ENDPOINT=$DISPATCH_BASE_URL/v1/systemone TIMEOUT=$SO_TIMEOUT KEY_PRIVATE=$DISPATCH_API_KEY_PRIVATE ;;
   openai) ENDPOINT=$OA_BASE/v1/decisions TIMEOUT=$OA_TIMEOUT KEY_PRIVATE=$OPENAI_API_KEY_PRIVATE ;;
