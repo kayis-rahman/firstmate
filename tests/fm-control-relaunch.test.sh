@@ -125,6 +125,7 @@ case "${1:-}" in
     else
       printf '╭────╮\n│    │\n╰────╯\n'
     fi
+    [ -z "${FM_FAKE_AGY_BUSY:-}" ] || printf 'esc to cancel\n'
     exit 0 ;;
   list-windows)
     # The three shapes real tmux answers a per-session inventory with. The
@@ -1097,6 +1098,47 @@ add_listed_task() {
   : > "$dir/second/.credentials.json"
   printf '%s\n' "$dir/first" "$dir/second" "$dir/signed-out" > "$dir/home/config/claude-accounts"
   [ -z "$recorded" ] || echo "account=$recorded" >> "$dir/home/state/$id.meta"
+}
+
+add_agy_listed_task() {
+  local dir=$1 id=$2 recorded=$3
+  add_ship_task "$dir" "$id" agy
+  cat > "$dir/fakebin/agy" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = models ]; then
+  [ -f "$HOME/.agy-signed-in" ] && { printf 'gemini-4-hydrogen-medium\tGemini 4 Hydrogen (Medium)\n'; exit 0; }
+  printf 'Error: Please sign in to view available models.\n' >&2
+  exit 1
+fi
+exit 0
+SH
+  chmod +x "$dir/fakebin/agy"
+  mkdir -p "$dir/home/config" "$dir/first" "$dir/second" "$dir/signed-out"
+  : > "$dir/first/.agy-signed-in"
+  : > "$dir/second/.agy-signed-in"
+  printf '%s\n%s\n%s\n' "$dir/first" "$dir/second" "$dir/signed-out" > "$dir/home/config/agy-accounts"
+  [ -z "$recorded" ] || echo "account=$recorded" >> "$dir/home/state/$id.meta"
+}
+
+test_agy_account_list_relaunch_reuses_and_moves() {
+  local dir out rc id=rl-agy-list
+  dir=$(new_case agy-list-reuse "$id")
+  add_agy_listed_task "$dir" "$id" "$dir/first"
+  out=$(FM_FAKE_AGY_BUSY=1 run_control "$dir" "$id" relaunch --note "same agy account"); rc=$?
+  expect_code 0 "$rc" "an agy relaunch under config/agy-accounts should reuse the recorded account"$'\n'"$out"
+  [ "$(meta_field "$dir" "$id" account)" = "$dir/first" ] || fail "the relaunched agy record should keep the recorded account"
+  assert_contains "$(cat "$dir/fake/literal")" "HOME='$dir/first'" \
+    "the agy replacement should launch under the recorded HOME"
+  : > "$dir/fake/literal"
+  out=$(FM_FAKE_AGY_BUSY=1 run_control "$dir" "$id" relaunch --account "$dir/second" --note "move to acct2"); rc=$?
+  expect_code 0 "$rc" "an explicit --account relaunch should move the agy task"$'\n'"$out"
+  [ "$(meta_field "$dir" "$id" account)" = "$dir/second" ] || fail "the relaunched agy record should name the new account"
+  assert_contains "$(cat "$dir/fake/literal")" "HOME='$dir/second'" \
+    "the agy replacement should launch under the new HOME"
+  out=$(run_control "$dir" "$id" relaunch --account "$dir/elsewhere" --note "bad"); rc=$?
+  expect_code 1 "$rc" "relaunch to an undeclared agy account must refuse"
+  assert_contains "$out" "is not declared in config/agy-accounts" "refusal should name config/agy-accounts"
+  pass "fm-control relaunch: config/agy-accounts reuses recorded account, moves on --account, and refuses undeclared"
 }
 
 test_account_list_relaunch_reuses_the_recorded_account() {
@@ -3393,3 +3435,4 @@ test_herdr_rebind_failure_from_a_plain_shell_names_the_real_cause
 test_relaunch_reverifies_an_already_in_flight_item_instead_of_rewriting_it
 test_relaunch_moves_a_drifted_item_back_in_flight
 test_away_branch_relaunch_accepts_existing_dispatchable_items
+test_agy_account_list_relaunch_reuses_and_moves

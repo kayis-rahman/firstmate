@@ -31,10 +31,11 @@ The post-launch readiness gate is the backstop: it answers a dialog that renders
 A pane whose brief cannot be confirmed to run in the worktree fails the spawn, records the failure in the task status, and closes the endpoint.
 Never steer into a pane still showing the dialog; a spawn that reported success has already cleared it.
 
-## Credential precondition
+## Credential precondition and multi-account selection
 
 A verified agy worker ran under a signed-in Google account with no key export and no dialog.
 The unauthenticated failure mode was not observed, so treat any auth prompt or refusal as a credential blocker under `../../../../../AGENTS.md` section 9, fix the environment, and retire the endpoint rather than typing into it.
+When `config/agy-accounts` is declared, every `agy` ship or scout spawn must pass `--account <entry>` (`ordinary` or an absolute `HOME` root from that list); `HOME=<root>` is applied to `agy models`, `../../../../../bin/fm-agy-trust.sh`, and the worker launch without altering the caller's global `HOME`, and `../../../../../bin/fm-agy-account-quota.sh` measures each declared entry's quota facts (`../../../../../docs/configuration.md#several-agy-accounts-configagy-accounts`).
 
 ## Detection
 

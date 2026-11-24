@@ -71,6 +71,33 @@ esac
 SH
   chmod +x "$fakebin/claude" "$fakebin/pi"
   cp "$fakebin/pi" "$fakebin/pi-signed"
+  cat > "$fakebin/agy" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = models ]; then
+  printf '%s\n' "\${HOME-unset}" >> '$dir/agy-checks'
+  if [ -f "\$HOME/.agy-signed-in" ]; then
+    printf 'gemini-4-hydrogen-medium\tGemini 4 Hydrogen (Medium)\n'
+    exit 0
+  fi
+  printf 'Error: Please sign in to view available models. Launch the CLI without arguments to sign in.\n' >&2
+  exit 1
+fi
+{
+  printf 'HOME=%s\n' "\${HOME-unset}"
+  printf 'ARGS=%s\n' "\$*"
+} > '$dir/agy-worker'
+SH
+  chmod +x "$fakebin/agy"
+  mv "$fakebin/tmux" "$fakebin/tmux.real"
+  cat > "$fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = capture-pane ] && [ "${FM_FAKE_AGY_BUSY:-0}" = 1 ]; then
+  printf 'esc to cancel\n'
+  exit 0
+fi
+exec "$(dirname "$0")/tmux.real" "$@"
+SH
+  chmod +x "$fakebin/tmux"
 }
 
 # new_case <name> <crew-harness> -> sets CASE HOME_DIR PROJ WT FAKEBIN
@@ -630,6 +657,55 @@ test_account_list_secondmate_needs_its_own_pin() {
   pass "a list never chooses a secondmate's account: it needs its own pin and refuses --account"
 }
 
+signed_in_agy_root() {
+  mkdir -p "$1"
+  : > "$1/.agy-signed-in"
+}
+
+test_agy_account_list_launches_and_trusts_under_selected_home() {
+  local out rc id=acct-agy-list
+  new_case agy-list agy
+  signed_in_agy_root "$CASE/first"
+  signed_in_agy_root "$CASE/second"
+  signed_in_agy_root "$HOME_DIR/user-home"
+  printf '%s\n%s\n' "$CASE/first" "$CASE/second" > "$HOME_DIR/config/agy-accounts"
+  out=$(FM_FAKE_AGY_BUSY=1 spawn_ship "$id" --model gemini-4-hydrogen-medium --account "$CASE/second"); rc=$?
+  expect_code 0 "$rc" "an agy spawn naming a declared, signed-in account should succeed: $out"
+  assert_contains "$out" "account=$CASE/second" "the spawn line should name the chosen agy account"
+  assert_grep "account=$CASE/second" "$HOME_DIR/state/$id.meta" "the task record should carry the chosen agy account"
+  assert_grep "$CASE/second" "$CASE/agy-checks" "agy models/sign-in check should run under the chosen HOME"
+  assert_no_grep "$CASE/first" "$CASE/agy-checks" "the other declared agy account must not be checked"
+  assert_contains "$(cat "$CASE/second/.gemini/antigravity-cli/settings.json" 2>/dev/null)" "$WT" \
+    "workspace trust should be registered in the chosen agy account's HOME"
+  assert_absent "$CASE/first/.gemini/antigravity-cli/settings.json" "the other agy account must not be touched"
+  assert_absent "$HOME_DIR/user-home/.gemini/antigravity-cli/settings.json" "the caller's global HOME must not be written"
+  run_pane
+  assert_grep "HOME=$CASE/second" "$CASE/agy-worker" "the agy worker should run under the chosen HOME"
+  pass "config/agy-accounts: --account applies to agy models, trust pre-registration, launch HOME, and metadata"
+}
+
+test_agy_account_list_refusals() {
+  local out rc id=acct-agy-bad
+  new_case agy-list-refusals agy
+  signed_in_agy_root "$CASE/first"
+  mkdir -p "$CASE/signed-out"
+  printf '%s\n%s\n' "$CASE/first" "$CASE/signed-out" > "$HOME_DIR/config/agy-accounts"
+  out=$(FM_FAKE_AGY_BUSY=1 spawn_ship "$id-missing-flag"); rc=$?
+  expect_code 1 "$rc" "an agy spawn under config/agy-accounts without --account must refuse"
+  assert_refused_before_launch "$id-missing-flag" "$out" "must name one with --account"
+  out=$(FM_FAKE_AGY_BUSY=1 spawn_ship "$id-other" --account "$CASE/elsewhere"); rc=$?
+  expect_code 1 "$rc" "an undeclared agy account must refuse"
+  assert_refused_before_launch "$id-other" "$out" "account '$CASE/elsewhere' is not declared in config/agy-accounts"
+  out=$(FM_FAKE_AGY_BUSY=1 spawn_ship "$id-out" --account "$CASE/signed-out"); rc=$?
+  expect_code 1 "$rc" "a signed-out agy account must refuse"
+  assert_refused_before_launch "$id-out" "$out" "is not signed in"
+  out=$(FM_FAKE_AGY_BUSY=1 spawn_ship "$id-raw" --account "$CASE/first" --harness "HOME=$CASE/second agy --prompt-interactive raw"); rc=$?
+  expect_code 1 "$rc" "a raw agy command setting HOME must refuse"
+  assert_refused_before_launch "$id-raw" "$out" "the raw launch command sets HOME"
+  assert_absent "$CASE/agy-worker" "no refused agy launch may start agy"
+  pass "config/agy-accounts refuses missing, undeclared, signed-out, and raw-HOME-override launches"
+}
+
 test_secondmate_account_override
 test_secondmate_account_refusals
 test_remote_secondmate_account_override_refuses_locally
@@ -651,5 +727,7 @@ test_no_account_list_keeps_today_and_refuses_account
 test_account_list_launches_the_named_entry
 test_account_list_refusals
 test_account_list_secondmate_needs_its_own_pin
+test_agy_account_list_launches_and_trusts_under_selected_home
+test_agy_account_list_refusals
 
 echo "# all fm-worker-account tests passed"

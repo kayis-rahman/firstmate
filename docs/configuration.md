@@ -9,7 +9,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | --- | --- |
 | Firstmate's code, private files, or project location | [FM_HOME](#fm_home) and [operational home layout](#operational-home-layout-and-state) |
 | Task windows and worker tools | [Runtime backend](#runtime-backend-configbackend--fm_backend) and [harness support](#harness-support) |
-| Worker permissions, accounts, or environment | [Codex approval review](#codex-automatic-approval-review), [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [Codex permission mode](#codex-permission-mode-configcodex-permission-mode), [persistent managed-policy failover](#persistent-managed-policy-failover), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), [several Claude accounts](#several-claude-accounts-configclaude-accounts), [worker tool exclusions](#worker-tool-exclusions-configcrew-exclude-tools), [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist), and its [Orca environment source](#orca-environment-source-configlaunch-env-tmux-session) |
+| Worker permissions, accounts, or environment | [Codex approval review](#codex-automatic-approval-review), [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [Codex permission mode](#codex-permission-mode-configcodex-permission-mode), [persistent managed-policy failover](#persistent-managed-policy-failover), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), [several Claude accounts](#several-claude-accounts-configclaude-accounts), [several agy accounts](#several-agy-accounts-configagy-accounts), [worker tool exclusions](#worker-tool-exclusions-configcrew-exclude-tools), [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist), and its [Orca environment source](#orca-environment-source-configlaunch-env-tmux-session) |
 | Backlog, preferences, and memory | [Backlog backend](#backlog-backend-taskstoml--configbacklog-backend), [captain preferences](#captain-preferences-datacaptainmd--datacaptain-sharedmd), [external memory tiers](#external-memory-tiers-memory-layering-section), [record export](#record-export-configrecord-export-root), [startup memory budget](#startup-memory-budget-configstartup-memory-budget), and [stow guard](#stow-guard-configstow-guard) |
 | Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), [Codex native Stop park](#codex-native-stop-park-configcodex-stop-park), [warm-cache compaction](#warm-cache-compaction-configwarm-compact), [Antigravity autocompact](#antigravity-autocompact-configagy-autocompact), and [Calm preference](#calm-preference-configcalm) |
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
@@ -1812,6 +1812,35 @@ The list covers Claude ships and scouts only.
 A local secondmate's own agent never draws from it: under a list it needs its own [per-secondmate account pin](#per-secondmate-account-pins), and `--account` refuses for every secondmate, local or remote.
 Other runners ignore the list, and `--account` refuses for them.
 Like the single pin, the list is not inherited into secondmate homes.
+
+### Several agy accounts (config/agy-accounts)
+
+A home with more than one Antigravity (`agy`) account can let each `agy` ship and scout launch under a chosen `HOME` directory.
+Create `config/agy-accounts` with one account per line, each `ordinary` (the caller's default `HOME`) or the absolute path of an existing `HOME` root holding that account's `.gemini/antigravity-cli` state:
+
+```text
+ordinary
+/Users/me/.agy-acct2
+```
+
+A final newline is optional; a blank line, a relative path, a repeated entry, or a control character refuses.
+The list is opt-in: without it, every `agy` launch behaves exactly as before, and `--account` refuses.
+
+While the list is present, every `agy` ship or scout spawn must name one declared entry explicitly with `--account <entry>`.
+Firstmate never picks an entry by default, rotates accounts automatically, or falls back to another entry or the ambient `HOME`.
+[`bin/fm-agy-account-quota.sh`](../bin/fm-agy-account-quota.sh) can measure each declared entry's quota facts under its own `HOME` without rotating or choosing an account.
+
+The named entry is checked before anything launches: its directory must exist and be readable and searchable, a raw `agy` command must not set `HOME=`, and `agy models` under that `HOME` must not report a sign-in error.
+The selected `HOME` applies to every `agy` invocation for that worker (the `agy models` check, workspace trust pre-registration in `bin/fm-agy-trust.sh`, and the worker launch command), without changing the captain's global `HOME` for anything else.
+The spawn line and the task record carry the entry as `account=`.
+
+A relaunch or recovery of that task keeps its recorded account, re-checking that it is still declared and usable before the running worker stops.
+To move a task to another declared account, relaunch it explicitly with `bin/fm-control.sh <id> relaunch --account <entry> --note <text>`.
+A task with no recorded account, or one whose account is no longer declared, refuses a plain relaunch and needs that explicit `--account`.
+
+The list covers `agy` ships and scouts only.
+A secondmate agent never draws from it, and `--account` refuses for every secondmate.
+Like `config/claude-accounts`, the list is not inherited into secondmate homes.
 
 ### Per-secondmate account pins
 
