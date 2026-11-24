@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 const (
@@ -22,21 +23,25 @@ const (
 )
 
 type post struct {
-	Content   string
-	ReplyTo   string
-	Silent    bool
-	Reaction  string
-	ReactedTo string
+	Content       string
+	ReplyTo       string
+	Silent        bool
+	Reaction      string
+	ReactedTo     string
+	Nonce         string
+	EnforceNonce  bool
+	RequireParent bool
 }
 
 // fakeDiscord is a real HTTP server so the REST client is exercised too.
 type fakeDiscord struct {
-	mu    sync.Mutex
-	msgs  []Message
-	posts []post
-	next  int
-	srv   *httptest.Server
-	token string
+	mu         sync.Mutex
+	msgs       []Message
+	posts      []post
+	next       int
+	srv        *httptest.Server
+	token      string
+	postStatus int
 }
 
 func newFake(t *testing.T) *fakeDiscord {
@@ -66,17 +71,25 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(out)
 	case r.Method == "POST":
+		if f.postStatus != 0 {
+			w.WriteHeader(f.postStatus)
+			return
+		}
 		var b struct {
 			Content string `json:"content"`
 			Ref     *struct {
-				ID string `json:"message_id"`
+				ID            string `json:"message_id"`
+				RequireParent bool   `json:"fail_if_not_exists"`
 			} `json:"message_reference"`
-			Flags int `json:"flags"`
+			Flags        int    `json:"flags"`
+			Nonce        string `json:"nonce"`
+			EnforceNonce bool   `json:"enforce_nonce"`
 		}
 		json.NewDecoder(r.Body).Decode(&b)
-		p := post{Content: b.Content, Silent: b.Flags&(1<<12) != 0}
+		p := post{Content: b.Content, Silent: b.Flags&(1<<12) != 0, Nonce: b.Nonce, EnforceNonce: b.EnforceNonce}
 		if b.Ref != nil {
 			p.ReplyTo = b.Ref.ID
+			p.RequireParent = b.Ref.RequireParent
 		}
 		f.posts = append(f.posts, p)
 		f.next++
@@ -104,12 +117,13 @@ func (f *fakeDiscord) postsSnapshot() []post {
 }
 
 type fakeInbox struct {
-	mu      sync.Mutex
-	notes   map[string]string // reqID -> text
-	calls   int
-	failing bool
-	replies []Reply
-	handled map[string]bool // note ids firstmate has acknowledged
+	mu          sync.Mutex
+	notes       map[string]string // reqID -> text
+	calls       int
+	failing     bool
+	wakePending bool
+	replies     []Reply
+	handled     map[string]bool // note ids firstmate has acknowledged
 }
 
 func (b *fakeInbox) Note(req, text string) (string, bool, error) {
@@ -125,7 +139,7 @@ func (b *fakeInbox) Note(req, text string) (string, bool, error) {
 	if _, ok := b.notes[req]; !ok {
 		b.notes[req] = text
 	}
-	return "note-" + req, true, nil
+	return "note-" + req, !b.wakePending, nil
 }
 
 func (b *fakeInbox) Handled() (map[string]bool, error) {
@@ -170,16 +184,16 @@ func (g *rig) open() {
 	if g.r != nil {
 		g.r.St.Close()
 	}
-	cfg := Config{APIBase: g.f.srv.URL, ChannelID: channel, OwnerID: owner, StateDir: g.dir}
+	cfg := Config{ChannelID: channel, OwnerID: owner, StateDir: g.dir}
 	if err := cfg.Validate(); err != nil {
 		g.t.Fatal(err)
 	}
-	st, err := OpenStore(g.dir)
+	st, err := OpenStore(g.dir, Scope{channel, owner, g.dir})
 	if err != nil {
 		g.t.Fatal(err)
 	}
 	g.t.Cleanup(st.Close)
-	g.r = &Relay{Cfg: cfg, Chat: &HTTPChat{Base: g.f.srv.URL, Channel: channel, Token: g.f.token}, Box: g.box, St: st,
+	g.r = &Relay{Cfg: cfg, Chat: &HTTPChat{base: g.f.srv.URL, Channel: channel, Token: g.f.token}, Box: g.box, St: st,
 		Now: func() time.Time { return g.now }}
 }
 
@@ -193,8 +207,6 @@ func (g *rig) baseline() { g.tick() } // first tick sets the cursor on an empty 
 
 func TestCaptureAckAndThreadedReply(t *testing.T) {
 	g := newRig(t)
-	g.r.Cfg.Receipt = "reply"
-	g.r.Cfg.Ack = "none"
 	g.baseline()
 	g.f.say("5001", owner, "ship the thing", g.now)
 	g.tick()
@@ -202,27 +214,15 @@ func TestCaptureAckAndThreadedReply(t *testing.T) {
 		t.Fatalf("not captured: %v", g.box.notes)
 	}
 	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || ps[0].ReplyTo != "5001" || !ps[0].Silent {
-		t.Fatalf("want one silent threaded receipt, got %+v", ps)
+	if len(ps) != 1 || ps[0].ReactedTo != "5001" || ps[0].Reaction != "👀" {
+		t.Fatalf("want one seen reaction, got %+v", ps)
 	}
 	g.box.replies = []Reply{{NoteID: "note-discord-5001", Body: "done, PR is up", Cursor: "000000000001"}}
 	g.tick()
 	g.tick() // second pass must not resend
 	ps = g.f.postsSnapshot()
-	if len(ps) != 2 || ps[1].ReplyTo != "5001" || ps[1].Content != "done, PR is up" || ps[1].Silent {
+	if len(ps) != 2 || ps[1].ReplyTo != "5001" || ps[1].Content != "done, PR is up" || ps[1].Silent || !ps[1].RequireParent || !ps[1].EnforceNonce || ps[1].Nonce == "" {
 		t.Fatalf("want threaded reply once, got %+v", ps)
-	}
-}
-
-func TestReactionReceipt(t *testing.T) {
-	g := newRig(t)
-	g.r.Cfg.Receipt = "reaction"
-	g.baseline()
-	g.f.say("5001", owner, "hi", g.now)
-	g.tick()
-	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || ps[0].Reaction != "👀" || ps[0].ReactedTo != "5001" {
-		t.Fatalf("want a reaction receipt, got %+v", ps)
 	}
 }
 
@@ -247,9 +247,8 @@ func TestSeenThenAcknowledgedOnceAcrossRestart(t *testing.T) {
 	}
 }
 
-func TestAckRetriedAfterFailureAndReplyMode(t *testing.T) {
+func TestAckRetriedAfterFailure(t *testing.T) {
 	g := newRig(t)
-	g.r.Cfg.Ack = "reply"
 	g.baseline()
 	g.f.say("5001", owner, "do it", g.now)
 	g.tick()
@@ -263,8 +262,8 @@ func TestAckRetriedAfterFailureAndReplyMode(t *testing.T) {
 	g.tick()
 	g.tick()
 	ps := g.f.postsSnapshot()
-	if len(ps) != 2 || ps[1].Content != "Handled by firstmate." || ps[1].ReplyTo != "5001" || !ps[1].Silent {
-		t.Fatalf("want one silent threaded ack, got %+v", ps)
+	if len(ps) != 2 || ps[1].Reaction != "✅" || ps[1].ReactedTo != "5001" {
+		t.Fatalf("want one acknowledged reaction, got %+v", ps)
 	}
 }
 
@@ -276,6 +275,9 @@ func TestRestartReplayAfterInboxOutage(t *testing.T) {
 	g.tick()
 	if len(g.box.notes) != 0 {
 		t.Fatal("should not have enqueued while inbox is down")
+	}
+	if ps := g.f.postsSnapshot(); len(ps) != 1 || ps[0].Reaction != "👀" {
+		t.Fatalf("seen must not wait for inbox recovery: %+v", ps)
 	}
 	g.open() // crash/restart: cursor already advanced past 5001
 	g.box.failing = false
@@ -290,6 +292,24 @@ func TestRestartReplayAfterInboxOutage(t *testing.T) {
 	g.tick()
 	if got := g.box.calls; got != 2 {
 		t.Fatalf("restart after success must not re-enqueue; inbox calls=%d", got)
+	}
+}
+
+func TestSeenForAllCapturesWhileWakeIsPending(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	g.box.wakePending = true
+	g.f.say("5001", owner, "first", g.now)
+	g.f.say("5002", owner, "second", g.now)
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != 2 || ps[0].Reaction != "👀" || ps[1].Reaction != "👀" || ps[1].ReactedTo != "5002" || g.box.calls != 1 {
+		t.Fatalf("expected both seen marks with only one enqueue attempt: %+v, calls=%d", ps, g.box.calls)
+	}
+	g.open()
+	g.box.wakePending = false
+	g.tick()
+	if len(g.box.notes) != 2 || len(g.f.postsSnapshot()) != 2 {
+		t.Fatal("expected both notes and no repeated reactions after restart")
 	}
 }
 
@@ -416,7 +436,7 @@ func TestReminderSuppressedWhenAnsweredOrActive(t *testing.T) {
 func TestAlertQuietWhileActive(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
-	g.r.St.S.LastOwnerAt = g.now
+	g.f.say("5001", owner, "", g.now)
 	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "x", Kind: "login", Text: "login needed"})
 	g.tick()
 	if ps := g.f.postsSnapshot(); len(ps) != 1 || !ps[0].Silent {
@@ -428,11 +448,11 @@ func TestRedactsSecretsAndRejectsBadEvents(t *testing.T) {
 	g := newRig(t)
 	g.baseline()
 	hook := "https://discord.com/api/webhooks/123456789012345678/AbCdEfGh-token"
-	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "s", Kind: "blocker", Text: "see " + hook + " token=abcdefgh12345"})
+	WriteEvent(g.r.St.EventsDir(), EventIn{ID: "s", Kind: "blocker", Text: "see " + hook + " github_pat_abcde_abcdefghijklmno_abcdefghijklmnop token=abcdefgh12345"})
 	os.WriteFile(filepath.Join(g.r.St.EventsDir(), "bad.json"), []byte("{nope"), 0o600)
 	g.tick()
 	ps := g.f.postsSnapshot()
-	if len(ps) != 1 || strings.Contains(ps[0].Content, "webhooks") || strings.Contains(ps[0].Content, "abcdefgh12345") {
+	if len(ps) != 1 || strings.Contains(ps[0].Content, "webhooks") || strings.Contains(ps[0].Content, "abcdefgh12345") || strings.Contains(ps[0].Content, "github_pat_") {
 		t.Fatalf("secret leaked: %+v", ps)
 	}
 	if _, err := os.Stat(filepath.Join(g.r.St.EventsDir(), "bad.json.rejected")); err != nil {
@@ -442,16 +462,169 @@ func TestRedactsSecretsAndRejectsBadEvents(t *testing.T) {
 
 func TestSecondInstanceRefusedAndConfigValidation(t *testing.T) {
 	g := newRig(t)
-	if _, err := OpenStore(g.dir); err == nil {
+	if _, err := OpenStore(g.dir, Scope{channel, owner, g.dir}); err == nil {
 		t.Fatal("second instance must be refused")
 	}
 	c := Config{ChannelID: channel, OwnerID: "abc", StateDir: "x"}
 	if c.Validate() == nil {
 		t.Fatal("non-snowflake owner accepted")
 	}
-	c = Config{APIBase: "http://evil.example", ChannelID: channel, OwnerID: owner, StateDir: "x"}
-	if c.Validate() == nil {
-		t.Fatal("plain http remote accepted")
+	for _, field := range []string{"api_base", "receipt", "ack", "active_chat_seconds", "max_message_runes"} {
+		path := filepath.Join(t.TempDir(), "config.json")
+		c := map[string]any{"channel_id": channel, "owner_id": owner, "state_dir": g.dir, field: "removed"}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadConfig(path); err == nil {
+			t.Fatalf("removed config field %q accepted", field)
+		}
+	}
+}
+
+func TestScopeMismatchRefusedAfterRestart(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	g.r.St.Close()
+	for _, scope := range []Scope{{other, owner, g.dir}, {channel, other, g.dir}, {channel, owner, t.TempDir()}} {
+		if st, err := OpenStore(g.dir, scope); err == nil {
+			st.Close()
+			t.Fatalf("opened with mismatched scope %+v", scope)
+		}
+	}
+	g.open()
+	if g.r.St.S.Cursor != "0" {
+		t.Fatal("matching scope lost its baseline")
+	}
+}
+
+func blockSave(t *testing.T, g *rig) func() {
+	t.Helper()
+	path := filepath.Join(g.dir, "state.json.tmp")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return func() {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestFailedSaveDoesNotConsumeEventOrExposeCapture(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	restore := blockSave(t, g)
+	g.f.say("5001", owner, "capture", g.now)
+	e := EventIn{ID: "pending", Kind: "decision", Text: "decide"}
+	if err := WriteEvent(g.r.St.EventsDir(), e); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := g.r.Tick(); err == nil {
+			t.Fatal("expected write error")
+		}
+	}
+	if g.box.calls != 0 || len(g.f.postsSnapshot()) != 0 {
+		t.Fatal("uncommitted capture or alert was dispatched")
+	}
+	if _, err := os.Stat(filepath.Join(g.r.St.EventsDir(), "pending.json")); err != nil {
+		t.Fatal(err)
+	}
+	restore()
+	g.open()
+	g.tick()
+	if g.box.notes["discord-5001"] != "capture" || len(g.f.postsSnapshot()) != 2 {
+		t.Fatal("capture or alert was lost after restart")
+	}
+}
+
+func TestReplyReusesNonceAfterFailedSave(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	g.f.say("5001", owner, "capture", g.now)
+	g.tick()
+	g.box.replies = []Reply{{NoteID: "note-discord-5001", Body: "reply", Cursor: "1"}}
+	restore := blockSave(t, g)
+	if err := g.r.Tick(); err == nil {
+		t.Fatal("expected write error after posting reply")
+	}
+	restore()
+	g.open()
+	g.tick()
+	ps := g.f.postsSnapshot()
+	if len(ps) != 3 || !ps[1].EnforceNonce || !ps[2].EnforceNonce || ps[1].Nonce == "" || ps[1].Nonce != ps[2].Nonce {
+		t.Fatalf("reply retries did not use the same enforced nonce: %+v", ps)
+	}
+}
+
+func TestReminderRetriedAfterDiscordRejection(t *testing.T) {
+	g, n := alertRig(t)
+	g.now = g.now.Add(time.Minute)
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		g.f.postStatus = status
+		if err := g.r.Tick(); err == nil || g.r.St.S.Events["d1"].Reminded {
+			t.Fatalf("status %d consumed reminder or hid the error", status)
+		}
+		g.open()
+	}
+	g.f.postStatus = 0
+	g.tick()
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != n+1 || ps[n].ReplyTo == "" || !ps[n].RequireParent {
+		t.Fatalf("want one native reminder after recovery: %+v", ps)
+	}
+}
+
+func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
+	g, n := alertRig(t)
+	g.now = g.now.Add(time.Minute)
+	g.f.say("5000", owner, "sent before the alert", g.now.Add(-time.Minute))
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != n+1 || ps[n].Reaction != "👀" {
+		t.Fatalf("expected capture but no reminder while active: %+v", ps)
+	}
+	g.now = g.now.Add(time.Minute)
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != n+2 || ps[n+1].ReplyTo != "5001" {
+		t.Fatalf("expected held reminder at the two-minute boundary: %+v", ps)
+	}
+}
+
+func TestStartupEmptyOwnerMessageCountsAsPresence(t *testing.T) {
+	g := newRig(t)
+	g.f.say("4999", owner, "", g.now.Add(-time.Minute))
+	g.f.say("5000", other, "newer message", g.now)
+	if err := WriteEvent(g.r.St.EventsDir(), EventIn{ID: "a", Kind: "blocker", Text: "quiet"}); err != nil {
+		t.Fatal(err)
+	}
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != 1 || !ps[0].Silent || g.box.calls != 0 {
+		t.Fatalf("expected quiet alert without replay: %+v, inbox calls=%d", ps, g.box.calls)
+	}
+}
+
+func TestDigestCarriesOverflowAndCapsUnicode(t *testing.T) {
+	g := newRig(t)
+	g.baseline()
+	for i, body := range []string{strings.Repeat("😀", 1100), "second", "second"} {
+		if err := WriteEvent(g.r.St.EventsDir(), EventIn{ID: itoa(i), Kind: "progress", Text: body}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g.tick()
+	ps := g.f.postsSnapshot()
+	if len(ps) != 1 || !strings.HasPrefix(ps[0].Content, "Fleet update (1)") || len(utf16.Encode([]rune(ps[0].Content))) > 2000 {
+		t.Fatalf("expected one bounded first digest, got %d posts", len(ps))
+	}
+	g.open()
+	g.now = g.now.Add(g.r.Cfg.batchWindow())
+	g.tick()
+	if ps := g.f.postsSnapshot(); len(ps) != 2 || ps[1].Content != "Fleet update (2)\n• second (x2)" {
+		t.Fatalf("overflow did not survive for the next digest: %+v", ps)
 	}
 }
 
@@ -460,13 +633,17 @@ func TestExecInboxAgainstStub(t *testing.T) {
 	stub := filepath.Join(dir, "fm-inbox.sh")
 	script := `#!/bin/sh
 case "$1" in
-note) echo '{"id":"n-1","outcome":"created"}'; exit 3;;
+note)
+  [ "$#" = 6 ] && [ "$2" = --request-id ] && [ "$3" = discord-1 ] &&
+  [ "$4" = --json ] && [ "$5" = -- ] && [ "$6" = - ] || exit 2
+  [ "$(cat)" = - ] || exit 2
+  echo '{"id":"n-1","outcome":"created"}'; exit 3;;
 receipts) echo '{"replies":[{"id":"n-1","body":"hi","cursor":"000000000002"}],"handled":[{"id":"n-1"}]}';;
 esac
 `
 	os.WriteFile(stub, []byte(script), 0o755)
 	e := ExecInbox{Cmd: stub, Home: dir}
-	id, announced, err := e.Note("discord-1", "text")
+	id, announced, err := e.Note("discord-1", "-")
 	if err != nil || id != "n-1" || announced {
 		t.Fatalf("note: %v %v %v", id, announced, err)
 	}

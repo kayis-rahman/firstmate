@@ -3,6 +3,7 @@ package discordrelay
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -16,7 +17,6 @@ type InMsg struct {
 	Enqueued  bool   `json:"enqueued"`
 	Receipted bool   `json:"receipted"`
 	Acked     bool   `json:"acked,omitempty"` // firstmate handled the note and the mark landed
-	Rejected  bool   `json:"rejected,omitempty"`
 }
 
 // Event is an outbound alert or routine update.
@@ -32,8 +32,15 @@ type Event struct {
 	Reminded bool      `json:"reminded"`
 }
 
+type Scope struct {
+	ChannelID string `json:"channel_id"`
+	OwnerID   string `json:"owner_id"`
+	InboxHome string `json:"inbox_home"`
+}
+
 // State is the relay's whole durable memory, one atomically replaced file.
 type State struct {
+	Scope       Scope             `json:"scope"`
 	Cursor      string            `json:"cursor"`
 	Messages    map[string]*InMsg `json:"messages"`
 	ReplyCursor string            `json:"reply_cursor"`
@@ -47,13 +54,14 @@ type State struct {
 
 // Store persists State and holds an exclusive process lock.
 type Store struct {
-	S    State
-	dir  string
-	lock *os.File
+	S         State
+	dir       string
+	lock      *os.File
+	committed []byte
 }
 
 // OpenStore creates dir (0700), takes the single-instance lock and loads state.
-func OpenStore(dir string) (*Store, error) {
+func OpenStore(dir string, scope Scope) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(dir, "events"), 0o700); err != nil {
 		return nil, err
 	}
@@ -63,7 +71,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		lf.Close()
-		return nil, errors.New("another relay instance holds the state lock")
+		return nil, fmt.Errorf("cannot acquire lock for state directory %s: %w", dir, err)
 	}
 	st := &Store{dir: dir, lock: lf}
 	b, err := os.ReadFile(filepath.Join(dir, "state.json"))
@@ -73,6 +81,11 @@ func OpenStore(dir string) (*Store, error) {
 			lf.Close()
 			return nil, errors.New("state.json is corrupt; restore a backup rather than guessing: " + err.Error())
 		}
+		if st.S.Scope != scope {
+			lf.Close()
+			return nil, errors.New("state directory is not bound to this channel, owner and inbox home; use a fresh state directory")
+		}
+		st.committed = b
 	case !os.IsNotExist(err):
 		lf.Close()
 		return nil, err
@@ -86,15 +99,35 @@ func OpenStore(dir string) (*Store, error) {
 	if st.S.Events == nil {
 		st.S.Events = map[string]*Event{}
 	}
+	if st.committed == nil {
+		st.S.Scope = scope
+		if err := st.Save(); err != nil {
+			lf.Close()
+			return nil, err
+		}
+	}
 	return st, nil
 }
 
 // Save atomically replaces state.json.
 func (s *Store) Save() error {
 	b, err := json.Marshal(&s.S)
+	if err == nil {
+		err = s.replace(b)
+	}
 	if err != nil {
+		if s.committed != nil {
+			var committed State
+			_ = json.Unmarshal(s.committed, &committed)
+			s.S = committed
+		}
 		return err
 	}
+	s.committed = b
+	return nil
+}
+
+func (s *Store) replace(b []byte) error {
 	tmp := filepath.Join(s.dir, "state.json.tmp")
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -108,7 +141,9 @@ func (s *Store) Save() error {
 		f.Close()
 		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 	return os.Rename(tmp, filepath.Join(s.dir, "state.json"))
 }
 

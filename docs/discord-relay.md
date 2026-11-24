@@ -1,7 +1,7 @@
 # Discord relay (Go, off by default)
 
 `fm-discord-relay` is a deterministic Discord relay for one captain and one channel.
-It makes no language-model calls: it authorizes the sender, captures messages into [`bin/fm-inbox.sh`](../bin/fm-inbox.sh), posts threaded receipts and answers, alerts when firstmate needs the captain, and batches routine updates.
+It makes no language-model calls: it authorizes the sender, captures messages into [`bin/fm-inbox.sh`](../bin/fm-inbox.sh), adds seen and acknowledged reactions, posts threaded answers, alerts when firstmate needs the captain, and batches routine updates.
 It is a separate private tool beside the current bridge in [discord-voice-relay.md](discord-voice-relay.md); building it changes nothing about that bridge.
 It never starts on its own: it exits unless the config file says `"enabled": true`, and nothing in this repository installs a LaunchAgent for it.
 
@@ -14,15 +14,15 @@ Buttons and select menus, and replacing the front-desk mate, are follow-ups.
 | --- | --- |
 | Capture | Polls the configured channel over the Discord REST API. Only messages whose author id equals `owner_id` in `channel_id` are accepted; bots, other users and other channels are ignored, and other users are only counted. |
 | Enqueue | Runs `fm-inbox.sh note --request-id discord-<messageId> --json`. The request id makes a retry or replay return the original note. The message is stored durably before the read cursor advances, and retried every pass until the inbox accepts and announces it. |
-| Seen | The moment a captain message is durably captured and enqueued, the relay puts a 👀 reaction on it (`receipt: reaction`, the default; `reply` posts a silent threaded "Queued for firstmate."; `none` disables). Retried until it lands, never repeated. |
-| Acknowledged | Once firstmate has actually handled the note (it is in the inbox's `handled/`, read through `fm-inbox.sh receipts --all-handled`), the relay adds a ✅ reaction to the captain's message (`ack: reaction`, the default; `reply` posts a silent threaded "Handled by firstmate."; `none` disables). The mark is recorded in `state.json` only after Discord accepts it, so a failed mark is retried and a landed one is never repeated across restarts. So 👀 means "received safely", ✅ means "firstmate dealt with it". |
-| Answers | Reads `fm-inbox.sh receipts --all-replies --after <cursor>` and posts each reply once as a native threaded reply to the captain's original message. |
-| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. While the captain chatted within `active_chat_seconds` they are posted silently, since he is already looking. |
-| Routine batching | Any other kind is collected and posted as one silent "Fleet update" digest every `batch_seconds`, with identical lines collapsed. |
-| Reminder | An urgent alert nobody answered within `reminder_seconds` gets exactly one threaded "Still waiting on you" reply. Any captain message after the alert counts as an answer. No reminder is sent while the captain is active in chat, and the reminder is marked sent before it is posted so a crash cannot repeat it. |
-| Secrets | Everything posted passes a redaction filter (webhook URLs, token shapes, `token=` pairs, bearer values, common key formats) and is capped in length. Mentions are disabled. |
+| Seen | The relay adds a 👀 reaction after it saves the capture, even if inbox enqueue or wake fails. |
+| Acknowledged | The relay adds a ✅ reaction only after `fm-inbox.sh receipts --all-handled` reports the note handled. Both reactions are idempotent and recorded in `state.json` only after Discord accepts them. |
+| Answers | Reads `fm-inbox.sh receipts --all-replies --after <cursor>` and posts native threaded replies. A stable nonce deduplicates retries within Discord’s short nonce window; a later retry after an ambiguous send can duplicate the reply. If the parent is missing, the answer stays queued and the error is logged; no standalone answer is posted. |
+| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. While the captain chatted within the last two minutes they are posted silently, since he is already looking. |
+| Routine batching | Other event kinds are posted in silent “Fleet update” digests at `batch_seconds` intervals, with identical lines collapsed. Updates that do not fit stay queued for the next digest; an oversized individual line is shortened. |
+| Reminder | An urgent alert without a later captain text message gets a threaded “Still waiting on you” reminder after `reminder_seconds`. Recent owner activity holds the reminder without canceling it. Rejected sends remain eligible; the relay records completion only after Discord accepts the reminder. |
+| Secrets | All posts have mentions disabled, a fixed length cap, and best-effort credential redaction. Do not send sensitive text or rely on the filter to make it safe. |
 
-On the very first start the relay records the newest existing message as its cursor and does not replay channel history.
+On first start the relay baselines at the newest message without replaying history. Recent owner messages, including messages without text, count as presence but are not replayed into the inbox.
 
 ## Configuration
 
@@ -36,57 +36,52 @@ On the very first start the relay records the newest existing message as its cur
   "state_dir": "/absolute/path/for/relay/state",
   "token_env": "FM_DISCORD_RELAY_TOKEN",
   "inbox_cmd": "bin/fm-inbox.sh",
-  "receipt": "reaction",
-  "ack": "reaction",
   "poll_seconds": 5,
   "reminder_seconds": 60,
-  "active_chat_seconds": 120,
   "batch_seconds": 600
 }
 ```
 
 The file holds the name of the token variable, never the token.
-Use a dedicated bot token for the relay (or a dedicated test channel) so that shadow testing never competes with the live bridge for the same messages.
-`api_base` defaults to `https://discord.com/api/v10` and must be https.
-`state_dir` holds `state.json` (mode 0600, atomically replaced), `relay.lock` (a second instance refuses to start) and `events/`.
+Shadow testing requires **both** a separate channel and a separate bot token from the live bridge. The relay channel must be captain-only and private in both shadow and live environments; the sender check does not restrict who can read posts.
+`state_dir` holds `state.json` (mode 0600, atomically replaced), `relay.lock` and `events/`. The lock prevents a second relay using the same state directory, not another reader of the channel. The relay binds the state to its channel, owner, and inbox home and refuses mismatches.
 The state file contains the captain's not-yet-enqueued message text, so keep the directory private.
 
 ## Commands
 
 ```sh
-# build: bin/fm-go-pilot-build.sh builds every go/cmd tool; run with FM_HOME set
-fm-discord-relay once   # one pass; use for shadow tests
-fm-discord-relay run    # loop until SIGTERM; supervise it with launchd or a shell
-fm-discord-relay status # counters only, never message text
-fm-discord-relay emit -kind blocker -task <task-id> -id <stable-id> "short text"
+# From the repository root:
+bin/fm-go-pilot-build.sh
+bin/go-pilot/discord-relay once
+bin/go-pilot/discord-relay run
+bin/go-pilot/discord-relay emit -kind blocker -task <task-id> -id <occurrence-id> "short text"
 ```
 
-`FM_HOME` selects the home whose `config/` and `bin/fm-inbox.sh` are used.
+`FM_HOME` selects the operational home for both configuration and inbox data. The default inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. Set `FM_ROOT_OVERRIDE` when running the binary outside that layout. An explicit relative `inbox_cmd` is also resolved under the code root.
 
 ## Event hooks
 
 `emit` (or any writer following the file format) drops `<state_dir>/events/<id>.json` with `{"id","kind","task","text"}`; the file is written to a temporary name and renamed.
 It works while the relay is stopped, and the event is delivered at the next pass.
 The relay moves an event into `state.json` before it deletes the file, deduplicates by `id`, and quarantines malformed files as `*.json.rejected`.
-Use a stable `id` such as `<task>-<kind>-<head>` so a repeated hook cannot alert twice.
-Without `-id`, the id is a hash of kind, task and text.
-Delivery is at-least-once for alerts: a crash after Discord accepts a post but before the state is saved can repeat that one post; reminders are at-most-once.
-Wiring hooks into firstmate's status path is a separate step and is not done by this build.
+Use an explicit occurrence ID, reusing it only when retrying the same occurrence.
+Alerts and reminders are delivered at least once: a crash after Discord accepts the post but before local state is saved can duplicate it.
+This release is shadow-only. Connecting the live Firstmate status producer is a separate cutover step that requires captain approval; `emit` and the event file format are not wired into that producer.
 
 ## Shadow test, cutover and rollback
 
 Shadow test (needs the captain's word; nothing here is done by the build):
 
-1. Create a dedicated test channel and bot token, put the token in the environment of the shell that runs the relay, and write a config with `enabled: true` pointing at the test channel and a throwaway `state_dir`.
-2. Run `fm-discord-relay once` after sending a message from the captain's phone; confirm the note appears in `fm-inbox.sh list`, the message gets 👀 at once and ✅ after you ack the note (`fm-inbox.sh drain --ack` or a reply), and `fm-inbox.sh reply` answers arrive in the thread.
-3. Emit a `decision` event and a routine event; confirm one push, one quiet digest, and one reminder after about a minute that stops when the captain answers.
-4. Send a message from a second account and confirm nothing is enqueued and `status` shows `rejected=1`.
+1. Use a separate captain-only test channel and bot token. Export the shadow token and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`.
+2. Run `bin/go-pilot/discord-relay once` before sending a captain message to establish the baseline. Send the message, then run `once` again; confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
+3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and run `once` to see the answer in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>`, then run `once` to see ✅.
+4. After two quiet minutes, emit a decision and a routine event with distinct occurrence IDs. Check for one push, one quiet digest, and a reminder after about a minute if unanswered.
 
-Cutover, only after the captain approves the shadow results:
+Cutover, only after the captain approves the shadow results and live producer wiring:
 
-1. Stop the old message watcher (`launchctl bootout gui/$(id -u)/com.firstmate.discord-watcher`), so two readers never capture the same message. The bridge's voice, poll, slash-command and webhook parts need their own decision before they are stopped.
-2. Point the relay config at the live `channel_id`, keep the relay's cursor baseline (first start skips history), and start `fm-discord-relay run` under supervision.
-3. Watch `status` and the log for one day.
+1. Stop the old message watcher (`launchctl bootout gui/$(id -u)/com.firstmate.discord-watcher`) so no two readers capture the same messages. Keep the existing reaction poll handling running: cast a test vote after stopping the watcher and confirm it is counted. If it fails, restart the old watcher and stop the cutover.
+2. Set the relay config to the live captain-only channel and select the live inbox home. Always use a fresh live `state_dir`; never reuse shadow state. Run `bin/go-pilot/discord-relay once` at cutover to establish the live baseline, then supervise `bin/go-pilot/discord-relay run`. History at or before the baseline is not replayed.
+3. Monitor the relay log for errors.
 
 Rollback:
 
@@ -104,7 +99,7 @@ Keep `state_dir` for diagnosis; delete it only to force a fresh baseline.
 | Discord down, 429 or 5xx | The pass logs the error (token redacted) and tries again at the next poll; cursors only advance after durable handling. |
 | Process crash | A restart reloads `state.json` and resumes every unfinished stage. |
 | Corrupt `state.json` | The relay refuses to start and says so; restore a copy rather than guessing. |
-| Two relays | The second refuses to start (state lock). |
+| Two relays using the same state directory | The second cannot acquire that directory’s lock. |
 
 Reaction polls stay with the existing bridge; the relay handles text only (voice, buttons and selects, and replacing the front-desk mate are follow-ups).
 

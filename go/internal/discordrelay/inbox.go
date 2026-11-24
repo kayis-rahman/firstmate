@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -31,12 +32,13 @@ type Inbox interface {
 // ExecInbox shells out to fm-inbox.sh with FM_HOME set.
 type ExecInbox struct{ Cmd, Home string }
 
-func (e ExecInbox) run(args ...string) ([]byte, int, error) {
+func (e ExecInbox) run(stdin string, args ...string) ([]byte, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, e.Cmd, args...)
 	cmd.Env = append(os.Environ(), "FM_HOME="+e.Home)
 	var out bytes.Buffer
+	cmd.Stdin = strings.NewReader(stdin)
 	cmd.Stdout = &out
 	err := cmd.Run()
 	var ee *exec.ExitError
@@ -51,7 +53,7 @@ func (e ExecInbox) run(args ...string) ([]byte, int, error) {
 
 // Note implements Inbox. Exit 3 is "saved but wake not announced".
 func (e ExecInbox) Note(reqID, text string) (string, bool, error) {
-	out, code, err := e.run("note", "--request-id", reqID, "--json", "--", text)
+	out, code, err := e.run(text, "note", "--request-id", reqID, "--json", "--", "-")
 	if err != nil {
 		return "", false, err
 	}
@@ -73,7 +75,7 @@ func (e ExecInbox) Replies(after string) ([]Reply, error) {
 	if after != "" {
 		args = append(args, "--after", after)
 	}
-	out, code, err := e.run(args...)
+	out, code, err := e.run("", args...)
 	if err != nil || code != 0 {
 		return nil, fmt.Errorf("fm-inbox receipts failed (code %d)", code)
 	}
@@ -96,7 +98,7 @@ func (e ExecInbox) Replies(after string) ([]Reply, error) {
 
 // Handled implements Inbox from the receipts view of handled notes.
 func (e ExecInbox) Handled() (map[string]bool, error) {
-	out, code, err := e.run("receipts", "--all-handled")
+	out, code, err := e.run("", "receipts", "--all-handled")
 	if err != nil || code != 0 {
 		return nil, fmt.Errorf("fm-inbox receipts failed (code %d)", code)
 	}

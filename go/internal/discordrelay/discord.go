@@ -2,6 +2,7 @@ package discordrelay
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,14 +25,15 @@ type Message struct {
 // Chat is the Discord transport, replaceable by a fake in tests.
 type Chat interface {
 	Fetch(after string, limit int) ([]Message, error)
-	Post(content, replyTo string, silent bool) (string, error)
+	Post(content, replyTo string, silent bool, nonce string) (string, error)
 	React(msgID, emoji string) error
 }
 
 // HTTPChat talks to the Discord REST API for one channel.
 type HTTPChat struct {
-	Base, Channel, Token string
-	Client               *http.Client
+	Channel, Token string
+	Client         *http.Client
+	base           string
 }
 
 func (h *HTTPChat) do(method, path string, body any) ([]byte, error) {
@@ -40,7 +42,11 @@ func (h *HTTPChat) do(method, path string, body any) ([]byte, error) {
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, h.Base+path, rd)
+	base := h.base
+	if base == "" {
+		base = "https://discord.com/api/v10"
+	}
+	req, err := http.NewRequest(method, base+path, rd)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +114,15 @@ func (h *HTTPChat) Fetch(after string, limit int) ([]Message, error) {
 
 // Post sends a message, optionally as a native threaded reply, optionally
 // without a push notification.
-func (h *HTTPChat) Post(content, replyTo string, silent bool) (string, error) {
-	body := map[string]any{"content": content, "allowed_mentions": map[string]any{"parse": []string{}}}
+func (h *HTTPChat) Post(content, replyTo string, silent bool, nonce string) (string, error) {
+	body := map[string]any{"content": clip(Redact(content), messageLimit), "allowed_mentions": map[string]any{"parse": []string{}}}
 	if replyTo != "" {
-		body["message_reference"] = map[string]any{"message_id": replyTo, "fail_if_not_exists": false}
+		body["message_reference"] = map[string]any{"message_id": replyTo, "fail_if_not_exists": true}
+	}
+	if nonce != "" {
+		hash := sha256.Sum256([]byte(nonce))
+		body["nonce"] = fmt.Sprintf("fm-%x", hash[:11])
+		body["enforce_nonce"] = true
 	}
 	if silent {
 		body["flags"] = 1 << 12 // SUPPRESS_NOTIFICATIONS
@@ -127,6 +138,35 @@ func (h *HTTPChat) Post(content, replyTo string, silent bool) (string, error) {
 		return "", fmt.Errorf("discord post: unreadable response")
 	}
 	return r.ID, nil
+}
+
+const messageLimit = 2000
+
+func textUnits(s string) int {
+	n := 0
+	for _, r := range s {
+		n++
+		if r > 0xffff {
+			n++
+		}
+	}
+	return n
+}
+
+func clip(s string, limit int) string {
+	if textUnits(s) <= limit {
+		return s
+	}
+	for i, r := range s {
+		limit--
+		if r > 0xffff {
+			limit--
+		}
+		if limit < 1 {
+			return s[:i] + "…"
+		}
+	}
+	return s
 }
 
 // React adds the bot's reaction to a message.

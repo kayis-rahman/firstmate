@@ -69,16 +69,7 @@ func (r *Relay) logf(f string, a ...any) {
 }
 
 func (r *Relay) active(now time.Time) bool {
-	return !r.St.S.LastOwnerAt.IsZero() && now.Sub(r.St.S.LastOwnerAt) < r.Cfg.activeWindow()
-}
-
-func (r *Relay) clip(s string) string {
-	s = Redact(s)
-	rs := []rune(s)
-	if len(rs) > r.Cfg.MaxMessageRune {
-		return string(rs[:r.Cfg.MaxMessageRune-1]) + "…"
-	}
-	return s
+	return !r.St.S.LastOwnerAt.IsZero() && now.Sub(r.St.S.LastOwnerAt) < 2*time.Minute
 }
 
 func snowLess(a, b string) bool {
@@ -92,7 +83,7 @@ func snowLess(a, b string) bool {
 // anywhere is repaired by the next pass. Stage errors are joined, not fatal.
 func (r *Relay) Tick() error {
 	var errs []error
-	for _, step := range []func() error{r.pollInbound, r.enqueue, r.markHandled, r.pollReplies, r.ingestEvents, r.dispatchEvents, r.remind} {
+	for _, step := range []func() error{r.pollInbound, r.markSeen, r.enqueue, r.markHandled, r.pollReplies, r.ingestEvents, r.dispatchEvents, r.remind} {
 		if err := step(); err != nil {
 			errs = append(errs, err)
 		}
@@ -103,112 +94,97 @@ func (r *Relay) Tick() error {
 func (r *Relay) pollInbound() error {
 	s := &r.St.S
 	first := s.Cursor == ""
-	limit := 100
-	if first {
-		limit = 1
-	}
-	msgs, err := r.Chat.Fetch(s.Cursor, limit)
+	msgs, err := r.Chat.Fetch(s.Cursor, 100)
 	if err != nil {
 		return err
 	}
 	sort.Slice(msgs, func(i, j int) bool { return snowLess(msgs[i].ID, msgs[j].ID) })
 	if first {
-		// Baseline: never replay channel history on first start. An empty
-		// channel baselines at "0" so its first message is captured.
 		s.Cursor = "0"
-		if len(msgs) > 0 {
-			s.Cursor = msgs[len(msgs)-1].ID
-		}
-		return r.St.Save()
 	}
 	for _, m := range msgs {
-		if _, seen := s.Messages[m.ID]; !seen && !snowLess(m.ID, s.Cursor) && m.ID != s.Cursor {
-			switch {
-			case m.ChannelID != "" && m.ChannelID != r.Cfg.ChannelID:
-				// wrong channel: ignore silently
-			case m.Bot:
-				// our own and other bots' messages are never input
-			case m.AuthorID != r.Cfg.OwnerID:
+		if !snowLess(s.Cursor, m.ID) {
+			continue
+		}
+		s.Cursor = m.ID
+		if m.ChannelID != r.Cfg.ChannelID || m.Bot {
+			continue
+		}
+		if m.AuthorID != r.Cfg.OwnerID {
+			if !first {
 				s.Rejected++
-				s.Messages[m.ID] = &InMsg{Rejected: true}
 				r.logf("rejected message %s from non-owner", m.ID)
-			case strings.TrimSpace(m.Content) == "":
-				// attachments (voice) stay with the existing bridge in this build
-			default:
-				s.Messages[m.ID] = &InMsg{Text: m.Content}
-				at := m.At
-				if at.IsZero() {
-					at = r.Now()
-				}
-				if at.After(s.LastOwnerAt) {
-					s.LastOwnerAt = at
-				}
-				for _, e := range s.Events {
-					if e.Posted {
-						e.Answered = true
-					}
-				}
+			}
+			continue
+		}
+		if m.At.After(s.LastOwnerAt) {
+			s.LastOwnerAt = m.At
+		}
+		if _, seen := s.Messages[m.ID]; first || seen || strings.TrimSpace(m.Content) == "" {
+			continue
+		}
+		s.Messages[m.ID] = &InMsg{Text: m.Content}
+		for _, e := range s.Events {
+			if e.Urgent && e.Posted && snowLess(e.MsgID, m.ID) {
+				e.Answered = true
 			}
 		}
-		if snowLess(s.Cursor, m.ID) {
-			s.Cursor = m.ID
-		}
 	}
-	if len(msgs) == 0 {
+	if !first && len(msgs) == 0 {
 		return nil
 	}
 	return r.St.Save()
 }
 
-func (r *Relay) enqueue() error {
-	s := &r.St.S
-	ids := make([]string, 0)
-	for id, m := range s.Messages {
-		if !m.Rejected && (!m.Enqueued || (!m.Receipted && r.Cfg.Receipt != "none")) {
+func (r *Relay) markSeen() error {
+	var ids []string
+	for id, m := range r.St.S.Messages {
+		if !m.Receipted {
 			ids = append(ids, id)
 		}
 	}
 	sort.Slice(ids, func(i, j int) bool { return snowLess(ids[i], ids[j]) })
 	var errs []error
 	for _, id := range ids {
-		m := s.Messages[id]
-		if !m.Enqueued {
-			noteID, announced, err := r.Box.Note("discord-"+id, m.Text)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("enqueue %s: %w", id, err))
-				break // preserve order
-			}
-			m.NoteID = noteID
-			if !announced {
-				if err := r.St.Save(); err != nil {
-					return err
-				}
-				errs = append(errs, fmt.Errorf("enqueue %s: saved, wake not announced yet", id))
-				break
-			}
-			m.Enqueued, m.Text = true, ""
-			if err := r.St.Save(); err != nil {
-				return err
-			}
+		if err := r.Chat.React(id, "👀"); err != nil {
+			errs = append(errs, fmt.Errorf("receipt %s: %w", id, err))
+			continue
 		}
-		if !m.Receipted && r.Cfg.Receipt != "none" {
-			var err error
-			if r.Cfg.Receipt == "reaction" {
-				err = r.Chat.React(id, "👀")
-			} else {
-				_, err = r.Chat.Post("Queued for firstmate.", id, true)
-			}
-			if err != nil {
-				errs = append(errs, fmt.Errorf("receipt %s: %w", id, err))
-				continue
-			}
-			m.Receipted = true
-			if err := r.St.Save(); err != nil {
-				return err
-			}
+		r.St.S.Messages[id].Receipted = true
+		if err := r.St.Save(); err != nil {
+			return err
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (r *Relay) enqueue() error {
+	s := &r.St.S
+	var ids []string
+	for id, m := range s.Messages {
+		if !m.Enqueued {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return snowLess(ids[i], ids[j]) })
+	for _, id := range ids {
+		m := s.Messages[id]
+		noteID, announced, err := r.Box.Note("discord-"+id, m.Text)
+		if err != nil {
+			return fmt.Errorf("enqueue %s: %w", id, err)
+		}
+		m.NoteID = noteID
+		if announced {
+			m.Enqueued, m.Text = true, ""
+		}
+		if err := r.St.Save(); err != nil {
+			return err
+		}
+		if !announced {
+			return fmt.Errorf("enqueue %s: saved, wake not announced yet", id)
+		}
+	}
+	return nil
 }
 
 // markHandled puts the acknowledged mark on every captured message whose note
@@ -218,11 +194,11 @@ func (r *Relay) markHandled() error {
 	s := &r.St.S
 	var ids []string
 	for id, m := range s.Messages {
-		if m.Enqueued && !m.Acked && m.NoteID != "" && !m.Rejected {
+		if !m.Acked && m.NoteID != "" {
 			ids = append(ids, id)
 		}
 	}
-	if len(ids) == 0 || r.Cfg.Ack == "none" {
+	if len(ids) == 0 {
 		return nil
 	}
 	handled, err := r.Box.Handled()
@@ -236,12 +212,7 @@ func (r *Relay) markHandled() error {
 		if !handled[m.NoteID] {
 			continue
 		}
-		if r.Cfg.Ack == "reaction" {
-			err = r.Chat.React(id, "✅")
-		} else {
-			_, err = r.Chat.Post("Handled by firstmate.", id, true)
-		}
-		if err != nil {
+		if err := r.Chat.React(id, "✅"); err != nil {
 			errs = append(errs, fmt.Errorf("ack %s: %w", id, err))
 			continue
 		}
@@ -255,16 +226,12 @@ func (r *Relay) markHandled() error {
 
 func (r *Relay) pollReplies() error {
 	s := &r.St.S
-	for _, m := range s.Messages {
-		if !m.Rejected && !m.Enqueued {
-			return nil // a reply could belong to a note not yet mapped
-		}
-	}
 	byNote := map[string]string{}
 	for id, m := range s.Messages {
-		if m.NoteID != "" {
-			byNote[m.NoteID] = id
+		if m.NoteID == "" {
+			return nil // a reply could belong to a note not yet mapped
 		}
+		byNote[m.NoteID] = id
 	}
 	reps, err := r.Box.Replies(s.ReplyCursor)
 	if err != nil {
@@ -273,7 +240,7 @@ func (r *Relay) pollReplies() error {
 	sort.Slice(reps, func(i, j int) bool { return reps[i].Cursor < reps[j].Cursor })
 	for _, rep := range reps {
 		if origin, ok := byNote[rep.NoteID]; ok && !s.SentReplies[rep.NoteID] {
-			if _, err := r.Chat.Post(r.clip(rep.Body), origin, false); err != nil {
+			if _, err := r.Chat.Post(rep.Body, origin, false, rep.NoteID); err != nil {
 				return fmt.Errorf("reply %s: %w", rep.NoteID, err)
 			}
 			s.SentReplies[rep.NoteID] = true
@@ -335,48 +302,72 @@ func (r *Relay) dispatchEvents() error {
 	var errs []error
 	for _, id := range ids {
 		e := s.Events[id]
-		msg := r.clip("🔔 " + e.Kind + " — " + eventLine(e))
-		mid, err := r.Chat.Post(msg, "", r.active(now)) // quiet while he is in the chat
+		msg := "🔔 " + e.Kind + " — " + eventLine(e)
+		mid, err := r.Chat.Post(msg, "", r.active(r.Now()), "") // quiet while he is in the chat
 		if err != nil {
 			errs = append(errs, fmt.Errorf("alert %s: %w", id, err))
 			continue
 		}
-		e.Posted, e.PostedAt, e.MsgID = true, now, mid
+		e.Posted, e.PostedAt, e.MsgID = true, r.Now(), mid
 		if err := r.St.Save(); err != nil {
 			return err
 		}
 	}
 	if len(s.Batch) > 0 && now.Sub(s.LastBatchAt) >= r.Cfg.batchWindow() {
-		counts := map[string]int{}
-		var order []string
-		for _, id := range s.Batch {
-			l := eventLine(s.Events[id])
-			if counts[l] == 0 {
-				order = append(order, l)
-			}
-			counts[l]++
-		}
-		var sb strings.Builder
-		fmt.Fprintf(&sb, "Fleet update (%d)", len(s.Batch))
-		for _, l := range order {
-			sb.WriteString("\n• " + l)
-			if counts[l] > 1 {
-				fmt.Fprintf(&sb, " (x%d)", counts[l])
-			}
-		}
-		if _, err := r.Chat.Post(r.clip(sb.String()), "", true); err != nil {
+		body, n := digest(s.Batch, s.Events)
+		if _, err := r.Chat.Post(body, "", true, ""); err != nil {
 			errs = append(errs, fmt.Errorf("digest: %w", err))
 		} else {
-			for _, id := range s.Batch {
+			for _, id := range s.Batch[:n] {
 				s.Events[id].Posted = true
 			}
-			s.Batch, s.LastBatchAt = nil, now
+			s.Batch, s.LastBatchAt = s.Batch[n:], now
 			if err := r.St.Save(); err != nil {
 				return err
 			}
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func digest(batch []string, events map[string]*Event) (string, int) {
+	counts := map[string]int{}
+	var order []string
+	budget := messageLimit - len(fmt.Sprintf("Fleet update (%d)", len(batch)))
+	n := 0
+	suffix := func(count int) string {
+		if count < 2 {
+			return ""
+		}
+		return fmt.Sprintf(" (x%d)", count)
+	}
+	for _, id := range batch {
+		line := "\n• " + Redact(eventLine(events[id]))
+		if n == 0 {
+			line = clip(line, budget)
+		}
+		count := counts[line]
+		cost := len(suffix(count+1)) - len(suffix(count))
+		if count == 0 {
+			cost += textUnits(line)
+		}
+		if cost > budget {
+			break
+		}
+		if count == 0 {
+			order = append(order, line)
+		}
+		counts[line]++
+		budget -= cost
+		n++
+	}
+	var body strings.Builder
+	fmt.Fprintf(&body, "Fleet update (%d)", n)
+	for _, line := range order {
+		body.WriteString(line)
+		body.WriteString(suffix(counts[line]))
+	}
+	return body.String(), n
 }
 
 func (r *Relay) remind() error {
@@ -395,13 +386,13 @@ func (r *Relay) remind() error {
 	var errs []error
 	for _, id := range ids {
 		e := s.Events[id]
-		// Mark first: a reminder is sent at most once, even across a crash.
+		if _, err := r.Chat.Post("Still waiting on you: "+e.Kind+" — "+eventLine(e), e.MsgID, false, ""); err != nil {
+			errs = append(errs, fmt.Errorf("reminder %s: %w", id, err))
+			continue
+		}
 		e.Reminded = true
 		if err := r.St.Save(); err != nil {
 			return err
-		}
-		if _, err := r.Chat.Post(r.clip("Still waiting on you: "+e.Kind+" — "+eventLine(e)), e.MsgID, false); err != nil {
-			errs = append(errs, fmt.Errorf("reminder %s: %w", id, err))
 		}
 	}
 	return errors.Join(errs...)
