@@ -42,6 +42,7 @@ FM_JEV_CIRCUIT_PAUSE_SECS=${FM_JEV_CIRCUIT_PAUSE_SECS:-1800}
 FM_JEV_CONFIDENCE_THRESHOLD=${FM_JEV_CONFIDENCE_THRESHOLD:-0.95}
 FM_JEV_WATCH_MAX_BYTES=${FM_JEV_WATCH_MAX_BYTES:-524288}
 FM_JEV_WATCH_KEEP_LINES=${FM_JEV_WATCH_KEEP_LINES:-1000}
+FM_JEV_WATCH_MAX_CONCURRENT=${FM_JEV_WATCH_MAX_CONCURRENT:-4}
 FM_JEV_SUPPRESSED_KEEP_LINES=${FM_JEV_SUPPRESSED_KEEP_LINES:-500}
 
 _fm_jev_config_dir() {
@@ -273,12 +274,28 @@ fm_jev_watch_log_append() {  # <task> <local_verdict> <jev_label> <confidence-or
 
 # fm_jev_watch_evaluate <task> <local_verdict> <status_line>
 # Synchronously evaluates one non-protected status line in watch mode and logs
-# the result to state/jev-watch.jsonl. Never alters any wake.
+# the result to state/jev-watch.jsonl. Deduplicates per task and exact status
+# line. Never alters any wake.
 fm_jev_watch_evaluate() {
   local task=$1 local_v=$2 line=$3
-  local helper out rc choice conf lat
+  local helper out rc choice conf lat state safe_task seen_file seen_lock prev_key cur_key
   if fm_jev_is_protected_status "$line"; then
     return 0
+  fi
+  state=$(_fm_jev_state_dir)
+  safe_task=$(printf '%s' "$task" | tr -c 'A-Za-z0-9._-' '_')
+  seen_file="$state/.jev-watch-seen-$safe_task"
+  seen_lock="$state/.jev-watch-seen.lock"
+  cur_key="${local_v}:${line}"
+  mkdir -p "$state" 2>/dev/null || return 0
+  if _fm_jev_lock_acquire "$seen_lock" 2; then
+    prev_key=$(cat "$seen_file" 2>/dev/null || true)
+    if [ "$prev_key" = "$cur_key" ]; then
+      _fm_jev_lock_release "$seen_lock"
+      return 0
+    fi
+    printf '%s\n' "$cur_key" > "$seen_file" 2>/dev/null || true
+    _fm_jev_lock_release "$seen_lock"
   fi
   if fm_jev_has_sensitive_content "$line" || fm_jev_has_sensitive_content "$task"; then
     fm_jev_watch_log_append "$task" "$local_v" "skipped_sensitive" "null" "null" "[REDACTED]"
@@ -315,13 +332,32 @@ fm_jev_watch_evaluate() {
 }
 
 # fm_jev_watch_dispatch <task> <local_verdict> <status_line>
-# Non-blocking wrapper for watchers unless FM_JEV_WATCH_SYNC=1.
+# Non-blocking, concurrency-bounded wrapper for watchers unless FM_JEV_WATCH_SYNC=1.
 fm_jev_watch_dispatch() {
   if [ "${FM_JEV_WATCH_SYNC:-0}" = "1" ]; then
     fm_jev_watch_evaluate "$@"
-  else
-    ( fm_jev_watch_evaluate "$@" ) >/dev/null 2>&1 &
+    return 0
   fi
+  local state pids_dir pid_f pid active=0 bg_pid
+  state=$(_fm_jev_state_dir)
+  pids_dir="$state/.jev-watch-pids"
+  mkdir -p "$pids_dir" 2>/dev/null || return 0
+  for pid_f in "$pids_dir"/*; do
+    [ -e "$pid_f" ] || continue
+    pid=${pid_f##*/}
+    if kill -0 "$pid" 2>/dev/null; then
+      active=$((active + 1))
+    else
+      rm -f -- "$pid_f" 2>/dev/null || true
+    fi
+  done
+  [ "$active" -lt "$FM_JEV_WATCH_MAX_CONCURRENT" ] || return 0
+  (
+    trap 'rm -f -- "'"$pids_dir"'/$BASHPID" 2>/dev/null || true' EXIT
+    fm_jev_watch_evaluate "$@"
+  ) >/dev/null 2>&1 &
+  bg_pid=$!
+  printf '%s\n' "$bg_pid" > "$pids_dir/$bg_pid" 2>/dev/null || true
 }
 
 # ---- Act mode: record-before-suppress, drain, missed-blocker auto-off --------

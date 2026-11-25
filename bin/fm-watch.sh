@@ -3319,6 +3319,11 @@ surface_nonterminal_stale() {  # <window> <hash> [dialog-name]
     bounded=0
   fi
   if [ "$throttled" -ne 0 ]; then
+    if [ -z "$dialog" ] && [ "$(fm_jev_mode)" = "watch" ]; then
+      _jev_stale_line=$(last_status_line "$STATE/$task.status")
+      fm_jev_is_protected_wake stale "stale: $win" "$_jev_stale_line" \
+        || fm_jev_watch_dispatch "$task" "needs-firstmate" "$_jev_stale_line"
+    fi
     if [ -z "$dialog" ] && [ "$(fm_jev_mode)" = "act" ]; then
       _jev_stale_line=$(last_status_line "$STATE/$task.status")
       if fm_jev_act_evaluate "$task" "stale" "stale: $win" "$_jev_stale_line" 0; then

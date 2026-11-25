@@ -279,6 +279,29 @@ echo "$report" | grep -q '\[job-b\].*waiting on peer' || fail "report missing mi
 FM_JEV_WATCH_MAX_BYTES=300 FM_JEV_WATCH_KEEP_LINES=2 fm_jev_watch_evaluate "job-d" "routine" "working: trim test"
 lines=$(wc -l < "$H4/state/jev-watch.jsonl" | tr -d ' ')
 [ "$lines" -le 2 ] || fail "watch log did not trim to bounded size (lines=$lines)"
+
+# status_is_captain_relevant must NOT dispatch Jev in watch mode
+rm -f "$TMP_ROOT/curl.argv"
+status_is_captain_relevant "working: classifier must not call jev" && fail "working should not be captain-relevant"
+[ ! -e "$TMP_ROOT/curl.argv" ] || fail "status_is_captain_relevant wrongly dispatched Jev in watch mode"
+
+# Deduplicate per task and exact status line
+rm -f "$TMP_ROOT/curl.argv"
+fm_jev_watch_evaluate "job-dedup" "routine" "working: exact same line"
+[ -e "$TMP_ROOT/curl.argv" ] || fail "first watch evaluation did not call curl"
+rm -f "$TMP_ROOT/curl.argv"
+fm_jev_watch_evaluate "job-dedup" "routine" "working: exact same line"
+[ ! -e "$TMP_ROOT/curl.argv" ] || fail "duplicate (task, status_line) was evaluated twice"
+
+# Bound concurrent background watch evaluations
+mkdir -p "$H4/state/.jev-watch-pids"
+sleep 2 &
+bg_pid=$!
+printf '%s\n' "$bg_pid" > "$H4/state/.jev-watch-pids/$bg_pid"
+rm -f "$TMP_ROOT/curl.argv"
+FM_JEV_WATCH_MAX_CONCURRENT=1 FM_JEV_WATCH_SYNC=0 fm_jev_watch_dispatch "job-cap" "routine" "working: concurrency capped"
+wait 2>/dev/null || true
+[ ! -e "$TMP_ROOT/curl.argv" ] || fail "watch dispatch exceeded concurrency bound"
 pass "watch mode logs bounded JSONL and fm-jev-report.sh summarizes counts and disagreements"
 
 # ---- 9. Act mode: 95% confidence boundary ------------------------------------
