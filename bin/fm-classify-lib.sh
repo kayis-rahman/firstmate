@@ -3021,14 +3021,29 @@ stale_is_terminal() {  # <window> <state>
   [ -n "$last" ] && status_is_captain_relevant "$last"
 }
 
-# --- shadow typed-decision API (phase 1) ------------------------------------
+# --- shadow typed-decision API (phase 1) & Jev monitoring (watch) -----------
+case $- in *u*) _fm_classify_jev_nounset=on ;; *) _fm_classify_jev_nounset=off ;; esac
+# shellcheck source=bin/fm-jev-monitor-lib.sh
+. "$_FM_CLASSIFY_LIB_DIR/fm-jev-monitor-lib.sh"
+[ "$_fm_classify_jev_nounset" = on ] || set +u
+unset _fm_classify_jev_nounset
+
 # Off by default. When config/decision-api-shadow exists, status_is_captain_relevant
 # consults bin/fm-decision-api.sh (local MLX Serve only) and records one line in
 # state/decision-shadow.log for each disagreement or low-confidence answer.
+# When config/jev-monitoring is watch, non-protected lines are also logged via
+# fm_jev_watch_dispatch without altering the local verdict.
 # The existing local verdict is always the one returned; the helper is fail-open.
 _fm_classify_decision_shadow() {  # <local_rc> <status-line>
   local local_rc=${1:-1} line=${2:-}
   local cfg state_dir log helper out choice conf local_verdict low=0
+  [ "${FM_JEV_IN_CLASSIFY_CHECK:-0}" -eq 1 ] && return 0
+  if [ "$(fm_jev_mode)" = "watch" ]; then
+    if [ "$local_rc" -eq 0 ]; then local_verdict='needs-firstmate'; else local_verdict='routine'; fi
+    if ! fm_jev_is_protected_status "$line"; then
+      fm_jev_watch_dispatch "${FM_JEV_JOB:-unknown}" "$local_verdict" "$line"
+    fi
+  fi
   cfg="${FM_CONFIG_OVERRIDE:-${FM_HOME:-.}/config}/decision-api-shadow"
   [ -f "$cfg" ] || return 0
   helper="${_FM_CLASSIFY_LIB_DIR:-.}/fm-decision-api.sh"

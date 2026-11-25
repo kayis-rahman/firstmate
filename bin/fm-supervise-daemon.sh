@@ -1947,6 +1947,13 @@ handle_wake() {  # <reason> <state>
   fi
   case "$action" in
     escalate)
+      if [ "$(fm_jev_mode)" = "watch" ]; then
+        _jev_task=${task:-$(window_to_task "${arg%% *}" "$state" 2>/dev/null || true)}
+        _jev_line=''
+        [ -n "$_jev_task" ] && _jev_line=$(last_status_line "$state/$_jev_task.status")
+        fm_jev_is_protected_wake "$kind" "$reason" "$_jev_line" \
+          || fm_jev_watch_dispatch "${_jev_task:-unknown}" "needs-firstmate" "${_jev_line:-$distilled}"
+      fi
       log "escalate: $reason -> $distilled"
       if escalate_add "$state" "$distilled"; then
         # A terminal-stale escalate must not leave a persistence marker behind, or

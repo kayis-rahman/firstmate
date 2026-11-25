@@ -4846,6 +4846,16 @@ EOF
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
+      if ! afk_present && [ "$signal_actionable" -ne 0 ] && [ "$(fm_jev_mode)" = "watch" ]; then
+        while IFS=$(printf '\t') read -r sf sig f; do
+          [ -n "$sf" ] || continue
+          _jev_task=$(basename "$f"); _jev_task=${_jev_task%.status}; _jev_task=${_jev_task%.turn-ended}
+          _jev_line=$(last_status_line "$STATE/$_jev_task.status")
+          fm_jev_is_protected_wake signal "$reason" "$_jev_line" || fm_jev_watch_dispatch "$_jev_task" "needs-firstmate" "$_jev_line"
+        done <<EOF
+$pending
+EOF
+      fi
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"
@@ -4904,6 +4914,16 @@ EOF
         wake "$reason"
       fi
       triage_log "absorbed benign $reason"
+      if [ "$(fm_jev_mode)" = "watch" ]; then
+        while IFS=$(printf '\t') read -r sf sig f; do
+          [ -n "$sf" ] || continue
+          _jev_task=$(basename "$f"); _jev_task=${_jev_task%.status}; _jev_task=${_jev_task%.turn-ended}
+          _jev_line=$(last_status_line "$STATE/$_jev_task.status")
+          fm_jev_is_protected_wake signal "$reason" "$_jev_line" || fm_jev_watch_dispatch "$_jev_task" "routine" "$_jev_line"
+        done <<EOF
+$pending
+EOF
+      fi
     fi
   fi
 
