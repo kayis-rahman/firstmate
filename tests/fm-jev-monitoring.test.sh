@@ -55,6 +55,10 @@ case "$mode" in
     printf '{"answers":{"classification":{"type":"choice","choice":"needs-firstmate","confidence":0.98,"probabilities":{"routine":0.02,"needs-firstmate":0.98}}}}' > "\$out"
     printf '200'
     ;;
+  ok_mlx)
+    printf '{"answers":{"classification":{"type":"choice","choice":"captain-relevant","confidence":0.9,"probabilities":{"captain-relevant":0.9,"not-captain-relevant":0.1}}}}' > "\$out"
+    printf '200'
+    ;;
   slow)
     exit 28
     ;;
@@ -112,6 +116,18 @@ status_is_captain_relevant "working: compiling modules" && fail "absent: working
 status_is_captain_relevant "done: shipped" || fail "absent: done should be captain-relevant"
 [ ! -e "$TMP_ROOT/curl.argv" ] || fail "absent setting called curl"
 [ ! -e "$H1/state/jev-watch.jsonl" ] || fail "absent setting created jev-watch.jsonl"
+
+# mlx mode must ignore TYPESAFE_PATH and always use /v1/systemone
+write_stub_curl ok_mlx "$TMP_ROOT"
+cat > "$H1/.env" <<'ENV'
+TYPESAFE_BASE=http://127.0.0.1:11234
+TYPESAFE_PATH=/v1/hosted-custom
+TYPESAFE_API_KEY=local-mlx-serve
+ENV
+"$ROOT/bin/fm-decision-api.sh" --context "done: shipped" >/dev/null || fail "mlx mode failed"
+grep -q 'http://127.0.0.1:11234/v1/systemone' "$TMP_ROOT/curl.argv" || fail "mlx mode did not use /v1/systemone: $(cat "$TMP_ROOT/curl.argv")"
+! grep -q '/v1/hosted-custom' "$TMP_ROOT/curl.argv" || fail "mlx mode wrongly honored TYPESAFE_PATH"
+rm -f "$H1/.env" "$TMP_ROOT/curl.argv"
 pass "absent setting keeps existing behavior and makes no Jev calls"
 
 # ---- 2. Setting values and invalid notice once -------------------------------

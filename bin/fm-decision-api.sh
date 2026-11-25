@@ -125,11 +125,7 @@ if [ "$MODE" = jev ]; then
 else
   BASE="${RAW_BASE:-http://127.0.0.1:11234}"
   BASE="${BASE%/}"
-  if [ -n "$RAW_PATH" ]; then
-    REQ_PATH=$(fm_typesafe_validate_path "$RAW_PATH") || exit 1
-  else
-    REQ_PATH='/v1/systemone'
-  fi
+  REQ_PATH='/v1/systemone'
   MODEL="${RAW_MODEL:-aselea/Kev-4B-MLX-Serve-8bit}"
   if [ -z "$TYPESAFE_API_KEY_PRIVATE" ]; then
     TYPESAFE_API_KEY_PRIVATE='local-mlx-serve'
