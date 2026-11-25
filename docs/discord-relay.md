@@ -51,7 +51,7 @@ bin/go-pilot/discord-relay run
 bin/go-pilot/discord-relay emit -kind blocker -id <occurrence-id> "short text"
 ```
 
-`FM_HOME` selects the operational home for both configuration and inbox data. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. Set `FM_ROOT_OVERRIDE` when running the binary outside that layout. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
+`FM_HOME` selects the operational home for both configuration and inbox data. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
 
 ## Event hooks
 

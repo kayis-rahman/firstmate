@@ -66,17 +66,33 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		after := r.URL.Query().Get("after")
-		var out []map[string]any
-		for i := len(f.msgs) - 1; i >= 0; i-- { // newest first, like Discord
-			m := f.msgs[i]
-			if after == "" || snowLess(after, m.ID) {
-				row := map[string]any{"id": m.ID, "channel_id": m.ChannelID, "content": m.Content,
-					"timestamp": m.At.Format(time.RFC3339), "author": map[string]any{"id": m.AuthorID, "bot": m.Bot}}
-				if m.ReplyTo != "" {
-					row["message_reference"] = map[string]any{"message_id": m.ReplyTo, "channel_id": m.ChannelID}
-				}
-				out = append(out, row)
+		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+		if err != nil || limit < 1 || limit > 100 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		start, end := 0, len(f.msgs)
+		if after == "" {
+			if end > limit {
+				start = end - limit
 			}
+		} else {
+			for start < end && !snowLess(after, f.msgs[start].ID) {
+				start++
+			}
+			if end-start > limit {
+				end = start + limit
+			}
+		}
+		var out []map[string]any
+		for i := end - 1; i >= start; i-- {
+			m := f.msgs[i]
+			row := map[string]any{"id": m.ID, "channel_id": m.ChannelID, "content": m.Content,
+				"timestamp": m.At.Format(time.RFC3339), "author": map[string]any{"id": m.AuthorID, "bot": m.Bot}}
+			if m.ReplyTo != "" {
+				row["message_reference"] = map[string]any{"message_id": m.ReplyTo, "channel_id": m.ChannelID}
+			}
+			out = append(out, row)
 		}
 		json.NewEncoder(w).Encode(out)
 	case r.Method == "POST":
@@ -398,6 +414,31 @@ func TestReminderSentOnceAfterAMinute(t *testing.T) {
 	ps := g.f.postsSnapshot()
 	if len(ps) != n+1 || !strings.HasPrefix(ps[n].Content, "Still waiting") || ps[n].ReplyTo == "" {
 		t.Fatalf("want exactly one threaded reminder, got %+v", ps)
+	}
+}
+
+func TestInboundCatchupBeforeAlertsAndReminders(t *testing.T) {
+	g, n := alertRig(t)
+	g.now = g.now.Add(5 * time.Minute)
+	for id := 5100; id < 5200; id++ {
+		g.f.say(itoa(id), other, "backlog", g.now.Add(-3*time.Minute))
+	}
+	first := g.r.St.S.Events["d1"].MsgID
+	g.f.msgs = append(g.f.msgs, Message{ID: "5200", ChannelID: channel, AuthorID: owner, Content: "answer", ReplyTo: first, At: g.now})
+	if err := g.emit(EventIn{ID: "next", Kind: "blocker", Text: "new blocker"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	ps := g.f.postsSnapshot()
+	if len(ps) != n+2 || ps[n].Reaction != "👀" || ps[n].ReactedTo != "5200" ||
+		!ps[n+1].Silent || !strings.Contains(ps[n+1].Content, "new blocker") {
+		t.Fatalf("expected capture and a quiet alert, without a reminder: %+v", ps)
+	}
+	g.open()
+	if g.r.St.S.Cursor != "5200" || !g.r.St.S.Events["d1"].Answered {
+		t.Fatal("catch-up did not commit the reply and cursor")
 	}
 }
 

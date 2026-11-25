@@ -31,23 +31,20 @@ func main() {
 	if cmd != "run" && cmd != "once" && cmd != "emit" {
 		log.Fatalf("fm-discord-relay: unknown command %q", cmd)
 	}
-	root := os.Getenv("FM_ROOT_OVERRIDE")
-	if root == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			log.Fatal(err)
-		}
-		exe, err = filepath.EvalSymlinks(exe)
-		if err != nil {
-			log.Fatal(err)
-		}
-		root = filepath.Dir(filepath.Dir(filepath.Dir(exe)))
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
 	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		log.Fatal(err)
+	}
+	root := filepath.Dir(filepath.Dir(filepath.Dir(exe)))
 	home := os.Getenv("FM_HOME")
 	if home == "" {
 		home = root
 	}
-	home, err := filepath.Abs(home)
+	home, err = filepath.Abs(home)
 	if err != nil {
 		log.Fatal(err)
 	}

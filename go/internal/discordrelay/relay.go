@@ -99,44 +99,56 @@ func (r *Relay) Tick() error {
 }
 
 func (r *Relay) pollInbound() error {
+	const pageSize = 100
 	s := &r.St.S
 	first := s.Cursor == ""
-	msgs, err := r.Chat.Fetch(s.Cursor, 100)
-	if err != nil {
-		return err
-	}
-	sort.Slice(msgs, func(i, j int) bool { return snowLess(msgs[i].ID, msgs[j].ID) })
-	if first {
-		s.Cursor = "0"
-	}
-	for _, m := range msgs {
-		if !snowLess(s.Cursor, m.ID) {
-			continue
+	for {
+		before := s.Cursor
+		msgs, err := r.Chat.Fetch(before, pageSize)
+		if err != nil {
+			return err
 		}
-		s.Cursor = m.ID
-		if m.ChannelID != r.Cfg.ChannelID || m.Bot || m.AuthorID != r.Cfg.OwnerID {
-			continue
+		if !first && len(msgs) == 0 {
+			return nil
 		}
-		if m.At.After(s.LastOwnerAt) {
-			s.LastOwnerAt = m.At
+		sort.Slice(msgs, func(i, j int) bool { return snowLess(msgs[i].ID, msgs[j].ID) })
+		if first {
+			s.Cursor = "0"
 		}
-		if _, seen := s.Messages[m.ID]; first || seen || strings.TrimSpace(m.Content) == "" {
-			continue
-		}
-		s.Messages[m.ID] = &InMsg{Text: m.Content}
-		if m.ReplyTo == "" {
-			continue
-		}
-		for _, e := range s.Events {
-			if alertKinds[e.Kind] && e.Posted && e.MsgID == m.ReplyTo && snowLess(e.MsgID, m.ID) {
-				e.Answered = true
+		for _, m := range msgs {
+			if !snowLess(s.Cursor, m.ID) {
+				continue
+			}
+			s.Cursor = m.ID
+			if m.ChannelID != r.Cfg.ChannelID || m.Bot || m.AuthorID != r.Cfg.OwnerID {
+				continue
+			}
+			if m.At.After(s.LastOwnerAt) {
+				s.LastOwnerAt = m.At
+			}
+			if _, seen := s.Messages[m.ID]; first || seen || strings.TrimSpace(m.Content) == "" {
+				continue
+			}
+			s.Messages[m.ID] = &InMsg{Text: m.Content}
+			if m.ReplyTo == "" {
+				continue
+			}
+			for _, e := range s.Events {
+				if alertKinds[e.Kind] && e.Posted && e.MsgID == m.ReplyTo && snowLess(e.MsgID, m.ID) {
+					e.Answered = true
+				}
 			}
 		}
+		if s.Cursor == before {
+			return errors.New("Discord inbound page did not advance the cursor")
+		}
+		if err := r.St.Save(); err != nil {
+			return err
+		}
+		if first || len(msgs) < pageSize {
+			return nil
+		}
 	}
-	if !first && len(msgs) == 0 {
-		return nil
-	}
-	return r.St.Save()
 }
 
 func (r *Relay) markSeen() error {
