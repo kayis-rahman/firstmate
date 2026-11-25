@@ -802,10 +802,12 @@ fm_lock_try_create() {
     FM_LOCK_PENDING_PREVIOUS_PID=${!:-}
     # Newer bash can enter EXIT before the child finishes. A process
     # substitution exposes its pid even before read returns the owner path.
-    if ! IFS= read -r ownerdir < <(fm_lock_owner_dir "$lockdir"); then
-      fm_lock_discard_owner "$ownerdir"
+    # Frame mktemp's output with NUL so embedded newlines stay in the path.
+    if ! IFS= read -r -d '' ownerdir < <(fm_lock_owner_dir "$lockdir" && printf '\0'); then
+      fm_lock_discard_owner "${ownerdir%$'\n'}"
       return 1
     fi
+    ownerdir=${ownerdir%$'\n'}
     FM_LOCK_PENDING_PID=$!
     if ! wait "$FM_LOCK_PENDING_PID" 2>/dev/null; then
       fm_lock_discard_owner "$ownerdir"
