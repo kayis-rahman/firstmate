@@ -264,3 +264,108 @@ FM_JEV_WATCH_MAX_BYTES=300 FM_JEV_WATCH_KEEP_LINES=2 fm_jev_watch_evaluate "job-
 lines=$(wc -l < "$H4/state/jev-watch.jsonl" | tr -d ' ')
 [ "$lines" -le 2 ] || fail "watch log did not trim to bounded size (lines=$lines)"
 pass "watch mode logs bounded JSONL and fm-jev-report.sh summarizes counts and disagreements"
+
+# ---- 9. Act mode: 95% confidence boundary ------------------------------------
+H5=$(make_home)
+export FM_HOME="$H5"
+export FM_CONFIG_OVERRIDE="$H5/config"
+export FM_STATE_OVERRIDE="$H5/state"
+cat > "$H5/.env" <<'ENV'
+TYPESAFE_BASE=http://127.0.0.1:19999
+TYPESAFE_API_KEY=stub-key
+ENV
+printf 'act\n' > "$H5/config/jev-monitoring"
+
+write_stub_curl ok_routine_94 "$TMP_ROOT"
+if fm_jev_act_evaluate "task-94" "signal" "signal: task-94.status" "working: step 1" 0; then
+  fail "routine at 0.94 was wrongly suppressed"
+fi
+[ ! -s "$H5/state/jev-suppressed.jsonl" ] || fail "0.94 wrote a suppressed record"
+
+write_stub_curl ok_needs "$TMP_ROOT"
+if fm_jev_act_evaluate "task-nf" "signal" "signal: task-nf.status" "working: step 2" 0; then
+  fail "needs-firstmate was wrongly suppressed"
+fi
+
+write_stub_curl ok_routine_95 "$TMP_ROOT"
+fm_jev_act_evaluate "task-95" "signal" "signal: task-95.status" "working: step 3" 42 \
+  || fail "routine at 0.95 was not suppressed"
+[ -s "$H5/state/jev-suppressed.jsonl" ] || fail "0.95 did not record before suppressing"
+jq -e '.task == "task-95" and .confidence == 0.95 and .drained == false' "$H5/state/jev-suppressed.jsonl" >/dev/null \
+  || fail "suppressed record missing expected fields"
+pass "95% confidence boundary: >=0.95 routine suppresses, <0.95 and needs-firstmate wake"
+
+# ---- 10. Crash after record -> next drain; fail-open if record fails ---------
+# Simulate crash after fm_jev_act_evaluate recorded (no wake-queue row written).
+# Create a dummy fm-guard.sh / fm-wake-drain dependencies? Use fm-wake-drain.sh directly!
+drain_out=$(FM_HOME="$H5" FM_CONFIG_OVERRIDE="$H5/config" FM_STATE_OVERRIDE="$H5/state" \
+  FM_NO_MISTAKES_OFF=1 "$ROOT/bin/fm-wake-drain.sh" 2>/dev/null || true)
+echo "$drain_out" | grep -q 'JEV MONITORING, SUPPRESSED ROUTINE' || fail "next drain did not show suppressed row: $drain_out"
+echo "$drain_out" | grep -q 'task-95: working: step 3' || fail "next drain missing task-95 detail: $drain_out"
+drain_out2=$(FM_HOME="$H5" FM_CONFIG_OVERRIDE="$H5/config" FM_STATE_OVERRIDE="$H5/state" \
+  FM_NO_MISTAKES_OFF=1 "$ROOT/bin/fm-wake-drain.sh" 2>/dev/null || true)
+if echo "$drain_out2" | grep -q 'JEV MONITORING, SUPPRESSED ROUTINE'; then
+  fail "second drain repeated already-shown suppressed row"
+fi
+
+# Unwritable store -> must NOT suppress
+H5B=$(make_home)
+export FM_HOME="$H5B"
+export FM_CONFIG_OVERRIDE="$H5B/config"
+export FM_STATE_OVERRIDE="$H5B/state"
+cat > "$H5B/.env" <<'ENV'
+TYPESAFE_BASE=http://127.0.0.1:19999
+TYPESAFE_API_KEY=stub-key
+ENV
+printf 'act\n' > "$H5B/config/jev-monitoring"
+mkdir -p "$H5B/state/jev-suppressed.jsonl"
+write_stub_curl ok_routine "$TMP_ROOT"
+if fm_jev_act_evaluate "task-unwritable" "signal" "signal: task-unwritable.status" "working: step" 0; then
+  fail "suppressed even though record-before-suppress failed"
+fi
+pass "record-before-suppress surfaces in next drain after crash and never suppresses on write failure"
+
+# ---- 11. Protected kinds never suppressed in act mode ------------------------
+export FM_HOME="$H5"
+export FM_CONFIG_OVERRIDE="$H5/config"
+export FM_STATE_OVERRIDE="$H5/state"
+rm -f "$TMP_ROOT/curl.argv"
+for prot_line in "blocked: stuck" "needs-decision [key=x]: choose" "failed: err" "done: ok" "PR ready"; do
+  if fm_jev_act_evaluate "task-prot" "signal" "signal: task-prot.status" "$prot_line" 0; then
+    fail "protected line suppressed in act mode: $prot_line"
+  fi
+done
+if fm_jev_act_evaluate "task-prot" "check" "check: pr-register" "working: ok" 0; then
+  fail "check wake suppressed in act mode"
+fi
+if fm_jev_act_evaluate "task-prot" "stale" "stale: s:0 (idle 240s, possible wedge, escalation 1)" "working: ok" 0; then
+  fail "stuck-worker wedge alarm suppressed in act mode"
+fi
+[ ! -e "$TMP_ROOT/curl.argv" ] || fail "act mode called curl for a protected kind"
+pass "act mode never sends or suppresses protected kinds or stuck-worker alarms"
+
+# ---- 12. Missed-blocker auto-off ---------------------------------------------
+H6=$(make_home)
+export FM_HOME="$H6"
+export FM_CONFIG_OVERRIDE="$H6/config"
+export FM_STATE_OVERRIDE="$H6/state"
+cat > "$H6/.env" <<'ENV'
+TYPESAFE_BASE=http://127.0.0.1:19999
+TYPESAFE_API_KEY=stub-key
+ENV
+printf 'act\n' > "$H6/config/jev-monitoring"
+write_stub_curl ok_routine "$TMP_ROOT"
+fm_jev_act_evaluate "task-auto" "signal" "signal: task-auto.status" "working: doing fine" 0 \
+  || fail "setup suppression for task-auto failed"
+fm_jev_check_missed_blocker "task-auto" "full-check" || fail "auto-off did not trigger on missed blocker"
+[ "$(cat "$H6/config/jev-monitoring")" = "off" ] || fail "config/jev-monitoring not durably switched to off"
+[ "$(fm_jev_mode)" = "off" ] || fail "fm_jev_mode did not report off after auto-off"
+if fm_jev_check_missed_blocker "task-auto" "full-check"; then
+  fail "auto-off re-triggered when already off"
+fi
+rm -f "$TMP_ROOT/curl.argv"
+if fm_jev_act_evaluate "task-other" "signal" "signal: task-other.status" "working: step" 0; then
+  fail "act mode still suppressed after auto-off"
+fi
+[ ! -e "$TMP_ROOT/curl.argv" ] || fail "curl called after auto-off"
+pass "missed-blocker auto-off durably switches jev-monitoring to off"
