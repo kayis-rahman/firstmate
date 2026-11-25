@@ -313,7 +313,7 @@ pass "notes that predate the announcement marker are unknown, not re-announced"
 
 # Reply cursor: replies recorded within the same second are both readable, in
 # recording order, even when the later note id sorts below the earlier one.
-home=$(make_home cursor)
+home=$(make_home "$(printf 'cursor\nwith\342\200\250separators')")
 mkdir -p "$home/state/inbox"
 later="1700000000-aaaaaa"
 earlier="1700000000-zzzzzz"

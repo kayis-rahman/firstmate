@@ -658,7 +658,7 @@ PY
 }
 
 cmd_receipts() {
-  local after="" all_pending=0 all_handled=0 all_replies=0 reply_files
+  local after="" all_pending=0 all_handled=0 all_replies=0 reply_ids path id
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --after)
@@ -678,12 +678,19 @@ cmd_receipts() {
   mkdir -p "$INBOX" || die "could not open inbox for receipts"
   load_wake_lib || die "receipts need $FM_ROOT/bin/fm-wake-lib.sh"
   fm_lock_acquire_wait_bounded "$REPLY_SEQ_LOCK" 2 || die "could not lock replies for receipts: $REPLY_SEQ_LOCK"
-  reply_files=$(printf '%s\n' "$REPLIES"/*)
+  reply_ids=$(
+    for path in "$REPLIES"/*; do
+      id=${path##*/}
+      if valid_note_id "$id"; then
+        printf '%s\n' "$id"
+      fi
+    done
+  )
   fm_lock_release "$REPLY_SEQ_LOCK"
   python3 - "$INBOX" "$ANNOUNCED_DIR" "$REPLIES" "$FM_HOME" \
     "$RECEIPTS_PENDING_BOUND" "$RECEIPTS_HANDLED_BOUND" "$RECEIPTS_REPLIES_BOUND" \
     "$all_pending" "$all_handled" "$all_replies" "$after" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 3<<<"$reply_files" <<'PY'
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 3<<<"$reply_ids" <<'PY'
 import json, os, sys
 from pathlib import Path
 
@@ -697,7 +704,7 @@ all_replies = sys.argv[10] == "1"
 after = sys.argv[11]
 generated = sys.argv[12]
 with os.fdopen(3) as snapshot:
-    reply_files = {Path(path) for path in snapshot.read().splitlines()}
+    reply_ids = set(snapshot.read().splitlines())
 
 # A record that vanishes between listing and reading - drain --ack moving a
 # note to handled/ - is skipped, and undecodable bytes are replaced, so one bad
@@ -753,8 +760,10 @@ def list_notes(folder):
 malformed_replies = []
 
 def reply_record(note_id):
+    if note_id not in reply_ids:
+        return None
     path = Path(replies_dir) / note_id
-    if path not in reply_files or not path.is_file():
+    if not path.is_file():
         return None
     record = parse_record(path)
     if record is None:

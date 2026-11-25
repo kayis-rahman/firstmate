@@ -32,14 +32,7 @@ func eventFilename(id string) string {
 	return hex.EncodeToString([]byte(id)) + ".json"
 }
 
-// WriteEvent queues an event for an already bound relay.
-func WriteEvent(dir string, scope Scope, e EventIn) error {
-	if _, err := loadBoundState(dir, scope, &State{}); err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("state directory is unbound; start the relay before emitting events")
-		}
-		return err
-	}
+func (e EventIn) validate() error {
 	if !idRe.MatchString(e.ID) {
 		return errors.New("event id must match " + idRe.String())
 	}
@@ -48,6 +41,20 @@ func WriteEvent(dir string, scope Scope, e EventIn) error {
 	}
 	if strings.TrimSpace(e.Text) == "" {
 		return errors.New("event text is empty")
+	}
+	return nil
+}
+
+// WriteEvent queues an event for an already bound relay.
+func WriteEvent(dir string, scope Scope, e EventIn) error {
+	if _, err := loadBoundState(dir, scope, &State{}); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("state directory is unbound; start the relay before emitting events")
+		}
+		return err
+	}
+	if err := e.validate(); err != nil {
+		return err
 	}
 	eventsDir := filepath.Join(dir, "events")
 	b, _ := json.Marshal(queuedEvent{Scope: scope, EventIn: e})
@@ -313,7 +320,7 @@ func (r *Relay) ingestEvents() error {
 		if err != nil {
 			return err
 		}
-		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != eventFilename(e.ID) || !alertKinds[e.Kind] || strings.TrimSpace(e.Text) == "" {
+		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || e.validate() != nil || file.Name() != eventFilename(e.ID) {
 			r.logf("rejecting malformed event file %s", filepath.Base(f))
 			if err := os.Remove(f); err != nil {
 				return err
