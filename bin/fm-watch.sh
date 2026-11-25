@@ -5351,7 +5351,7 @@ EOF
       while IFS=$(printf '\t') read -r _hb_f _hb_end _hb_ident; do
         [ -n "$_hb_f" ] || continue
         _hb_task=$(basename "$_hb_f"); _hb_task=${_hb_task%.status}
-        if fm_jev_check_missed_blocker "$_hb_task" "full-check"; then
+        if fm_jev_check_missed_blocker "$_hb_task" "full-check" "$_hb_end"; then
           fm_wake_append check jev-monitoring-auto-off "check: jev-monitoring auto-off triggered (full check surfaced missed blocker on $_hb_task)" || exit 1
         fi
       done <<EOF

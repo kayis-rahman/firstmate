@@ -383,7 +383,7 @@ fi
 [ ! -e "$TMP_ROOT/curl.argv" ] || fail "act mode called curl for a protected kind"
 pass "act mode never sends or suppresses protected kinds or stuck-worker alarms"
 
-# ---- 12. Missed-blocker auto-off ---------------------------------------------
+# ---- 12. Missed-blocker auto-off (span-covered vs later genuine blocker) ----
 H6=$(make_home)
 export FM_HOME="$H6"
 export FM_CONFIG_OVERRIDE="$H6/config"
@@ -394,12 +394,27 @@ TYPESAFE_API_KEY=stub-key
 ENV
 printf 'act\n' > "$H6/config/jev-monitoring"
 write_stub_curl ok_routine "$TMP_ROOT"
+
+printf 'working: doing fine\n' > "$H6/state/task-auto.status"
+offset_before=$(wc -c < "$H6/state/task-auto.status" | tr -d ' ')
 fm_jev_act_evaluate "task-auto" "signal" "signal: task-auto.status" "working: doing fine" 0 \
   || fail "setup suppression for task-auto failed"
-fm_jev_check_missed_blocker "task-auto" "full-check" || fail "auto-off did not trigger on missed blocker"
+recorded_offset=$(jq -r '.status_offset' "$H6/state/jev-suppressed.jsonl")
+[ "$recorded_offset" = "$offset_before" ] || fail "expected real status_offset=$offset_before, got $recorded_offset"
+
+# A later genuine blocker appended AFTER the suppressed row (offset > recorded_offset) must NOT turn auto-off on
+printf 'blocked: genuine new blocker\n' >> "$H6/state/task-auto.status"
+offset_after=$(wc -c < "$H6/state/task-auto.status" | tr -d ' ')
+if fm_jev_check_missed_blocker "task-auto" "full-check" "$offset_after"; then
+  fail "auto-off wrongly triggered on a newer event beyond suppressed row's offset"
+fi
+[ "$(cat "$H6/config/jev-monitoring")" = "act" ] || fail "config/jev-monitoring turned off for uncovered newer event"
+
+# An event covered by the suppressed row's span (event_offset <= recorded_offset) MUST trigger auto-off
+fm_jev_check_missed_blocker "task-auto" "full-check" "$offset_before" || fail "auto-off did not trigger on covered missed blocker"
 [ "$(cat "$H6/config/jev-monitoring")" = "off" ] || fail "config/jev-monitoring not durably switched to off"
 [ "$(fm_jev_mode)" = "off" ] || fail "fm_jev_mode did not report off after auto-off"
-if fm_jev_check_missed_blocker "task-auto" "full-check"; then
+if fm_jev_check_missed_blocker "task-auto" "full-check" "$offset_before"; then
   fail "auto-off re-triggered when already off"
 fi
 rm -f "$TMP_ROOT/curl.argv"
@@ -407,4 +422,4 @@ if fm_jev_act_evaluate "task-other" "signal" "signal: task-other.status" "workin
   fail "act mode still suppressed after auto-off"
 fi
 [ ! -e "$TMP_ROOT/curl.argv" ] || fail "curl called after auto-off"
-pass "missed-blocker auto-off durably switches jev-monitoring to off"
+pass "missed-blocker auto-off checks span offset and durably switches jev-monitoring to off"

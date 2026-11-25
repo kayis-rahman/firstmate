@@ -1658,7 +1658,7 @@ housekeeping() {  # <state>
         event=${rest#*$'\t'}
         if escalate_add "$state" "$(basename "$f"): $event (catch-all scan)"; then
           mark_status_seen "$state" "$task" "$endpoint" "$ident" || true
-          if fm_jev_check_missed_blocker "$task" "catch-all-scan"; then
+          if fm_jev_check_missed_blocker "$task" "catch-all-scan" "$endpoint"; then
             escalate_add "$state" "jev-monitoring auto-off triggered: missed captain-relevant event on $task" || true
           fi
         fi

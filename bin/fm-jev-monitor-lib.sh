@@ -365,6 +365,16 @@ _fm_jev_suppressed_path() {
   printf '%s/jev-suppressed.jsonl' "$(_fm_jev_state_dir)"
 }
 
+_fm_jev_task_status_size() {  # <task>
+  local f sz
+  f="$(_fm_jev_state_dir)/$1.status"
+  [ -f "$f" ] || { printf '0'; return 0; }
+  sz=$(wc -c < "$f" 2>/dev/null || echo 0)
+  sz=${sz//[[:space:]]/}
+  case "$sz" in ''|*[!0-9]*) sz=0 ;; esac
+  printf '%s' "$sz"
+}
+
 fm_jev_record_suppressed() {  # <task> <kind> <reason> <status_line> <status_offset> <confidence> <latency_ms>
   local task=$1 kind=$2 reason=$3 line=$4 offset=${5:-0} conf=${6:-0} lat=${7:-0}
   local state store lock rec
@@ -426,6 +436,7 @@ fm_jev_act_evaluate() {
   fm_jev_circuit_record_success
   [ "$choice" = "routine" ] || return 1
   awk -v c="$conf" -v t="$FM_JEV_CONFIDENCE_THRESHOLD" 'BEGIN{exit !(c+0 >= t+0)}' 2>/dev/null || return 1
+  case "$offset" in ''|0|*[!0-9]*) offset=$(_fm_jev_task_status_size "$task") ;; esac
   fm_jev_record_suppressed "$task" "$kind" "$reason" "$line" "$offset" "$conf" "$lat" || return 1
   return 0
 }
@@ -467,12 +478,13 @@ fm_jev_drain_suppressed() {
   return 0
 }
 
-# fm_jev_check_missed_blocker <task> <event-desc>
-# If jev-monitoring is in act mode and <task> has a suppressed row that has not
-# yet triggered auto-off, durably switch config/jev-monitoring to off and mark
-# the row(s). Returns 0 if auto-off triggered, 1 otherwise.
+# fm_jev_check_missed_blocker <task> <event-desc> [<event-offset>]
+# If jev-monitoring is in act mode and <task> has a suppressed row whose
+# recorded status_offset covers <event-offset> (event_offset <= status_offset)
+# and has not yet triggered auto-off, durably switch config/jev-monitoring to
+# off and mark the row(s). Returns 0 if auto-off triggered, 1 otherwise.
 fm_jev_check_missed_blocker() {
-  local task=$1
+  local task=$1 _desc=${2:-} event_offset=${3:-}
   local state store lock cfg matched tmp
   [ -n "$task" ] || return 1
   [ "$(fm_jev_mode)" = "act" ] || return 1
@@ -482,8 +494,11 @@ fm_jev_check_missed_blocker() {
   cfg="$(_fm_jev_config_dir)/jev-monitoring"
   [ -s "$store" ] || return 1
   command -v jq >/dev/null 2>&1 || return 1
+  case "$event_offset" in ''|*[!0-9]*) event_offset=$(_fm_jev_task_status_size "$task") ;; esac
   _fm_jev_lock_acquire "$lock" 2 || return 1
-  matched=$(jq -e --arg t "$task" 'select(.task == $t and ((.auto_off_triggered // false) | not))' "$store" 2>/dev/null) || matched=''
+  matched=$(jq -e --arg t "$task" --argjson ev "$event_offset" \
+    'select(.task == $t and ((.auto_off_triggered // false) | not) and ((.status_offset // 0) >= $ev))' \
+    "$store" 2>/dev/null) || matched=''
   if [ -z "$matched" ]; then
     _fm_jev_lock_release "$lock"
     return 1
@@ -494,7 +509,9 @@ fm_jev_check_missed_blocker() {
   fi
   tmp=$(mktemp "$state/.jev-suppressed.off.XXXXXX" 2>/dev/null) || tmp=''
   if [ -n "$tmp" ]; then
-    if jq -c --arg t "$task" 'if .task == $t then .auto_off_triggered = true else . end' "$store" > "$tmp" 2>/dev/null; then
+    if jq -c --arg t "$task" --argjson ev "$event_offset" \
+      'if (.task == $t and ((.status_offset // 0) >= $ev)) then .auto_off_triggered = true else . end' \
+      "$store" > "$tmp" 2>/dev/null; then
       mv -f -- "$tmp" "$store" 2>/dev/null || rm -f -- "$tmp" 2>/dev/null || true
     else
       rm -f -- "$tmp" 2>/dev/null || true
