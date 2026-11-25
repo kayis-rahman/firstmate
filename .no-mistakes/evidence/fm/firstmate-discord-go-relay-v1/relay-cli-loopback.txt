@@ -1,0 +1,45 @@
+Real Go relay and shell inbox, disposable home with U+2028 in path. Test build changes only the REST base URL to a private loopback API; no real Discord or credentials.
+$ discord-relay-stock run 
+2026/11/25 11:13:31 fm-discord-relay: disabled; set "enabled": true in /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M87NH3MASPDERS6WYF40M5FT/.relay-validation/inbox home/config/discord-relay.json
+$ discord-relay-stock emit -kind blocker -id disabled No delivery 
+2026/11/25 11:13:31 fm-discord-relay: disabled; set "enabled": true in /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M87NH3MASPDERS6WYF40M5FT/.relay-validation/inbox home/config/discord-relay.json
+$ discord-relay-stock run 
+2026/11/25 11:13:31 fm-discord-relay: environment variable FM_DISCORD_RELAY_TOKEN is empty
+$ discord-relay-stock emit -kind blocker -id unbound No delivery 
+2026/11/25 11:13:31 fm-discord-relay emit: state directory is unbound; start the relay before emitting events
+PASS default-off, missing token, and unbound producer guards; no network traffic
+$ discord-relay-stock run 
+2026/11/25 11:13:31 fm-discord-relay: cannot acquire lock for state directory /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M87NH3MASPDERS6WYF40M5FT/.relay-validation/shadow-state: resource temporarily unavailable
+$ discord-relay-stock emit -kind blocker -id wrong-scope No delivery 
+2026/11/25 11:13:31 fm-discord-relay emit: state directory is not bound to this channel, owner and inbox home
+PASS shadow baseline skipped history; concurrent same-state reader and wrong-scope producer refused
+$ fm-inbox.sh list 
+1795605216-DIaPt7
+    -- owner text survives verbatim
+Pending receipt: {"id": "1795605216-DIaPt7", "at": "2026-11-25T11:13:36Z", "source": "text", "request_id": "discord-106", "body": "-- owner text survives verbatim", "acknowledged": false, "announced": true, "reply": null}
+Discord reactions before handling: [204] []
+PASS owner text captured durably; foreign author, bot, wrong channel, and blank/audio-only text not enqueued
+$ discord-relay-stock emit -kind bogus -id invalid No delivery 
+2026/11/25 11:13:37 fm-discord-relay emit: unknown alert kind "bogus"
+$ discord-relay-stock emit -kind decision -id active-1 active decision evidence 
+active-1
+2026/11/25 11:13:42 rejecting malformed event file 77726f6e672d7261772d73636f7065.json
+Active alert REST payload: {"allowed_mentions": {"parse": []}, "content": "🔔 decision — active decision evidence", "flags": 4096}
+$ discord-relay-stock emit -kind decision -id active-1 active decision evidence 
+active-1
+$ fm-inbox.sh reply 1795605216-DIaPt7 Threaded answer from the inbox 
+replied 1795605216-DIaPt7
+$ fm-inbox.sh drain --ack 1795605216-DIaPt7 
+acked 1795605216-DIaPt7
+2026/11/25 11:13:47 tick: ack 106: discord PUT /channels/1000/messages/106/reactions/%E2%9C%85/@me: status 500
+Answer REST payload: {"allowed_mentions": {"parse": []}, "content": "Threaded answer from the inbox", "enforce_nonce": true, "message_reference": {"fail_if_not_exists": true, "message_id": "106"}, "nonce": "fm-e98fe7d81303a3d68563f8"}
+Check-mark HTTP attempts: [500, 204]
+PASS handled mark retried, correctly threaded answer from Unicode inbox home, and no repeat after restart or duplicate emit
+Reminder due (>60s), owner still active; no reminder posted
+Reminder REST payload: {"allowed_mentions": {"parse": []}, "content": "Still waiting on you: decision — active decision evidence", "message_reference": {"fail_if_not_exists": true, "message_id": "107"}}
+$ discord-relay-stock emit -kind blocker -id quiet-1 quiet blocker evidence 
+quiet-1
+$ discord-relay-stock emit -kind login -id quiet-2 second quiet alert evidence 
+quiet-2
+Quiet alert REST payload: {"allowed_mentions": {"parse": []}, "content": "🔔 blocker — quiet blocker evidence"}
+PASS while quiet, push flag is absent; unanswered control got one reminder, while the answered alert got none

@@ -1,0 +1,6 @@
+Real Go relay and shell inbox, disposable home with U+2028 in path. Test build changes only the REST base URL to a private loopback API; no real Discord or credentials.
+2026/11/25 11:12:30 tick: enqueue 101: saved, wake not announced yet
+Note saved during queue outage: {"id": "1795605150-gaUzXf", "at": "2026-11-25T11:12:30Z", "source": "text", "request_id": "discord-101", "body": "Wake outage durable test", "acknowledged": false, "announced": false, "reply": null}
+Same note after repair: {"id": "1795605150-gaUzXf", "at": "2026-11-25T11:12:30Z", "source": "text", "request_id": "discord-101", "body": "Wake outage durable test", "acknowledged": false, "announced": true, "reply": null}
+Wake queue: 1795605150	2	check	inbox:1795605150-gaUzXf	check: captain inbox note 1795605150-gaUzXf - Wake outage durable test
+PASS restart announced the original note without repeating 👀 or creating a duplicate
