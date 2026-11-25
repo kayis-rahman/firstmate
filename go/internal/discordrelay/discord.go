@@ -33,7 +33,6 @@ type Chat interface {
 // HTTPChat talks to the Discord REST API for one channel.
 type HTTPChat struct {
 	Channel, Token string
-	Client         *http.Client
 	base           string
 }
 
@@ -56,10 +55,7 @@ func (h *HTTPChat) do(method, path string, body any) ([]byte, error) {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c := h.Client
-	if c == nil {
-		c = &http.Client{Timeout: 20 * time.Second}
-	}
+	c := &http.Client{Timeout: 20 * time.Second}
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, redactErr(err, h.Token)

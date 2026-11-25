@@ -351,20 +351,25 @@ snapshot_bin="$TMP_ROOT/snapshot-bin"
 mkdir -p "$snapshot_bin"
 FM_TEST_REAL_PYTHON=$(command -v python3)
 export FM_TEST_REAL_PYTHON
+export FM_TEST_SNAPSHOT_INBOX_BIN="$INBOX_BIN"
+printf 'id=1700000000-cccccc\n--\nconcurrent note\n' > "$home/state/inbox/1700000000-cccccc.note"
 cat > "$snapshot_bin/python3" <<'SH'
 #!/bin/sh
-pid=$(cat "$FM_HOME/state/inbox/.replies.lock/pid") || exit 70
-kill -0 "$pid" || exit 71
+lock="$FM_HOME/state/inbox/.replies.lock"
+[ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 70
+"$FM_TEST_SNAPSHOT_INBOX_BIN" reply 1700000000-cccccc "concurrent answer" >/dev/null || exit 71
 exec "$FM_TEST_REAL_PYTHON" "$@"
 SH
 chmod +x "$snapshot_bin/python3"
 snapshot=$(PATH="$snapshot_bin:$PATH" run_inbox "$home" receipts --all-replies --after "$first_cursor") \
-  || fail "the receipts reader must hold the writer lock throughout the scan"
+  || fail "the receipts reader must release the writer lock before rendering"
 assert_equals "$later" "$(printf '%s' "$snapshot" | json_get replies 0 id)" \
   "the locked snapshot preserves cursor filtering"
+assert_equals "1" "$(printf '%s' "$snapshot" | json_len replies)" \
+  "a reply written before rendering but after the snapshot is not included"
 [ ! -e "$home/state/inbox/.replies.lock" ] && [ ! -L "$home/state/inbox/.replies.lock" ] \
   || fail "receipts left the reply lock held"
-pass "receipts scan under the shared reply writer lock"
+pass "receipts render the reply snapshot without holding the writer lock"
 
 pressure_home=$(make_home receipts-pressure)
 lock_fail_bin="$TMP_ROOT/lock-fail-bin"
@@ -412,8 +417,7 @@ pass "receipts fail without a lock and do not block reply writers on stdout"
 
 # A lost sequence counter must not move the cursor backwards: the next reply
 # still sorts after every reply a client has already read.
-lost_cursor=$(printf '%s' "$replies" | python3 -c 'import json,sys
-print(json.load(sys.stdin)["reply_cursor"])')
+lost_cursor=$(run_inbox "$home" receipts --all-replies | json_get reply_cursor)
 rm -f "$home/state/inbox/.replies/.seq"
 third="1700000000-mmmmmm"
 printf 'id=%s\nat=2026-01-01T00:00:00Z\nsource=text\nannounce_marker=1\n--\norder three\n' \

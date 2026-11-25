@@ -662,6 +662,23 @@ func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
 	}
 }
 
+func TestConfigRequiresCanonicalSnowflakes(t *testing.T) {
+	valid := Config{ChannelID: "1", OwnerID: "18446744073709551615", StateDir: t.TempDir()}
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"0", "00001", "+1", "-1", "18446744073709551616", " 1", ""} {
+		for _, cfg := range []Config{
+			{ChannelID: id, OwnerID: valid.OwnerID, StateDir: valid.StateDir},
+			{ChannelID: valid.ChannelID, OwnerID: id, StateDir: valid.StateDir},
+		} {
+			if err := cfg.Validate(); err == nil {
+				t.Errorf("accepted invalid snowflake %q in %+v", id, cfg)
+			}
+		}
+	}
+}
+
 func TestConfigRequiresExactUniqueTypedFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	values := map[string]string{

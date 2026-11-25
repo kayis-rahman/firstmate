@@ -11,7 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
+	"strconv"
 )
 
 // Config is read from config/discord-relay.json.
@@ -22,7 +22,10 @@ type Config struct {
 	StateDir  string `json:"state_dir"`
 }
 
-var snowflake = regexp.MustCompile(`^[0-9]{5,25}$`)
+func validSnowflake(id string) bool {
+	n, err := strconv.ParseUint(id, 10, 64)
+	return err == nil && n != 0 && strconv.FormatUint(n, 10) == id
+}
 
 // LoadConfig reads and validates a config file.
 func LoadConfig(path string) (Config, error) {
@@ -72,10 +75,10 @@ func LoadConfig(path string) (Config, error) {
 
 // Validate refuses unsafe or incomplete settings.
 func (c *Config) Validate() error {
-	if !snowflake.MatchString(c.ChannelID) {
+	if !validSnowflake(c.ChannelID) {
 		return errors.New("channel_id must be a Discord snowflake")
 	}
-	if !snowflake.MatchString(c.OwnerID) {
+	if !validSnowflake(c.OwnerID) {
 		return errors.New("owner_id must be a Discord snowflake")
 	}
 	if !filepath.IsAbs(c.StateDir) {
