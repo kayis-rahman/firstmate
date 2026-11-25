@@ -462,11 +462,11 @@ fm_jev_act_evaluate() {
 # nothing is recorded and returns 1 so the caller wakes firstmate.
 fm_jev_act_signal_batch() {
   local pending=$1 reason=$2
-  local state sf sig f task line
+  local state sf f task line
   local items=()
   [ "$(fm_jev_mode)" = "act" ] || return 1
   state=$(_fm_jev_state_dir)
-  while IFS=$(printf '\t') read -r sf sig f; do
+  while IFS=$(printf '\t') read -r sf _ f; do
     [ -n "$sf" ] || continue
     task=$(basename "$f"); task=${task%.status}; task=${task%.turn-ended}
     line=$(last_status_line "$state/$task.status")
