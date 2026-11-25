@@ -89,16 +89,16 @@ func snowLess(a, b string) bool {
 // Tick runs one full pass. Each stage persists before it advances, so a crash
 // anywhere is repaired by the next pass. Stage errors are joined, not fatal.
 func (r *Relay) Tick() error {
-	inboundErr := r.pollInbound()
+	caughtUp, inboundErr := r.pollInbound()
 	err := errors.Join(inboundErr, r.markSeen(), r.enqueue(), r.markHandled(), r.pollReplies(), r.ingestEvents(),
 		r.dispatchEvents())
-	if inboundErr == nil {
+	if caughtUp {
 		err = errors.Join(err, r.remind())
 	}
 	return err
 }
 
-func (r *Relay) pollInbound() error {
+func (r *Relay) pollInbound() (bool, error) {
 	const pageSize = 100
 	s := &r.St.S
 	first := s.Cursor == ""
@@ -106,10 +106,10 @@ func (r *Relay) pollInbound() error {
 		before := s.Cursor
 		msgs, err := r.Chat.Fetch(before, pageSize)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !first && len(msgs) == 0 {
-			return nil
+			return true, nil
 		}
 		sort.Slice(msgs, func(i, j int) bool { return snowLess(msgs[i].ID, msgs[j].ID) })
 		if first {
@@ -140,13 +140,13 @@ func (r *Relay) pollInbound() error {
 			}
 		}
 		if s.Cursor == before {
-			return errors.New("Discord inbound page did not advance the cursor")
+			return false, errors.New("Discord inbound page did not advance the cursor")
 		}
 		if err := r.St.Save(); err != nil {
-			return err
+			return false, err
 		}
 		if first || len(msgs) < pageSize {
-			return nil
+			return len(msgs) < pageSize, nil
 		}
 	}
 }

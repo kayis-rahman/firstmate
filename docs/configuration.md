@@ -563,6 +563,28 @@ Run every routine Firstmate backlog command through [`bin/fm-tasks-axi.sh`](../b
 Like lifecycle transitions, it addresses this home's backlog and archive from any working directory.
 Bootstrap reports a code-root `data/backlog.md` or `data/done-archive.md` that is not this home's own file as a `BACKLOG_RECONCILE: code-root ...` line, even in a read-only session.
 
+## Go Discord relay
+
+`$FM_HOME/config/discord-relay.json` (gitignored with the rest of `config/`):
+
+```json
+{
+  "enabled": false,
+  "channel_id": "<channel snowflake>",
+  "owner_id": "<captain's Discord user snowflake>",
+  "state_dir": "/absolute/path/for/relay/state"
+}
+```
+
+Supply the bot token in `FM_DISCORD_RELAY_TOKEN`, not in the config file. The relay polls every five seconds.
+
+- `enabled`: defaults to false; both `run` and `emit` refuse to operate unless true.
+- `channel_id` and `owner_id`: required Discord snowflakes for the private channel and its captain.
+- `state_dir`: required directory for the relay state and event spool. Use an absolute path and keep shadow and live directories separate.
+
+`FM_HOME` selects the operational home for both configuration and inbox data; when unset, the code root is used. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
+See the [Discord relay runbook](discord-relay.md) for shadow setup and cutover.
+
 ## Runtime backend (config/backend / FM_BACKEND)
 
 For spawn-capable adapters, the runtime session-provider backend controls where task windows/endpoints are created, captured, sent to, watched, and killed.

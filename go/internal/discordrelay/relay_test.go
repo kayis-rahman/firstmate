@@ -633,6 +633,31 @@ func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
 	}
 }
 
+func TestFullBaselineHoldsReminderButStillPushesAlert(t *testing.T) {
+	g := newRig(t)
+	g.r.St.S.Events["due"] = &Event{Kind: "decision", Text: "old alert", Posted: true, PostedAt: g.now.Add(-time.Minute), MsgID: "4900"}
+	g.f.say("5000", owner, "recent chat hidden by the full page", g.now)
+	for id := 5001; id <= 5100; id++ {
+		g.f.say(itoa(id), other, "newer history", g.now)
+	}
+	if err := g.emit(EventIn{ID: "new", Kind: "blocker", Text: "new alert"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	ps := g.f.postsSnapshot()
+	if len(ps) != 1 || ps[0].Silent || !strings.Contains(ps[0].Content, "new alert") || g.box.calls != 0 {
+		t.Fatalf("expected only the new alert, without replay or reminders: %+v", ps)
+	}
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if ps = g.f.postsSnapshot(); len(ps) != 2 || ps[1].ReplyTo != "4900" {
+		t.Fatalf("expected held reminder after catch-up: %+v", ps)
+	}
+}
+
 func TestStartupEmptyOwnerMessageCountsAsPresence(t *testing.T) {
 	g := newRig(t)
 	g.f.say("4999", owner, "", g.now.Add(-time.Minute))

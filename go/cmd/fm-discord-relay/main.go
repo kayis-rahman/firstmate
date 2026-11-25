@@ -1,7 +1,6 @@
 // fm-discord-relay: deterministic, zero-model-token Discord relay for firstmate.
 //
 //	fm-discord-relay run    loop until SIGINT/SIGTERM
-//	fm-discord-relay once   one pass (shadow/testing)
 //	fm-discord-relay emit   -kind K -id ID text...
 //
 // It is off unless the config file says "enabled": true. See
@@ -24,11 +23,11 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: fm-discord-relay run|once|emit")
+		fmt.Fprintln(os.Stderr, "usage: fm-discord-relay run|emit")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
-	if cmd != "run" && cmd != "once" && cmd != "emit" {
+	if cmd != "run" && cmd != "emit" {
 		log.Fatalf("fm-discord-relay: unknown command %q", cmd)
 	}
 	exe, err := os.Executable()
@@ -99,12 +98,6 @@ func main() {
 		St:   st,
 		Now:  time.Now,
 		Logf: log.Printf,
-	}
-	if cmd == "once" {
-		if err := r.Tick(); err != nil {
-			log.Fatalf("fm-discord-relay: %v", err)
-		}
-		return
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

@@ -17,26 +17,16 @@ Buttons and select menus, and replacing the front-desk mate, are follow-ups.
 | Seen | The relay adds a 👀 reaction after it saves the capture, even if inbox enqueue or wake fails. |
 | Acknowledged | The relay adds a ✅ reaction only after `fm-inbox.sh receipts --all-handled` reports the note handled. Both reactions are idempotent and recorded in `state.json` only after Discord accepts them. |
 | Answers | Reads `fm-inbox.sh receipts --all-replies --after <cursor>` and posts native threaded replies. A stable nonce deduplicates retries within Discord’s short nonce window; a later retry after an ambiguous send can duplicate the reply. If the parent is missing, that answer stays queued and the error is logged; other mapped answers can still post. No standalone answer is posted. |
-| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. They post silently if the most recent observed captain message was within the last two minutes. A failed inbound pass does not itself mute the push. |
-| Reminder | An alert without a later captain text reply referencing that alert gets a threaded “Still waiting on you” reminder after one minute. Other owner chat only counts as presence. Recent owner activity or an unsuccessful inbound pass holds the reminder without canceling it. Rejected sends remain eligible; the relay records completion only after Discord accepts the reminder. |
+| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. They post silently if the most recent observed captain message was within the last two minutes. An incomplete inbound pass does not delay an alert; it can still push if recent owner activity has not been observed. |
+| Reminder | An alert without a later captain text reply referencing that alert gets a threaded “Still waiting on you” reminder after one minute. Other owner chat only counts as presence. Recent owner activity or an incomplete inbound pass holds the reminder without canceling it. Rejected sends remain eligible; the relay records completion only after Discord accepts the reminder. |
 | Secrets | All posts have mentions disabled, a fixed length cap, and best-effort credential redaction. Do not send sensitive text or rely on the filter to make it safe. |
 
-On first start the relay baselines at the newest message without replaying history. Recent owner messages, including messages without text, count as presence but are not replayed into the inbox.
+On first start the relay baselines at the newest message without replaying history. Recent owner messages seen on the first page, including messages without text, count as presence but are not replayed into the inbox. A full baseline page may hide recent activity, so reminders wait until a subsequent successful catch-up pass.
 
 ## Configuration
 
-`$FM_HOME/config/discord-relay.json` (gitignored with the rest of `config/`):
+See [Go Discord relay configuration](configuration.md#go-discord-relay) for the schema, operational home, and bot token.
 
-```json
-{
-  "enabled": false,
-  "channel_id": "<channel snowflake>",
-  "owner_id": "<captain's Discord user snowflake>",
-  "state_dir": "/absolute/path/for/relay/state"
-}
-```
-
-Supply the bot token in `FM_DISCORD_RELAY_TOKEN`, not in the config file. The relay polls every five seconds.
 Shadow testing requires **both** a separate channel and a separate bot token from the live bridge. The relay channel must be captain-only and private in both shadow and live environments; the sender check does not restrict who can read posts.
 `state_dir` holds `state.json` (mode 0600, atomically replaced), `relay.lock` and `events/`. The lock prevents a second relay using the same state directory, not another reader of the channel. The relay binds the state to its channel, owner, and inbox home and refuses mismatches.
 The state file contains the captain's not-yet-enqueued message text, so keep the directory private.
@@ -46,12 +36,9 @@ The state file contains the captain's not-yet-enqueued message text, so keep the
 ```sh
 # From the repository root:
 bin/fm-go-pilot-build.sh
-bin/go-pilot/discord-relay once
 bin/go-pilot/discord-relay run
 bin/go-pilot/discord-relay emit -kind blocker -id <occurrence-id> "short text"
 ```
-
-`FM_HOME` selects the operational home for both configuration and inbox data. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
 
 ## Event hooks
 
@@ -66,14 +53,14 @@ This release is shadow-only. Connecting the live Firstmate status producer is a 
 Shadow test (needs the captain's word; nothing here is done by the build):
 
 1. Use a separate captain-only test channel and bot token. Before baselining a guild text channel, enable **Message Content Intent** for the bot in the Discord Developer Portal (and obtain approval if Discord requires it). Before baselining, grant the bot **View Channel**, **Read Message History**, **Send Messages**, and **Add Reactions** in the shadow channel. Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Unset `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_CONFIG_OVERRIDE`, `FM_WAKE_QUEUE`, and `FM_WAKE_QUEUE_LOCK` before using the inbox wrapper manually.
-2. Run `bin/go-pilot/discord-relay once` before sending a captain message to establish the baseline. Send an ordinary captain message that does not mention the bot, then run `once` again; confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
-3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and run `once` to see the answer in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>`, then run `once` to see ✅.
-4. Start `bin/go-pilot/discord-relay run` and leave it running for this check. After two quiet minutes, emit a decision with an explicit occurrence ID from another shell using the same `FM_HOME`. Check for one push and a reminder after about a minute if unanswered.
+2. Start `bin/go-pilot/discord-relay run` under supervision. After the initial baseline is saved, send an ordinary captain message that does not mention the bot. On a subsequent poll, confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
+3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and check that the answer appears in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>` and check for ✅.
+4. With the relay still running, wait two quiet minutes, then emit a decision with an explicit occurrence ID from another shell using the same `FM_HOME`. Check for one push and a reminder after about a minute if unanswered.
 
 Cutover, only after the captain approves the shadow results and live producer wiring:
 
 1. Stop the old message watcher (`launchctl bootout gui/$(id -u)/com.firstmate.discord-watcher`) so no two readers capture the same messages. Keep the existing reaction poll handling running: cast a test vote after stopping the watcher and confirm it is counted. If it fails, restart the old watcher and stop the cutover.
-2. Set the relay config to the live captain-only channel and select the live inbox home. Always use a fresh live `state_dir`; never reuse shadow state. Run `bin/go-pilot/discord-relay once` at cutover to establish the live baseline, then supervise `bin/go-pilot/discord-relay run`. History at or before the baseline is not replayed.
+2. Set the relay config to the live captain-only channel and select the live inbox home. Always use a fresh live `state_dir`; never reuse shadow state. Start `bin/go-pilot/discord-relay run` under supervision at cutover; its first pass establishes the live baseline. History at or before the baseline is not replayed.
 3. Monitor the relay log for errors.
 
 Rollback:
