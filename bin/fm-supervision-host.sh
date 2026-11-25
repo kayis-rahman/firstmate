@@ -447,6 +447,8 @@ cleanup() {
   # A signal can land inside the handled-turn settle, which holds the queue and
   # marker locks; the grant release below needs the queue lock, so drop any of
   # them this process still owns first (fm_lock_release ignores foreign owners).
+  # Join any in-flight publication before testing ownership.
+  fm_lock_wait_pending_mutation
   fm_lock_release "$STATE/.watcher-down.lock" 2>/dev/null || true
   fm_lock_release "$FM_WAKE_QUEUE_LOCK" 2>/dev/null || true
   if [ "$ENGINE_RUNNING" -eq 1 ]; then
