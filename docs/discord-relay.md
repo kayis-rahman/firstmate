@@ -70,9 +70,11 @@ Cutover, only after the captain approves the shadow results and live producer wi
 
 Rollback:
 
-1. Send `SIGTERM` to the Go relay and confirm the process has exited before restarting the old watcher. An in-progress pass can keep running after the signal.
-2. Restart the old watcher: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.firstmate.discord-watcher.plist`.
-3. Successfully enqueued messages are already in the Firstmate inbox. Captures not yet enqueued may exist only in relay state; keep that directory and reconcile those messages before deleting it. Messages sent while neither ran are picked up by the old bridge according to its own cursor. The old watcher may also repost an answer already delivered by the Go relay because it uses a separate reply cursor.
+1. If a live producer was connected to the Go relay, point it back to its previous route before restarting the old watcher. With the config still enabled, `emit` can succeed even when the relay is stopped; that only queues the alert.
+2. Before stopping the Go relay, check for unsent alerts in `events/` and in `state.json` (events with `posted: false`). Check the captain-only channel before posting any still-needed alert by hand, in case the relay already sent it. The old watcher does not drain the Go alert queue.
+3. Send `SIGTERM` to the Go relay and confirm the process has exited before restarting the old watcher. An in-progress pass can keep running after the signal.
+4. Restart the old watcher: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.firstmate.discord-watcher.plist`.
+5. Successfully enqueued messages are already in the Firstmate inbox. Captures not yet enqueued may exist only in relay state; keep that directory and reconcile those messages before deleting it. Messages sent while neither ran are picked up by the old bridge according to its own cursor. The old watcher may also repost an answer already delivered by the Go relay because it uses a separate reply cursor.
 Keep `state_dir` for diagnosis; delete it only to force a fresh baseline.
 
 ## Failure behaviour
