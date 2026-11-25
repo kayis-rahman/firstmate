@@ -140,7 +140,7 @@ func (r *Relay) pollInbound() (bool, error) {
 			}
 			for _, e := range s.Events {
 				if alertKinds[e.Kind] && e.Posted && e.MsgID == m.ReplyTo && snowLess(e.MsgID, m.ID) {
-					e.Answered = true
+					e.Answered, e.Text = true, ""
 				}
 			}
 		}
@@ -377,7 +377,7 @@ func (r *Relay) remind() error {
 			errs = append(errs, fmt.Errorf("reminder %s: %w", id, err))
 			continue
 		}
-		e.Reminded = true
+		e.Reminded, e.Text = true, ""
 		if err := r.St.Save(); err != nil {
 			return err
 		}

@@ -32,8 +32,36 @@ func LoadConfig(path string) (Config, error) {
 		return c, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&c); err != nil {
+	if start, err := dec.Token(); err != nil || start != json.Delim('{') {
+		return c, fmt.Errorf("config %s: expected a JSON object", path)
+	}
+	fields := map[string]any{
+		"enabled": &c.Enabled, "channel_id": &c.ChannelID,
+		"owner_id": &c.OwnerID, "state_dir": &c.StateDir,
+	}
+	for dec.More() {
+		key, err := dec.Token()
+		if err != nil {
+			return c, fmt.Errorf("config %s: %w", path, err)
+		}
+		name := key.(string)
+		field, ok := fields[name]
+		if !ok {
+			return c, fmt.Errorf("config %s: unknown or duplicate field %q", path, name)
+		}
+		delete(fields, name)
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return c, fmt.Errorf("config %s field %q: %w", path, name, err)
+		}
+		if bytes.Equal(value, []byte("null")) {
+			return c, fmt.Errorf("config %s field %q: null is not allowed", path, name)
+		}
+		if err := json.Unmarshal(value, field); err != nil {
+			return c, fmt.Errorf("config %s field %q: %w", path, name, err)
+		}
+	}
+	if _, err := dec.Token(); err != nil {
 		return c, fmt.Errorf("config %s: %w", path, err)
 	}
 	if err := dec.Decode(new(json.RawMessage)); err != io.EOF {

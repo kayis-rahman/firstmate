@@ -413,8 +413,11 @@ func TestReminderSentOnceAfterAMinute(t *testing.T) {
 	g.open()
 	g.tick()
 	ps := g.f.postsSnapshot()
-	if len(ps) != n+1 || !strings.HasPrefix(ps[n].Content, "Still waiting") || ps[n].ReplyTo == "" {
-		t.Fatalf("want exactly one threaded reminder, got %+v", ps)
+	if len(ps) != n+1 || !strings.HasPrefix(ps[n].Content, "Still waiting") || !strings.Contains(ps[n].Content, "pick option") || ps[n].ReplyTo == "" {
+		t.Fatalf("want exactly one threaded reminder with the alert text, got %+v", ps)
+	}
+	if e := g.r.St.S.Events["d1"]; !e.Reminded || e.Text != "" || e.MsgID != ps[n].ReplyTo {
+		t.Fatalf("expected reminder metadata without retained text: %+v", e)
 	}
 }
 
@@ -478,8 +481,11 @@ func TestOnlyReferencedAlertIsAnswered(t *testing.T) {
 	g.f.msgs = append(g.f.msgs, Message{ID: "5101", ChannelID: channel, AuthorID: owner, Content: "answer", ReplyTo: first, At: g.now})
 	g.tick()
 	g.open()
-	if !g.r.St.S.Events["d1"].Answered || g.r.St.S.Events["second"].Answered {
-		t.Fatal("expected only the referenced alert to be answered")
+	if e := g.r.St.S.Events["d1"]; !e.Answered || e.Text != "" || e.MsgID != first {
+		t.Fatalf("expected completed alert without retained text: %+v", e)
+	}
+	if e := g.r.St.S.Events["second"]; e.Answered || e.Text != "second alert" {
+		t.Fatalf("expected unanswered alert to retain its text: %+v", e)
 	}
 	n := len(g.f.postsSnapshot())
 	g.now = g.now.Add(time.Minute)
@@ -653,6 +659,47 @@ func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
 	g.tick()
 	if ps := g.f.postsSnapshot(); len(ps) != n+2 || ps[n+1].ReplyTo != "5001" {
 		t.Fatalf("expected held reminder at the two-minute boundary: %+v", ps)
+	}
+}
+
+func TestConfigRequiresExactUniqueTypedFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	values := map[string]string{
+		"enabled": "true", "channel_id": strconv.Quote(channel),
+		"owner_id": strconv.Quote(owner), "state_dir": strconv.Quote(filepath.Dir(path)),
+	}
+	load := func(fields string) (Config, error) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte("{"+fields+"}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return LoadConfig(path)
+	}
+	for key, value := range values {
+		base := ""
+		for other, v := range values {
+			if other != key {
+				base += strconv.Quote(other) + ":" + v + ","
+			}
+		}
+		field := strconv.Quote(key) + ":"
+		for _, invalid := range []string{
+			field + value + "," + field + value,
+			strconv.Quote(strings.ToUpper(key)) + ":" + value,
+			field + "null", field + "123",
+		} {
+			if _, err := load(base + invalid); err == nil {
+				t.Errorf("accepted invalid field(s) %s", invalid)
+			}
+		}
+		if cfg, err := load(base + field + value); err != nil || !cfg.Enabled {
+			t.Errorf("valid config refused for %s: %+v, %v", key, cfg, err)
+		}
+		if key == "enabled" {
+			if cfg, err := load(strings.TrimSuffix(base, ",")); err != nil || cfg.Enabled {
+				t.Errorf("omitted enabled should default to false: %+v, %v", cfg, err)
+			}
+		}
 	}
 }
 

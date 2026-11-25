@@ -22,7 +22,7 @@ type InMsg struct {
 // Event is an outbound alert.
 type Event struct {
 	Kind     string    `json:"kind"`
-	Text     string    `json:"text"`
+	Text     string    `json:"text,omitempty"`
 	Posted   bool      `json:"posted"`
 	PostedAt time.Time `json:"posted_at"`
 	MsgID    string    `json:"msg_id,omitempty"`

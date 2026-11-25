@@ -63,7 +63,7 @@ Shadow test (needs the captain's word; nothing here is done by the build):
 
 Cutover, only after the captain approves the shadow results and live producer wiring:
 
-1. Pause captain text submissions to the live channel before stopping the old watcher.
+1. Pause captain text submissions to the live channel before stopping the old watcher. Answer its outstanding notes and confirm the watcher delivered the replies, or hand each note off explicitly with an agreed way to deliver its answer. The Go relay does not inherit the old watcher’s reply mappings.
 2. Stop the old message watcher (`launchctl bootout gui/$(id -u)/com.firstmate.discord-watcher`) so no two readers capture the same messages. Keep the existing reaction poll handling running: cast a test vote after stopping the watcher and confirm it is counted. If it fails, restart the old watcher and stop the cutover.
 3. Set the relay config to the live captain-only channel and select the live inbox home. Always use a fresh live `state_dir`; never reuse shadow state. Start `bin/go-pilot/discord-relay run` under supervision at cutover; its first pass establishes the live baseline. History at or before the baseline is not replayed.
 4. Confirm the initial cursor is saved in the new `state.json`. Reconcile any captain messages sent between the old watcher stopping and that baseline (resend any that did not reach the inbox), then resume normal submissions. Monitor the relay log for errors.
