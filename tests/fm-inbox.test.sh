@@ -313,7 +313,7 @@ pass "notes that predate the announcement marker are unknown, not re-announced"
 
 # Reply cursor: replies recorded within the same second are both readable, in
 # recording order, even when the later note id sorts below the earlier one.
-home=$(make_home cursor)
+home=$(make_home "$(printf 'cursor\nwith\342\200\250separators')")
 mkdir -p "$home/state/inbox"
 later="1700000000-aaaaaa"
 earlier="1700000000-zzzzzz"
@@ -347,10 +347,77 @@ expect_code 1 "$conflict_code" "a second reply for the same note is refused"
 assert_contains "$conflict" "already recorded" "the refusal names the existing record"
 pass "the reply channel is durable and its cursor is a strict order"
 
+snapshot_bin="$TMP_ROOT/snapshot-bin"
+mkdir -p "$snapshot_bin"
+FM_TEST_REAL_PYTHON=$(command -v python3)
+export FM_TEST_REAL_PYTHON
+export FM_TEST_SNAPSHOT_INBOX_BIN="$INBOX_BIN"
+printf 'id=1700000000-cccccc\n--\nconcurrent note\n' > "$home/state/inbox/1700000000-cccccc.note"
+cat > "$snapshot_bin/python3" <<'SH'
+#!/bin/sh
+lock="$FM_HOME/state/inbox/.replies.lock"
+[ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 70
+"$FM_TEST_SNAPSHOT_INBOX_BIN" reply 1700000000-cccccc "concurrent answer" >/dev/null || exit 71
+exec "$FM_TEST_REAL_PYTHON" "$@"
+SH
+chmod +x "$snapshot_bin/python3"
+snapshot=$(PATH="$snapshot_bin:$PATH" run_inbox "$home" receipts --all-replies --after "$first_cursor") \
+  || fail "the receipts reader must release the writer lock before rendering"
+assert_equals "$later" "$(printf '%s' "$snapshot" | json_get replies 0 id)" \
+  "the locked snapshot preserves cursor filtering"
+assert_equals "1" "$(printf '%s' "$snapshot" | json_len replies)" \
+  "a reply written before rendering but after the snapshot is not included"
+[ ! -e "$home/state/inbox/.replies.lock" ] && [ ! -L "$home/state/inbox/.replies.lock" ] \
+  || fail "receipts left the reply lock held"
+pass "receipts render the reply snapshot without holding the writer lock"
+
+pressure_home=$(make_home receipts-pressure)
+lock_fail_bin="$TMP_ROOT/lock-fail-bin"
+mkdir -p "$pressure_home/state/inbox/handled" "$lock_fail_bin"
+printf '#!/bin/sh\nexit 1\n' > "$lock_fail_bin/mktemp"
+chmod +x "$lock_fail_bin/mktemp"
+python3 - "$INBOX_BIN" "$pressure_home" "$lock_fail_bin" <<'PY'
+import json, os, select, subprocess, sys
+from pathlib import Path
+
+binary, home, lock_fail_bin = sys.argv[1:]
+env = dict(os.environ, FM_HOME=home, FM_STATE_OVERRIDE=home + "/state",
+           FM_DATA_OVERRIDE=home + "/data", FM_CONFIG_OVERRIDE=home + "/config")
+inbox = Path(home) / "state/inbox"
+lock = inbox / ".replies.lock"
+for dangling, view in [(False, "--all-replies"), (True, "--all-handled")]:
+    if dangling:
+        lock.symlink_to(inbox / "missing-owner")
+    blocked = subprocess.run([binary, "receipts", view],
+                             env=dict(env, FM_LOCK_STALE_AFTER="3600",
+                                      PATH=lock_fail_bin + os.pathsep + env["PATH"]),
+                             capture_output=True, text=True, timeout=10)
+    assert blocked.returncode == 1 and not blocked.stdout, blocked
+    assert "could not lock replies for receipts" in blocked.stderr, blocked.stderr
+    if dangling:
+        lock.unlink(missing_ok=True)
+
+note_id = "1700000000-aaaaaa"
+(inbox / (note_id + ".note")).write_text(f"id={note_id}\n--\nreply here\n")
+(inbox / "handled/1700000000-bbbbbb.note").write_text("--\n" + "x" * (4 * 1024 * 1024))
+with subprocess.Popen([binary, "receipts", "--all-handled"], env=env,
+                      stdout=subprocess.PIPE) as reader:
+    try:
+        assert select.select([reader.stdout], [], [], 10)[0], "no snapshot output"
+        assert reader.poll() is None, "expected a full, unread stdout pipe"
+        subprocess.run([binary, "reply", note_id, "answer"], env=env,
+                       capture_output=True, check=True, timeout=5)
+        output, _ = reader.communicate(timeout=10)
+        assert reader.returncode == 0 and json.loads(output)["replies"] == []
+    finally:
+        if reader.poll() is None:
+            reader.kill()
+PY
+pass "receipts fail without a lock and do not block reply writers on stdout"
+
 # A lost sequence counter must not move the cursor backwards: the next reply
 # still sorts after every reply a client has already read.
-lost_cursor=$(printf '%s' "$replies" | python3 -c 'import json,sys
-print(json.load(sys.stdin)["reply_cursor"])')
+lost_cursor=$(run_inbox "$home" receipts --all-replies | json_get reply_cursor)
 rm -f "$home/state/inbox/.replies/.seq"
 third="1700000000-mmmmmm"
 printf 'id=%s\nat=2026-01-01T00:00:00Z\nsource=text\nannounce_marker=1\n--\norder three\n' \

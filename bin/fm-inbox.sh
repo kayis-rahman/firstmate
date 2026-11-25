@@ -58,6 +58,9 @@
 # acknowledgement, announcement, and any recorded reply. Default bounds omit
 # rather than implying the first page is everything; omitted[] names the
 # surface and how to reveal it, the same convention as fm-bearings-snapshot.sh.
+# Receipts briefly take the reply writer lock to snapshot committed reply IDs;
+# if the lock cannot be acquired, receipts fails rather than returning partial
+# JSON. Rendering does not hold the lock, so blocked output cannot stall writers.
 # `reply` is how the primary publishes its actual answer against a note id.
 # Each reply is stamped with a durable per-home sequence, so the receipts cursor
 # is a strict total order and two replies recorded in the same second are both
@@ -658,7 +661,7 @@ PY
 }
 
 cmd_receipts() {
-  local after="" all_pending=0 all_handled=0 all_replies=0
+  local after="" all_pending=0 all_handled=0 all_replies=0 reply_ids path id
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --after)
@@ -675,10 +678,22 @@ cmd_receipts() {
     esac
   done
   need_python
+  mkdir -p "$INBOX" || die "could not open inbox for receipts"
+  load_wake_lib || die "receipts need $FM_ROOT/bin/fm-wake-lib.sh"
+  fm_lock_acquire_wait_bounded "$REPLY_SEQ_LOCK" 2 || die "could not lock replies for receipts: $REPLY_SEQ_LOCK"
+  reply_ids=$(
+    for path in "$REPLIES"/*; do
+      id=${path##*/}
+      if valid_note_id "$id"; then
+        printf '%s\n' "$id"
+      fi
+    done
+  )
+  fm_lock_release "$REPLY_SEQ_LOCK"
   python3 - "$INBOX" "$ANNOUNCED_DIR" "$REPLIES" "$FM_HOME" \
     "$RECEIPTS_PENDING_BOUND" "$RECEIPTS_HANDLED_BOUND" "$RECEIPTS_REPLIES_BOUND" \
     "$all_pending" "$all_handled" "$all_replies" "$after" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 3<<<"$reply_ids" <<'PY'
 import json, os, sys
 from pathlib import Path
 
@@ -691,6 +706,8 @@ all_handled = sys.argv[9] == "1"
 all_replies = sys.argv[10] == "1"
 after = sys.argv[11]
 generated = sys.argv[12]
+with os.fdopen(3) as snapshot:
+    reply_ids = set(snapshot.read().splitlines())
 
 # A record that vanishes between listing and reading - drain --ack moving a
 # note to handled/ - is skipped, and undecodable bytes are replaced, so one bad
@@ -746,6 +763,8 @@ def list_notes(folder):
 malformed_replies = []
 
 def reply_record(note_id):
+    if note_id not in reply_ids:
+        return None
     path = Path(replies_dir) / note_id
     if not path.is_file():
         return None
