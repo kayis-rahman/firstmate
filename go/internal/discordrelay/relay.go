@@ -219,8 +219,8 @@ func (r *Relay) enqueue() error {
 }
 
 // markHandled puts the acknowledged mark on every captured message whose note
-// firstmate has handled. Acked is persisted only after the mark lands, so a
-// failed mark is retried and a landed one is never repeated across restarts.
+// firstmate has handled. If Discord accepts the mark before the checkpoint is
+// saved, a retry uses the same idempotent reaction PUT.
 func (r *Relay) markHandled() error {
 	s := &r.St.S
 	var ids []string

@@ -25,7 +25,7 @@ type Inbox interface {
 	// is saved but its wake is not yet announced, so the caller must retry.
 	Note(reqID, text string) (noteID string, announced bool, err error)
 	Replies(after string) ([]Reply, error)
-	// Handled reports which of the given note ids firstmate has acknowledged.
+	// Handled reports note IDs firstmate has acknowledged.
 	Handled() (map[string]bool, error)
 }
 
