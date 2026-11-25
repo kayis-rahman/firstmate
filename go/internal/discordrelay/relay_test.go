@@ -223,7 +223,7 @@ func (g *rig) open() {
 		g.t.Fatal(err)
 	}
 	g.t.Cleanup(st.Close)
-	g.r = &Relay{Cfg: cfg, Chat: &HTTPChat{base: g.f.srv.URL, Channel: channel, Token: g.f.token}, Box: g.box, St: st,
+	g.r = &Relay{Chat: &HTTPChat{base: g.f.srv.URL, Channel: channel, Token: g.f.token}, Box: g.box, St: st,
 		Now: func() time.Time { return g.now }}
 }
 

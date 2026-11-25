@@ -92,7 +92,6 @@ func main() {
 		log.Fatal(err)
 	}
 	r := &discordrelay.Relay{
-		Cfg:  cfg,
 		Chat: &discordrelay.HTTPChat{Channel: cfg.ChannelID, Token: token},
 		Box:  discordrelay.ExecInbox{Cmd: inbox, Home: home},
 		St:   st,

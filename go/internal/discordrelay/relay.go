@@ -68,7 +68,6 @@ func WriteEvent(dir string, scope Scope, e EventIn) error {
 
 // Relay wires transport, inbox and durable state.
 type Relay struct {
-	Cfg               Config
 	Chat              Chat
 	Box               Inbox
 	St                *Store
@@ -132,7 +131,7 @@ func (r *Relay) pollInbound() (bool, error) {
 				continue
 			}
 			s.Cursor = m.ID
-			if m.ChannelID != r.Cfg.ChannelID || m.Bot || m.AuthorID != r.Cfg.OwnerID {
+			if m.ChannelID != r.St.S.Scope.ChannelID || m.Bot || m.AuthorID != r.St.S.Scope.OwnerID {
 				continue
 			}
 			if m.At.After(s.LastOwnerAt) {

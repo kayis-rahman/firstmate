@@ -49,7 +49,13 @@ func (e ExecInbox) run(stdin string, args ...string) ([]byte, int, error) {
 	cmd.Stdin = strings.NewReader(stdin)
 	cmd.Stdout = &out
 	err := cmd.Run()
+	if ctx.Err() != nil {
+		return out.Bytes(), -1, ctx.Err()
+	}
 	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == -1 {
+		return out.Bytes(), -1, err
+	}
 	if errors.As(err, &ee) {
 		return out.Bytes(), ee.ExitCode(), nil
 	}
@@ -84,7 +90,10 @@ func (e ExecInbox) Replies(after string) ([]Reply, error) {
 		args = append(args, "--after", after)
 	}
 	out, code, err := e.run("", args...)
-	if err != nil || code != 0 {
+	if err != nil {
+		return nil, fmt.Errorf("fm-inbox receipts failed: %w", err)
+	}
+	if code != 0 {
 		return nil, fmt.Errorf("fm-inbox receipts failed (code %d)", code)
 	}
 	var r struct {
@@ -107,7 +116,10 @@ func (e ExecInbox) Replies(after string) ([]Reply, error) {
 // Handled implements Inbox from the receipts view of handled notes.
 func (e ExecInbox) Handled() (map[string]bool, error) {
 	out, code, err := e.run("", "receipts", "--all-handled")
-	if err != nil || code != 0 {
+	if err != nil {
+		return nil, fmt.Errorf("fm-inbox receipts failed: %w", err)
+	}
+	if code != 0 {
 		return nil, fmt.Errorf("fm-inbox receipts failed (code %d)", code)
 	}
 	var r struct {
