@@ -46,7 +46,7 @@ account() {
 
 run_tool() {
   env -i HOME="$CASE/user-home" PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" \
-    QUOTA_AXI_SNAPSHOT="$CASE/shared-fixture.json" "$TOOL" "$@" 2>&1
+    QUOTA_AXI_SNAPSHOT="$CASE/shared-fixture.json" "$TOOL" 2>&1
 }
 
 test_two_accounts_print_their_own_rows() {
