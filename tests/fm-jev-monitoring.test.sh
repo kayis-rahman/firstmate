@@ -423,3 +423,52 @@ if fm_jev_act_evaluate "task-other" "signal" "signal: task-other.status" "workin
 fi
 [ ! -e "$TMP_ROOT/curl.argv" ] || fail "curl called after auto-off"
 pass "missed-blocker auto-off checks span offset and durably switches jev-monitoring to off"
+
+# ---- 13. Multi-file signal: evaluate all before recording --------------------
+H7=$(make_home)
+export FM_HOME="$H7"
+export FM_CONFIG_OVERRIDE="$H7/config"
+export FM_STATE_OVERRIDE="$H7/state"
+cat > "$H7/.env" <<'ENV'
+TYPESAFE_BASE=http://127.0.0.1:19999
+TYPESAFE_API_KEY=stub-key
+ENV
+printf 'act\n' > "$H7/config/jev-monitoring"
+printf 'working: step 1\n' > "$H7/state/task-m1.status"
+printf 'working: step 2\n' > "$H7/state/task-m2.status"
+
+# Stub curl: first call returns routine 0.97, second call returns needs-firstmate
+rm -f "$TMP_ROOT/seq_count"
+cat > "$FAKEBIN/curl" <<CURL
+#!/usr/bin/env bash
+out=''
+while [ \$# -gt 0 ]; do
+  case "\$1" in
+    -o) out="\$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+n=\$(cat "$TMP_ROOT/seq_count" 2>/dev/null || echo 0)
+n=\$((n + 1))
+printf '%s' "\$n" > "$TMP_ROOT/seq_count"
+if [ "\$n" -eq 1 ]; then
+  printf '{"answers":{"classification":{"type":"choice","choice":"routine","confidence":0.97,"probabilities":{"routine":0.97,"needs-firstmate":0.03}}}}' > "\$out"
+else
+  printf '{"answers":{"classification":{"type":"choice","choice":"needs-firstmate","confidence":0.98,"probabilities":{"routine":0.02,"needs-firstmate":0.98}}}}' > "\$out"
+fi
+printf '200'
+CURL
+chmod +x "$FAKEBIN/curl"
+
+pending_batch=$(printf 'sf1\tsig1\t%s/state/task-m1.status\nsf2\tsig2\t%s/state/task-m2.status\n' "$H7" "$H7")
+if fm_jev_act_signal_batch "$pending_batch" "signal: task-m1.status task-m2.status"; then
+  fail "multi-file batch suppressed when second file needed firstmate"
+fi
+[ ! -s "$H7/state/jev-suppressed.jsonl" ] || fail "first task was recorded as suppressed even though batch woke firstmate"
+
+# Both routine >= 0.95 -> both recorded and batch suppressed
+write_stub_curl ok_routine "$TMP_ROOT"
+fm_jev_act_signal_batch "$pending_batch" "signal: task-m1.status task-m2.status" \
+  || fail "multi-file batch did not suppress when all files were routine >= 0.95"
+[ "$(wc -l < "$H7/state/jev-suppressed.jsonl" | tr -d ' ')" = "2" ] || fail "both tasks should be recorded when batch suppresses"
+pass "multi-file signal evaluates all before recording and records nothing on wake"

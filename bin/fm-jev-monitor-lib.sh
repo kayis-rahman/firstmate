@@ -403,12 +403,15 @@ fm_jev_record_suppressed() {  # <task> <kind> <reason> <status_line> <status_off
   return 0
 }
 
-# fm_jev_act_evaluate <task> <kind> <reason> <status_line> [<status_offset>]
-# Returns 0 ONLY if Jev classified the notice as routine >= 0.95 AND it was
-# durably recorded before suppression. Returns 1 otherwise (caller wakes as today).
-fm_jev_act_evaluate() {
+# fm_jev_act_check <task> <kind> <reason> <status_line> [<status_offset>]
+# Evaluates Jev in act mode WITHOUT recording yet. Sets FM_JEV_ACT_CONF,
+# FM_JEV_ACT_LAT, and FM_JEV_ACT_OFFSET on return 0 (routine >= threshold).
+fm_jev_act_check() {
   local task=$1 kind=$2 reason=$3 line=$4 offset=${5:-0}
   local helper out rc choice conf lat
+  FM_JEV_ACT_CONF=''
+  FM_JEV_ACT_LAT=''
+  FM_JEV_ACT_OFFSET=''
   [ "$(fm_jev_mode)" = "act" ] || return 1
   fm_jev_is_protected_wake "$kind" "$reason" "$line" && return 1
   if fm_jev_has_sensitive_content "$line" || fm_jev_has_sensitive_content "$task"; then
@@ -437,7 +440,47 @@ fm_jev_act_evaluate() {
   [ "$choice" = "routine" ] || return 1
   awk -v c="$conf" -v t="$FM_JEV_CONFIDENCE_THRESHOLD" 'BEGIN{exit !(c+0 >= t+0)}' 2>/dev/null || return 1
   case "$offset" in ''|0|*[!0-9]*) offset=$(_fm_jev_task_status_size "$task") ;; esac
-  fm_jev_record_suppressed "$task" "$kind" "$reason" "$line" "$offset" "$conf" "$lat" || return 1
+  FM_JEV_ACT_CONF=$conf
+  FM_JEV_ACT_LAT=$lat
+  FM_JEV_ACT_OFFSET=$offset
+  return 0
+}
+
+# fm_jev_act_evaluate <task> <kind> <reason> <status_line> [<status_offset>]
+# Returns 0 ONLY if Jev classified the notice as routine >= 0.95 AND it was
+# durably recorded before suppression. Returns 1 otherwise (caller wakes as today).
+fm_jev_act_evaluate() {
+  local task=$1 kind=$2 reason=$3 line=$4 offset=${5:-0}
+  fm_jev_act_check "$task" "$kind" "$reason" "$line" "$offset" || return 1
+  fm_jev_record_suppressed "$task" "$kind" "$reason" "$line" "$FM_JEV_ACT_OFFSET" "$FM_JEV_ACT_CONF" "$FM_JEV_ACT_LAT" || return 1
+  return 0
+}
+
+# fm_jev_act_signal_batch <pending-tab-lines> <reason>
+# Evaluates every file in a multi-file signal batch before recording any
+# suppression. If any file is not routine >= 0.95 (or fails/redacts/protected),
+# nothing is recorded and returns 1 so the caller wakes firstmate.
+fm_jev_act_signal_batch() {
+  local pending=$1 reason=$2
+  local state sf sig f task line
+  local items=()
+  [ "$(fm_jev_mode)" = "act" ] || return 1
+  state=$(_fm_jev_state_dir)
+  while IFS=$(printf '\t') read -r sf sig f; do
+    [ -n "$sf" ] || continue
+    task=$(basename "$f"); task=${task%.status}; task=${task%.turn-ended}
+    line=$(last_status_line "$state/$task.status")
+    fm_jev_act_check "$task" "signal" "$reason" "$line" 0 || return 1
+    items+=("$task"$'\t'"$line"$'\t'"$FM_JEV_ACT_OFFSET"$'\t'"$FM_JEV_ACT_CONF"$'\t'"$FM_JEV_ACT_LAT")
+  done <<EOF
+$pending
+EOF
+  [ "${#items[@]}" -gt 0 ] || return 1
+  local item t l off c lat
+  for item in "${items[@]}"; do
+    IFS=$(printf '\t') read -r t l off c lat <<<"$item"
+    fm_jev_record_suppressed "$t" "signal" "$reason" "$l" "$off" "$c" "$lat" || return 1
+  done
   return 0
 }
 

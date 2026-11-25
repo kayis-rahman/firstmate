@@ -4869,19 +4869,7 @@ EOF
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
       _jev_mode_now=$(fm_jev_mode)
       if ! afk_present && [ "$signal_actionable" -ne 0 ] && [ "$_jev_mode_now" = "act" ]; then
-        _jev_all_suppressed=1
-        while IFS=$(printf '\t') read -r sf sig f; do
-          [ -n "$sf" ] || continue
-          _jev_task=$(basename "$f"); _jev_task=${_jev_task%.status}; _jev_task=${_jev_task%.turn-ended}
-          _jev_line=$(last_status_line "$STATE/$_jev_task.status")
-          if ! fm_jev_act_evaluate "$_jev_task" "signal" "$reason" "$_jev_line" 0; then
-            _jev_all_suppressed=0
-            break
-          fi
-        done <<EOF
-$pending
-EOF
-        if [ "$_jev_all_suppressed" -eq 1 ]; then
+        if fm_jev_act_signal_batch "$pending" "$reason"; then
           while IFS=$(printf '\t') read -r sf sig f; do
             [ -n "$sf" ] || continue
             case "$f" in *.status) ;; *) printf '%s' "$sig" > "$sf" ;; esac
