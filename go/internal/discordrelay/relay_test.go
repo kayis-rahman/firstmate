@@ -3,6 +3,7 @@ package discordrelay
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -439,6 +440,28 @@ func TestInboundCatchupBeforeAlertsAndReminders(t *testing.T) {
 	g.open()
 	if g.r.St.S.Cursor != "5200" || !g.r.St.S.Events["d1"].Answered {
 		t.Fatal("catch-up did not commit the reply and cursor")
+	}
+}
+
+func TestFetchRequiresMatchingReplyChannel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `[
+			{"id":"1","channel_id":"123","message_reference":{"message_id":"99"}},
+			{"id":"2","channel_id":"123","message_reference":{"message_id":"99","channel_id":"456"}},
+			{"id":"3","channel_id":"123","message_reference":{"message_id":"99","channel_id":"123","type":1}},
+			{"id":"4","channel_id":"123","message_reference":{"message_id":"99","channel_id":"123"}}
+		]`)
+	}))
+	defer srv.Close()
+	chat := &HTTPChat{base: srv.URL, Channel: "123"}
+	msgs, err := chat.Fetch("", 100)
+	if err != nil || len(msgs) != 4 {
+		t.Fatalf("expected four messages, got %v: %v", msgs, err)
+	}
+	for i, want := range []string{"", "", "", "99"} {
+		if msgs[i].ReplyTo != want {
+			t.Errorf("message %s: ReplyTo = %q, want %q", msgs[i].ID, msgs[i].ReplyTo, want)
+		}
 	}
 }
 

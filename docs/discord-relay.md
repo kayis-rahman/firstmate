@@ -17,11 +17,11 @@ Buttons and select menus, and replacing the front-desk mate, are follow-ups.
 | Seen | The relay adds a 👀 reaction after it saves the capture, even if inbox enqueue or wake fails. |
 | Acknowledged | The relay adds a ✅ reaction only after `fm-inbox.sh receipts --all-handled` reports the note handled. Both reactions are idempotent and recorded in `state.json` only after Discord accepts them. |
 | Answers | Reads `fm-inbox.sh receipts --all-replies --after <cursor>` and posts native threaded replies. A stable nonce deduplicates retries within Discord’s short nonce window; a later retry after an ambiguous send can duplicate the reply. If the parent is missing, that answer stays queued and the error is logged; other mapped answers can still post. No standalone answer is posted. |
-| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately with a push. They post silently if the most recent observed captain message was within the last two minutes. An incomplete inbound pass does not delay an alert; it can still push if recent owner activity has not been observed. |
+| Urgent alerts | Event kinds `decision`, `review-ready`, `login`, `blocker` are posted immediately and can push with the notification setup below. They post silently if the most recent observed captain message was within the last two minutes. An incomplete inbound pass does not delay an alert; it can still push if recent owner activity has not been observed. |
 | Reminder | An alert without a later captain text reply referencing that alert gets a threaded “Still waiting on you” reminder after one minute. Other owner chat only counts as presence. Recent owner activity or an incomplete inbound pass holds the reminder without canceling it. Rejected sends remain eligible; the relay records completion only after Discord accepts the reminder. |
 | Secrets | All posts have mentions disabled, a fixed length cap, and best-effort credential redaction. Do not send sensitive text or rely on the filter to make it safe. |
 
-On first start the relay baselines at the newest message without replaying history. Recent owner messages seen on the first page, including messages without text, count as presence but are not replayed into the inbox. A full baseline page may hide recent activity, so reminders wait two minutes after the baseline is saved and require a successful inbound pass. This in-memory hold does not delay alerts.
+On first start the relay baselines at the newest message without replaying history. Recent owner messages seen on the first page, including messages without text, count as presence but are not replayed into the inbox. A full baseline page may hide recent activity, so reminders wait two minutes after the baseline is saved and require a successful inbound pass. This in-memory hold does not delay alerts. A restart within about two minutes of a first start with a full baseline page loses the hold and may allow one early reminder.
 
 ## Configuration
 
@@ -49,6 +49,10 @@ Alerts and reminders are delivered at least once: a crash after Discord accepts 
 This release is shadow-only. Connecting the live Firstmate status producer is a separate cutover step that requires captain approval; `emit` is not wired into that producer.
 
 ## Shadow test, cutover and rollback
+
+For both shadow and live use, set the captain’s Discord notification setting for the relay channel to **All Messages**, leave the channel unmuted, and enable push notifications on the receiving device. The relay does not use mentions to trigger alerts or reminders.
+
+Stop the relay before changing the bot’s channel permissions. Losing **Read Message History** can look like an empty channel at baseline or no new messages during polling. Restore the required permissions before restarting.
 
 Shadow test (needs the captain's word; nothing here is done by the build):
 

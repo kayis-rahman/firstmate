@@ -114,7 +114,7 @@ func (h *HTTPChat) Fetch(after string, limit int) ([]Message, error) {
 	out := make([]Message, 0, len(raw))
 	for _, m := range raw {
 		msg := Message{ID: m.ID, ChannelID: m.ChannelID, Content: m.Content, AuthorID: m.Author.ID, Bot: m.Author.Bot, At: m.Timestamp}
-		if m.Reference.Type == 0 && (m.Reference.ChannelID == "" || m.Reference.ChannelID == m.ChannelID) {
+		if m.Reference.Type == 0 && m.Reference.ChannelID == m.ChannelID {
 			msg.ReplyTo = m.Reference.MessageID
 		}
 		out = append(out, msg)
