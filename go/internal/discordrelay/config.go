@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 )
 
@@ -45,8 +46,8 @@ func (c *Config) Validate() error {
 	if !snowflake.MatchString(c.OwnerID) {
 		return errors.New("owner_id must be a Discord snowflake")
 	}
-	if c.StateDir == "" {
-		return errors.New("state_dir is required")
+	if !filepath.IsAbs(c.StateDir) {
+		return errors.New("state_dir must be an absolute path")
 	}
 	return nil
 }

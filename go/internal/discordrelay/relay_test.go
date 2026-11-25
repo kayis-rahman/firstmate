@@ -633,6 +633,28 @@ func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
 	}
 }
 
+func TestConfigRequiresAbsoluteStateDir(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "config.json")
+	for _, dir := range []string{"", "relay", filepath.Join(home, "relay")} {
+		cfg := Config{ChannelID: channel, OwnerID: owner, StateDir: dir}
+		b, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err = LoadConfig(path)
+		if filepath.IsAbs(dir) && err != nil {
+			t.Fatalf("absolute state_dir refused: %v", err)
+		}
+		if !filepath.IsAbs(dir) && (err == nil || !strings.Contains(err.Error(), "state_dir must be an absolute path")) {
+			t.Fatalf("expected invalid state_dir %q to be refused: %v", dir, err)
+		}
+	}
+}
+
 func TestFullBaselineHoldsReminderButStillPushesAlert(t *testing.T) {
 	g := newRig(t)
 	g.r.St.S.Events["due"] = &Event{Kind: "decision", Text: "old alert", Posted: true, PostedAt: g.now.Add(-time.Minute), MsgID: "4900"}
@@ -650,11 +672,19 @@ func TestFullBaselineHoldsReminderButStillPushesAlert(t *testing.T) {
 	if len(ps) != 1 || ps[0].Silent || !strings.Contains(ps[0].Content, "new alert") || g.box.calls != 0 {
 		t.Fatalf("expected only the new alert, without replay or reminders: %+v", ps)
 	}
+	g.now = g.now.Add(time.Minute)
 	if err := g.r.Tick(); err != nil {
 		t.Fatal(err)
 	}
-	if ps = g.f.postsSnapshot(); len(ps) != 2 || ps[1].ReplyTo != "4900" {
-		t.Fatalf("expected held reminder after catch-up: %+v", ps)
+	if ps = g.f.postsSnapshot(); len(ps) != 1 {
+		t.Fatalf("reminder escaped while unseen activity could still be recent: %+v", ps)
+	}
+	g.now = g.now.Add(time.Minute)
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if ps = g.f.postsSnapshot(); len(ps) != 3 || ps[1].ReplyTo != "4900" || ps[2].ReplyTo != "5001" {
+		t.Fatalf("expected both held reminders after the presence window: %+v", ps)
 	}
 }
 

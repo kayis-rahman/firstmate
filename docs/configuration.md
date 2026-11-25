@@ -580,7 +580,7 @@ Supply the bot token in `FM_DISCORD_RELAY_TOKEN`, not in the config file. The re
 
 - `enabled`: defaults to false; both `run` and `emit` refuse to operate unless true.
 - `channel_id` and `owner_id`: required Discord snowflakes for the private channel and its captain.
-- `state_dir`: required directory for the relay state and event spool. Use an absolute path and keep shadow and live directories separate.
+- `state_dir`: required absolute path to the relay state and event spool. Keep shadow and live directories separate.
 
 `FM_HOME` selects the operational home for both configuration and inbox data; when unset, the code root is used. The inbox wrapper is `bin/fm-inbox.sh` under the code root, inferred from the built executable’s location. The relay does not pass the state, data, or config directory overrides, or wake queue and lock overrides, to the inbox wrapper.
 See the [Discord relay runbook](discord-relay.md) for shadow setup and cutover.

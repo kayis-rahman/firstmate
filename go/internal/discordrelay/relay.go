@@ -61,12 +61,13 @@ func WriteEvent(dir string, scope Scope, e EventIn) error {
 
 // Relay wires transport, inbox and durable state.
 type Relay struct {
-	Cfg  Config
-	Chat Chat
-	Box  Inbox
-	St   *Store
-	Now  func() time.Time
-	Logf func(format string, args ...any)
+	Cfg               Config
+	Chat              Chat
+	Box               Inbox
+	St                *Store
+	Now               func() time.Time
+	Logf              func(format string, args ...any)
+	baselineHoldUntil time.Time
 }
 
 func (r *Relay) logf(f string, a ...any) {
@@ -75,8 +76,10 @@ func (r *Relay) logf(f string, a ...any) {
 	}
 }
 
+const presenceWindow = 2 * time.Minute
+
 func (r *Relay) active(now time.Time) bool {
-	return !r.St.S.LastOwnerAt.IsZero() && now.Sub(r.St.S.LastOwnerAt) < 2*time.Minute
+	return !r.St.S.LastOwnerAt.IsZero() && now.Sub(r.St.S.LastOwnerAt) < presenceWindow
 }
 
 func snowLess(a, b string) bool {
@@ -145,8 +148,12 @@ func (r *Relay) pollInbound() (bool, error) {
 		if err := r.St.Save(); err != nil {
 			return false, err
 		}
-		if first || len(msgs) < pageSize {
-			return len(msgs) < pageSize, nil
+		if first && len(msgs) >= pageSize {
+			r.baselineHoldUntil = r.Now().Add(presenceWindow)
+			return false, nil
+		}
+		if len(msgs) < pageSize {
+			return true, nil
 		}
 	}
 }
@@ -349,7 +356,7 @@ func (r *Relay) dispatchEvents() error {
 func (r *Relay) remind() error {
 	s := &r.St.S
 	now := r.Now()
-	if r.active(now) {
+	if now.Before(r.baselineHoldUntil) || r.active(now) {
 		return nil // suppressed while he is in the chat; re-evaluated next tick
 	}
 	ids := make([]string, 0)
