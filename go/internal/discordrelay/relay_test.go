@@ -517,8 +517,8 @@ func TestRedactsSecretsAndRejectsBadEvents(t *testing.T) {
 	if len(ps) != 1 || strings.Contains(ps[0].Content, "webhooks") || strings.Contains(ps[0].Content, "abcdefgh12345") || strings.Contains(ps[0].Content, "github_pat_") {
 		t.Fatalf("secret leaked: %+v", ps)
 	}
-	if _, err := os.Stat(filepath.Join(g.r.St.eventsDir(), "bad.json.rejected")); err != nil {
-		t.Fatal("malformed event not quarantined")
+	if files, err := os.ReadDir(g.r.St.eventsDir()); err != nil || len(files) != 0 {
+		t.Fatalf("malformed event left spool files: %v, %v", files, err)
 	}
 }
 
@@ -656,6 +656,23 @@ func TestOlderOwnerMessageHoldsButDoesNotAnswer(t *testing.T) {
 	}
 }
 
+func TestConfigRequiresSingleDocument(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	for _, suffix := range []string{" \n\t", "\n{\"enabled\":false}", "\ninvalid"} {
+		b, err := json.Marshal(Config{Enabled: true, ChannelID: channel, OwnerID: owner, StateDir: filepath.Dir(path)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, append(b, suffix...), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err = LoadConfig(path)
+		if (err == nil) != (strings.TrimSpace(suffix) == "") {
+			t.Errorf("LoadConfig with suffix %q: %v", suffix, err)
+		}
+	}
+}
+
 func TestConfigRequiresAbsoluteStateDir(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "config.json")
@@ -740,8 +757,8 @@ func TestUnknownAlertKindRejectedByEmitAndSpool(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.tick()
-	if _, err := os.Stat(path + ".rejected"); err != nil || len(g.f.postsSnapshot()) != 0 {
-		t.Fatalf("expected unknown kind quarantined without delivery: %v", err)
+	if files, err := os.ReadDir(g.r.St.eventsDir()); err != nil || len(files) != 0 || len(g.f.postsSnapshot()) != 0 {
+		t.Fatalf("expected unknown kind deleted without delivery: %v, %v", files, err)
 	}
 }
 
@@ -805,6 +822,36 @@ func TestEmitRequiresBoundScope(t *testing.T) {
 	g.tick()
 	if ps := g.f.postsSnapshot(); len(ps) != 1 || !strings.Contains(ps[0].Content, e.Text) {
 		t.Fatalf("expected one delivery from the literal state directory: %+v", ps)
+	}
+}
+
+func TestFirstAlertWaitsForBaseline(t *testing.T) {
+	g := newRig(t)
+	if err := g.emit(EventIn{ID: "boot", Kind: "decision", Text: "first alert"}); err != nil {
+		t.Fatal(err)
+	}
+	g.f.fetchStatus = http.StatusTooManyRequests
+	if err := g.r.Tick(); err == nil || len(g.f.postsSnapshot()) != 0 {
+		t.Fatalf("alert posted without a baseline or poll error was hidden: %v", err)
+	}
+	g.open()
+	g.f.fetchStatus = 0
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if ps := g.f.postsSnapshot(); len(ps) != 1 || !strings.Contains(ps[0].Content, "first alert") {
+		t.Fatalf("expected the queued alert after baseline: %+v", ps)
+	}
+	g.f.msgs = append(g.f.msgs, Message{
+		ID: "5100", ChannelID: channel, AuthorID: owner, Content: "answer",
+		ReplyTo: g.r.St.S.Events["boot"].MsgID, At: g.now,
+	})
+	if err := g.r.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if ps := g.f.postsSnapshot(); len(ps) != 2 || ps[1].Reaction != "👀" || ps[1].ReactedTo != "5100" ||
+		g.box.notes["discord-5100"] != "answer" || !g.r.St.S.Events["boot"].Answered {
+		t.Fatalf("expected a captured answer and no duplicate alert: %+v", ps)
 	}
 }
 

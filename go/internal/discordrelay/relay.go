@@ -93,8 +93,10 @@ func snowLess(a, b string) bool {
 // anywhere is repaired by the next pass. Stage errors are joined, not fatal.
 func (r *Relay) Tick() error {
 	caughtUp, inboundErr := r.pollInbound()
-	err := errors.Join(inboundErr, r.markSeen(), r.enqueue(), r.markHandled(), r.pollReplies(), r.ingestEvents(),
-		r.dispatchEvents())
+	err := errors.Join(inboundErr, r.markSeen(), r.enqueue(), r.markHandled(), r.pollReplies(), r.ingestEvents())
+	if r.St.S.Cursor != "" {
+		err = errors.Join(err, r.dispatchEvents())
+	}
 	if caughtUp {
 		err = errors.Join(err, r.remind())
 	}
@@ -313,7 +315,9 @@ func (r *Relay) ingestEvents() error {
 		}
 		if json.Unmarshal(b, &e) != nil || e.Scope != r.St.S.Scope || !idRe.MatchString(e.ID) || file.Name() != eventFilename(e.ID) || !alertKinds[e.Kind] || strings.TrimSpace(e.Text) == "" {
 			r.logf("rejecting malformed event file %s", filepath.Base(f))
-			_ = os.Rename(f, f+".rejected")
+			if err := os.Remove(f); err != nil {
+				return err
+			}
 			continue
 		}
 		if _, dup := r.St.S.Events[e.ID]; !dup {

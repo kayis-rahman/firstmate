@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,6 +35,9 @@ func LoadConfig(path string) (Config, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
 		return c, fmt.Errorf("config %s: %w", path, err)
+	}
+	if err := dec.Decode(new(json.RawMessage)); err != io.EOF {
+		return c, fmt.Errorf("config %s: expected exactly one JSON object", path)
 	}
 	return c, c.Validate()
 }
