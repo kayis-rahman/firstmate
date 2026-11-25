@@ -3852,6 +3852,19 @@ Phase 1 runs the local MLX Serve typed-decision API (`/v1/systemone`) in shadow 
 - `bin/fm-decision-api.sh` is fail-open: MLX Serve being down or slow (hard timeout 3 seconds) makes it print nothing and do nothing.
 - Exact request, response, timeout, and logging mechanics live in the header of `bin/fm-decision-api.sh`.
 
+## Jev monitoring (config/jev-monitoring)
+
+`config/jev-monitoring` is an optional local, gitignored file with one value: `off`, `watch`, or `act`.
+Absent means `off`, and any other value behaves as `off` with one notice.
+
+- When `off` (or absent), existing local MLX Serve shadow behavior (`config/decision-api-shadow`) and all wake routing stay unchanged.
+- In `watch` mode, non-protected monitoring notices are sent off the wake path (3-second timeout) to `bin/fm-decision-api.sh --mode jev` at the configured TypeSafe host (`TYPESAFE_BASE`, `TYPESAFE_PATH`, and `TYPESAFE_API_KEY` via environment, `.env`, or `config/dispatch-credential-sources.json`).
+- Protected kinds (blockers, decisions, failures, finished jobs, PR/merge notices, `check` wakes, and stuck-worker alarms) and lines containing links, keys, logins, or `config/dispatch-never-send` matches stay local and are never sent.
+- `watch` mode logs label, confidence, latency, and local verdict to a bounded `state/jev-watch.jsonl` file without changing any wake; `bin/fm-jev-report.sh` summarizes counts and disagreements.
+- In `act` mode, only non-protected wakes already eligible to surface at attended (`bin/fm-watch.sh`) or away (`bin/fm-supervise-daemon.sh`) routing are evaluated.
+- A `routine` verdict at confidence 0.95 or higher is durably recorded in `state/jev-suppressed.jsonl` before suppressing the wake and is shown in the next `bin/fm-wake-drain.sh` run; any fallback (slow, down, bad key, no credit, odd reply) wakes as today, and 3 consecutive API failures pause Jev calls for 30 minutes before retrying.
+- If the full check or stuck-worker alarm surfaces a captain-relevant event for a task covered by a suppressed row, `config/jev-monitoring` is durably switched to `off` and firstmate is woken.
+
 ## Disk hygiene thresholds
 
 `config/disk-thresholds` is an optional local, gitignored file controlling `bin/fm-hygiene.sh` alarms:

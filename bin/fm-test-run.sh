@@ -863,6 +863,7 @@ tests/fm-inactive-reconcile.test.sh 70873
 tests/fm-inbox.test.sh 9208
 tests/fm-install-herdr.test.sh 273
 tests/fm-jev-mem-guard.test.sh 228
+tests/fm-jev-monitoring.test.sh 1000
 tests/fm-kimi-harness.test.sh 89952
 tests/fm-kimi-trust-prompt-live-e2e.test.sh 172
 tests/fm-kiro-harness.test.sh 34145
