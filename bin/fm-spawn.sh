@@ -7970,7 +7970,13 @@ fi
 # kill switch below it is an export statement, so it survives a compound raw
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
-LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
+AGY_AUTOCOMPACT_EVENT_FILE=
+if [ "$HARNESS" = agy ] && { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && [ -e "$CONFIG/agy-autocompact" ]; then
+  AGY_AUTOCOMPACT_EVENT_FILE="$STATE_REAL/$ID.compact-adviser.jsonl"
+  LAUNCH="unset COMPACT_ADVISER_DISABLE; export COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE"); $LAUNCH"
+else
+  LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
+fi
 # Pane launch idle-timeout contract: see the launch-environment header above.
 LAUNCH_CHROME_IDLE_TIMEOUT_MS=1800000
 LAUNCH="export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS; $LAUNCH"
@@ -8020,7 +8026,11 @@ if [ "$BACKEND" = t3code ]; then
   # (spawn_t3code_env_install). TRACEPARENT is delivered only once its meta
   # record exists, the same delivered-implies-recorded invariant the pane path
   # keeps by unsetting it when the record fails.
-  T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" COMPACT_ADVISER_DISABLE=1 "FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  if [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+    T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" "COMPACT_ADVISER_EVENT_FILE=$AGY_AUTOCOMPACT_EVENT_FILE" "FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  else
+    T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" COMPACT_ADVISER_DISABLE=1 "FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  fi
   if [ "$GIT_HOOKS_INSTALLED" = 1 ]; then
     T3CODE_ENV+=(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath "GIT_CONFIG_VALUE_0=$GIT_HOOKS_DIR")
   fi
@@ -8055,10 +8065,16 @@ else
 # process (go build, go test, ...) inherit it. Sent before the launch command so
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
-# Export the compact-adviser kill switch into the pane shell through the same
-# pre-launch channel, so later commands in that shell inherit it too. The launch
-# command independently establishes the value for the agent process itself.
-spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
+# Export the compact-adviser kill switch (or per-task event file for opted-in
+# agy workers) into the pane shell through the same pre-launch channel, so later
+# commands in that shell inherit it too. The launch command independently
+# establishes the value for the agent process itself.
+if [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+  spawn_send_text_line "$T" "unset COMPACT_ADVISER_DISABLE"
+  spawn_send_text_line "$T" "export COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE")"
+else
+  spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
+fi
 # And the bounded browser-automation lifetime, so later commands in that same pane
 # shell inherit it as well as the agent process itself.
 spawn_send_text_line "$T" "export CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"
@@ -8109,6 +8125,9 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
     HC_SESSION HC_TERMINAL_ID HC_TERMINAL_SOCKET HC_SCOPE \
     FM_TASK_ID COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
     $LAUNCH_ENV_FORWARD_NAMES; do
+    if [ "$env_name" = COMPACT_ADVISER_DISABLE ] && [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+      continue
+    fi
     if [ "$ORCA_LAUNCH_ENV_ENABLED" = 1 ]; then
       case $'\n'"$LAUNCH_ENV_NAMES"$'\n' in
         *$'\n'"$env_name"$'\n'*) continue ;;
@@ -8132,7 +8151,11 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   # Setting it here rather than relying on the assignment already carried by
   # $LAUNCH is what gives the wrapping `/bin/sh` itself the switch, not only the
   # agent command it runs.
-  LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX COMPACT_ADVISER_DISABLE=1"
+  if [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+    LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE")"
+  else
+    LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX COMPACT_ADVISER_DISABLE=1"
+  fi
   # The same floor treatment for the bounded browser-automation lifetime above,
   # so the wrapping `/bin/sh` itself carries it, not only the agent command it runs.
   LAUNCH_ENV_PREFIX="$LAUNCH_ENV_PREFIX CHROME_DEVTOOLS_AXI_IDLE_TIMEOUT_MS=$LAUNCH_CHROME_IDLE_TIMEOUT_MS"

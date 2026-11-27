@@ -11,7 +11,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | Task windows and worker tools | [Runtime backend](#runtime-backend-configbackend--fm_backend) and [harness support](#harness-support) |
 | Worker permissions, accounts, or environment | [Codex approval review](#codex-automatic-approval-review), [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [Codex permission mode](#codex-permission-mode-configcodex-permission-mode), [persistent managed-policy failover](#persistent-managed-policy-failover), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), [several Claude accounts](#several-claude-accounts-configclaude-accounts), [worker tool exclusions](#worker-tool-exclusions-configcrew-exclude-tools), [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist), and its [Orca environment source](#orca-environment-source-configlaunch-env-tmux-session) |
 | Backlog, preferences, and memory | [Backlog backend](#backlog-backend-taskstoml--configbacklog-backend), [captain preferences](#captain-preferences-datacaptainmd--datacaptain-sharedmd), [external memory tiers](#external-memory-tiers-memory-layering-section), [record export](#record-export-configrecord-export-root), [startup memory budget](#startup-memory-budget-configstartup-memory-budget), and [stow guard](#stow-guard-configstow-guard) |
-| Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), [Codex native Stop park](#codex-native-stop-park-configcodex-stop-park), [warm-cache compaction](#warm-cache-compaction-configwarm-compact), and [Calm preference](#calm-preference-configcalm) |
+| Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), [Codex native Stop park](#codex-native-stop-park-configcodex-stop-park), [warm-cache compaction](#warm-cache-compaction-configwarm-compact), [Antigravity autocompact](#antigravity-autocompact-configagy-autocompact), and [Calm preference](#calm-preference-configcalm) |
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
 | Review bots on owned GitHub pull requests | [Contribution review bots](#contribution-review-bots-configcontribution-review-bots) |
 | Stopping idle workers while a PR awaits review, and cleanup on merge | [Park on review](#park-on-review) |
@@ -490,6 +490,17 @@ A compacted primary still picks up pending wakes and decisions from disk, becaus
 
 This feature does not set `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` or any other autocompact setting.
 `bin/fm-warm-compact-lib.sh` owns the guards, with coverage in [`tests/fm-warm-compact.test.sh`](../tests/fm-warm-compact.test.sh) and the opt-in live guard [`tests/fm-warm-compact-herdr-live-e2e.test.sh`](../tests/fm-warm-compact-herdr-live-e2e.test.sh).
+
+## Antigravity autocompact (config/agy-autocompact)
+
+Create the home-local `config/agy-autocompact` file to opt in to watcher-driven `/compact` delivery for Antigravity (`agy`) ship and scout workers when the compact-adviser hook emits a safe-boundary event.
+The feature is off by default when the file is absent, and it never compacts a secondmate or the primary.
+
+When `config/agy-autocompact` is present, `bin/fm-spawn.sh` sets `COMPACT_ADVISER_EVENT_FILE` to `state/<id>.compact-adviser.jsonl` instead of `COMPACT_ADVISER_DISABLE=1` for `agy` ship and scout launches.
+On each poll, `bin/fm-watch.sh` reads new JSON lines from `state/<id>.compact-adviser.jsonl`, verifies `harness=agy`, `verdict=compact`, and that `cwd` matches the task's recorded worktree, checks that the worker is alive, not busy, and has an `empty` composer (`fm_backend_composer_state`), and delivers `/compact` through `fm_backend_send_text_submit`.
+If the worker is busy or its composer is not empty, the watcher defers and retries on the next tick.
+Successful compactions are rate-limited to at most once per task every 10 minutes.
+`tests/fm-watch-agy-autocompact.test.sh` covers mapping, idle and composer gating, deferral, and rate limiting.
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
@@ -1990,7 +2001,7 @@ Regression coverage executes emitted launch commands with synthetic nonsecret va
 Every crewmate, scout, and secondmate Firstmate launches starts with `COMPACT_ADVISER_DISABLE=1` in its environment, on a fresh spawn and on a relaunch alike, so an unattended session never activates the compact adviser.
 This guarantee also covers raw launch commands, remote secondmates, and launches filtered by `config/launch-env-allowlist`; it does not depend on the destination environment already containing the variable.
 
-Firstmate provides no configuration or flag to change this value.
+Firstmate provides no configuration or flag to change this value except [Antigravity autocompact](#antigravity-autocompact-configagy-autocompact), which replaces `COMPACT_ADVISER_DISABLE=1` with `COMPACT_ADVISER_EVENT_FILE` on opted-in `agy` ship and scout workers.
 This applies only to agents Firstmate launches; the captain's own primary Firstmate session is never given the variable.
 
 [`fm-spawn.sh --help`](../bin/fm-spawn.sh) owns the delivery mechanics, with focused regression coverage in [`tests/fm-spawn-compact-adviser-disable.test.sh`](../tests/fm-spawn-compact-adviser-disable.test.sh) and [`tests/fm-spawn-compact-adviser-disable-remote.test.sh`](../tests/fm-spawn-compact-adviser-disable-remote.test.sh).

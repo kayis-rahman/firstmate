@@ -1054,6 +1054,105 @@ secondmate_ring_to_drain() {  # <task> <window>
   fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")"
 }
 
+# Opt-in Antigravity (agy) autocompact handler (docs/configuration.md
+# "Antigravity autocompact (config/agy-autocompact)"). Off when absent.
+FM_AGY_AUTOCOMPACT_COOLDOWN_SECS=${FM_AGY_AUTOCOMPACT_COOLDOWN_SECS:-600}
+
+agy_autocompact_norm_path() {  # <path>
+  local p=${1:-} phys
+  while [ "${#p}" -gt 1 ] && [ "${p%/}" != "$p" ]; do
+    p=${p%/}
+  done
+  if [ -n "$p" ] && [ -d "$p" ]; then
+    phys=$(cd "$p" 2>/dev/null && pwd -P) && p=$phys
+  fi
+  printf '%s' "$p"
+}
+
+agy_autocompact_has_matching_event() {  # <event-file> <offset> <norm-worktree>
+  local event_file=$1 offset=$2 norm_wt=$3 line ev_harness ev_verdict ev_cwd
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    ev_harness=$(printf '%s' "$line" | jq -r 'if type == "object" then (.harness // "") else "" end' 2>/dev/null || true)
+    [ "$ev_harness" = agy ] || continue
+    ev_verdict=$(printf '%s' "$line" | jq -r 'if type == "object" then (.verdict // "") else "" end' 2>/dev/null || true)
+    [ "$ev_verdict" = compact ] || continue
+    ev_cwd=$(printf '%s' "$line" | jq -r 'if type == "object" then (.cwd // "") else "" end' 2>/dev/null || true)
+    [ -n "$ev_cwd" ] || continue
+    if [ "$(agy_autocompact_norm_path "$ev_cwd")" = "$norm_wt" ]; then
+      return 0
+    fi
+  done < <(tail -n "+$((offset + 1))" "$event_file" 2>/dev/null)
+  return 1
+}
+
+agy_autocompact_tick() {  # [now-epoch]
+  [ -e "$CONFIG/agy-autocompact" ] || return 0
+  local now=${1:-$(date +%s)}
+  local event_file task meta kind harness w worktree norm_wt total_lines offset_file offset
+  local last_file last_ts backend label agent_state tail40 verdict cstate submit_verdict
+  for event_file in "$STATE"/*.compact-adviser.jsonl; do
+    [ -f "$event_file" ] && [ ! -L "$event_file" ] || continue
+    task=${event_file##*/}
+    task=${task%.compact-adviser.jsonl}
+    case "$task" in ''|*[!A-Za-z0-9._-]*) continue ;; esac
+    meta="$STATE/$task.meta"
+    [ -f "$meta" ] && [ ! -L "$meta" ] || continue
+    kind=$(fm_meta_get "$meta" kind)
+    [ "$kind" != secondmate ] && [ "$kind" != primary ] || continue
+    harness=$(fm_meta_get "$meta" harness)
+    [ "$harness" = agy ] || continue
+    w=$(fm_backend_target_of_meta "$meta")
+    [ -n "$w" ] || continue
+    worktree=$(fm_meta_get "$meta" worktree)
+    [ -n "$worktree" ] || continue
+    norm_wt=$(agy_autocompact_norm_path "$worktree")
+    total_lines=$(wc -l < "$event_file" 2>/dev/null | tr -d ' ')
+    case "$total_lines" in ''|*[!0-9]*) continue ;; esac
+    offset_file="$STATE/.agy-autocompact-offset-$task"
+    offset=$(cat "$offset_file" 2>/dev/null || echo 0)
+    case "$offset" in ''|*[!0-9]*) offset=0 ;; esac
+    if [ "$total_lines" -lt "$offset" ]; then
+      offset=0
+    fi
+    if [ "$total_lines" -le "$offset" ]; then
+      continue
+    fi
+    if ! agy_autocompact_has_matching_event "$event_file" "$offset" "$norm_wt"; then
+      printf '%s\n' "$total_lines" > "$offset_file" 2>/dev/null || true
+      continue
+    fi
+    last_file="$STATE/.agy-autocompact-last-$task"
+    last_ts=$(cat "$last_file" 2>/dev/null || true)
+    case "$last_ts" in ''|*[!0-9]*) last_ts= ;; esac
+    if [ -n "$last_ts" ] && [ "$now" -ge "$last_ts" ] \
+      && [ $((now - last_ts)) -lt "$FM_AGY_AUTOCOMPACT_COOLDOWN_SECS" ]; then
+      printf '%s\n' "$total_lines" > "$offset_file" 2>/dev/null || true
+      triage_log "agy-autocompact: rate-limited $task"
+      continue
+    fi
+    backend=$(fm_backend_of_meta "$meta")
+    [ -n "$backend" ] || backend=$(window_backend "$w")
+    label=$(window_label "$w")
+    agent_state=$(fm_backend_agent_state "$backend" "$w" 2>/dev/null || true)
+    [ "$agent_state" = alive ] || continue
+    watcher_capture "$backend" "$w" 40 "$label" || continue
+    tail40=$WATCHER_CAPTURE
+    verdict=$(fm_busy_classify_meta "$meta" "$task" "$STATE" "$tail40")
+    case "$verdict" in
+      busy\ *|dead\ *) continue ;;
+    esac
+    cstate=$(FM_COMPOSER_HARNESS=agy fm_backend_composer_state "$backend" "$w" "$label" 2>/dev/null) || cstate=unknown
+    [ "$cstate" = empty ] || continue
+    submit_verdict=$(FM_COMPOSER_HARNESS=agy fm_backend_send_text_submit "$backend" "$w" /compact 3 0.4 0.4 "$label" 2>/dev/null) || submit_verdict=send-failed
+    if [ "$submit_verdict" = empty ]; then
+      printf '%s\n' "$now" > "$last_file" 2>/dev/null || true
+      printf '%s\n' "$total_lines" > "$offset_file" 2>/dev/null || true
+      triage_log "agy-autocompact: delivered /compact to $task ($w)"
+    fi
+  done
+}
+
 # Surface one durable parent check when the foreign queue's drain position has
 # not moved for the bounded interval. The progress marker records that position
 # as the same epoch-sequence row identity the stall receipts use, so the timer
@@ -4406,6 +4505,8 @@ while :; do
     echo "watcher: secondmate wake-loop observation failed" >&2
     exit 1
   }
+
+  agy_autocompact_tick || true
 
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this
