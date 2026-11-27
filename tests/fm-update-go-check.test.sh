@@ -51,4 +51,38 @@ test_flags_changed_ported_helper_and_switches_to_shell() {
   pass "flags changed Go port, switches it to shell, and reports new helper candidates"
 }
 
-fm_test_run test_flags_changed_ported_helper_and_switches_to_shell
+test_runs_go_pilot_build_when_go_available() {
+  local repo old new fakebin out
+  repo=$(setup_repo)
+  mkdir -p "$repo/go/cmd/fm-forge-detect"
+  cp "$ROOT/bin/fm-go-pilot-build.sh" "$repo/bin/fm-go-pilot-build.sh"
+  cp "$ROOT/bin/fm-update-go-check.sh" "$repo/bin/fm-update-go-check.sh"
+  git -C "$repo" add .
+  git -C "$repo" commit -q -m "add go-pilot-build"
+  old=$(git -C "$repo" rev-parse HEAD)
+  printf '# updated\n' >> "$repo/bin/fm-forge-detect.sh"
+  git -C "$repo" add .
+  git -C "$repo" commit -q -m "update"
+  new=$(git -C "$repo" rev-parse HEAD)
+
+  fakebin=$(fm_fakebin "$TMP_ROOT/build-bin")
+  cat > "$fakebin/go" <<'SH'
+#!/usr/bin/env bash
+out=
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then out=$2; shift 2; continue; fi
+  shift
+done
+[ -n "$out" ] && printf '#!/bin/sh\nexit 0\n' > "$out" && chmod +x "$out"
+exit 0
+SH
+  chmod +x "$fakebin/go"
+
+  out=$(FM_ROOT_OVERRIDE="$repo" FM_HOME="$repo" FM_CONFIG_OVERRIDE="$repo/config" \
+    PATH="$fakebin:/usr/bin:/bin" bash "$repo/bin/fm-update-go-check.sh" "$old" "$new" 2>&1) || fail "build check failed: $out"
+  assert_contains "$out" "go-pilot-build: ok" "expected go-pilot-build: ok, got: $out"
+  [ -x "$repo/bin/go-pilot/forge-detect" ] || fail "go-pilot-build did not write into FM_ROOT_OVERRIDE/bin/go-pilot"
+  pass "runs go-pilot-build into FM_ROOT_OVERRIDE when go is available"
+}
+
+fm_test_run test_flags_changed_ported_helper_and_switches_to_shell test_runs_go_pilot_build_when_go_available

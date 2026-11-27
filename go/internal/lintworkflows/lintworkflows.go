@@ -37,7 +37,7 @@ func Run(root string, files []string, stdout, stderr io.Writer) int {
 					continue
 				}
 				full := filepath.Join(wfDir, name)
-				info, err := os.Stat(full)
+				info, err := os.Lstat(full)
 				if err == nil && info.Mode().IsRegular() {
 					files = append(files, full)
 				}

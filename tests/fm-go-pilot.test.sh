@@ -61,4 +61,22 @@ case "$out" in
   *) fail "missing binary did not fall back: $out" ;;
 esac
 
+# direct shell entry point handoff via config/go-pilot
+for tool in forge-detect env-cause storage-policy test-tap-verify lint-workflows; do
+  cp "$ROOT/bin/fm-$tool.sh" "$CODE/bin/fm-$tool.sh"
+  cat > "$CODE/bin/go-pilot/$tool" <<SH
+#!/bin/sh
+printf 'go-handoff:%s\n' "$tool"
+exit 0
+SH
+  chmod +x "$CODE/bin/go-pilot/$tool"
+  printf '%s\n' "$tool" > "$TMP_HOME/config/go-pilot"
+  out=$(FM_ROOT_OVERRIDE="$CODE" FM_CONFIG_OVERRIDE="$TMP_HOME/config" bash "$CODE/bin/fm-$tool.sh" --help 2>&1) || fail "$tool handoff failed: $out"
+  case "$out" in
+    "go-handoff:$tool") ;;
+    *) fail "direct entry point fm-$tool.sh did not hand off to Go: $out" ;;
+  esac
+done
+pass "direct shell entry points hand off to go-pilot when enabled"
+
 pass "all checks"

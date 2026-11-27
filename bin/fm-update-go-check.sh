@@ -21,7 +21,7 @@ PILOT_CONFIG="$CONFIG/go-pilot"
 GO_PORT_DOC="$FM_ROOT/docs/go-port.md"
 
 usage() {
-  sed -n '2,12{s/^# \{0,1\}//;p;}' "$0"
+  sed -n '2,13{s/^# \{0,1\}//;p;}' "$0"
 }
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then

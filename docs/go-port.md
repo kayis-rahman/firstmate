@@ -274,6 +274,7 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-turnend-guard-cursor.sh | 441 | executed | later-ops | shell |
 | bin/fm-turnend-guard-grok.sh | 90 | executed | later-ops | shell |
 | bin/fm-turnend-guard.sh | 584 | executed | later-ops | shell |
+| bin/fm-update-go-check.sh | 114 | executed | helper | shell |
 | bin/fm-update.sh | 380 | executed | helper | shell |
 | bin/fm-usage-warner.sh | 519 | executed | helper | shell |
 | bin/fm-vendor-auth-probe.sh | 189 | executed | helper | shell |

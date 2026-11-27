@@ -77,7 +77,15 @@ func Run(path string, clean, largeWork bool, home string, stdout, stderr io.Writ
 		home + "/.cache/huggingface/xet",
 	}
 
+	homePrefix := homeReal + "/"
+	if homeReal == "/" {
+		homePrefix = "/"
+	}
+
 	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err != nil {
+			continue
+		}
 		cInfo, err := os.Lstat(candidate)
 		if err != nil {
 			continue
@@ -88,7 +96,7 @@ func Run(path string, clean, largeWork bool, home string, stdout, stderr io.Writ
 			continue
 		}
 		parentReal, err = filepath.Abs(parentReal)
-		if err != nil || !strings.HasPrefix(parentReal+"/", homeReal+"/") {
+		if err != nil || !strings.HasPrefix(parentReal+"/", homePrefix) {
 			fmt.Fprintf(stdout, "cache=skipped reason=outside-home-or-unresolvable path=%s\n", candidate)
 			continue
 		}

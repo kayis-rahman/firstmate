@@ -2,18 +2,17 @@ package envcause
 
 import (
 	"fmt"
-	"os"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
 func Classify(darwin string, text string) string {
 	d := darwin
 	if d == "auto" {
-		if os.Getenv("GOOS") == "darwin" {
+		if runtime.GOOS == "darwin" {
 			d = "1"
 		} else {
-			// best effort: rely on runtime.GOOS at call site via main
 			d = "0"
 		}
 	}

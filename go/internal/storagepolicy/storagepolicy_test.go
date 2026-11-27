@@ -95,4 +95,21 @@ func TestCleanRespectsActiveAndSymlinks(t *testing.T) {
 	if !strings.Contains(stdout.String(), "cache=removed path="+uvDir) {
 		t.Fatalf("expected cache=removed, got %s", stdout.String())
 	}
+
+	elsewhere := t.TempDir()
+	xetDir := filepath.Join(home, ".cache", "huggingface")
+	if err := os.MkdirAll(xetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(xetDir, "xet")); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	rc = Run(home, true, false, home, &stdout, &stderr)
+	if rc != 0 {
+		t.Fatalf("expected rc=0, got %d", rc)
+	}
+	if !strings.Contains(stdout.String(), "reason=not-a-real-directory") {
+		t.Fatalf("expected symlink cache path to be skipped, got %s", stdout.String())
+	}
 }
