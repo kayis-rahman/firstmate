@@ -1,0 +1,477 @@
+FM_TEST_BEGIN 2026-11-27T21:40:34Z tests/fm-agy-account-quota.test.sh family=standalone expected_gate_skip=none
+ok - each declared agy account prints its own quota row, read under its own HOME
+ok - ordinary is measured from the caller HOME
+ok - an absent or malformed agy list refuses before any quota read
+# all fm-agy-account-quota tests passed
+FM_TEST_END 2026-11-27T21:40:35Z tests/fm-agy-account-quota.test.sh exit=0 duration_ms=1053 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:40:35Z tests/fm-worker-account.test.sh family=backend-dispatch expected_gate_skip=none
+ok - Claude, Pi, and pi-signed secondmates use their own pins without changing other launches
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+ok - unusable per-mate pins name the setting and refuse rather than use the primary's usable account
+ok - a remote route refuses a primary-side account override instead of silently ignoring it
+ok - a remote secondmate refuses --account instead of launching on the remote home's account
+ok - an absent pin leaves Claude and Pi launches exactly as they were
+ok - a Claude pin selects its root and sheds the credentials that would outrank it
+ok - a Claude pin refuses a signed-out root even when the invoking process has a usable login and API key
+ok - an ordinary Claude pin selects the default login and drops an ambient root
+ok - malformed, relative, CR-terminated, empty, extra-line, missing-root, and non-file pins refuse before launch
+ok - a Pi pin selects its root and passes the declared provider
+ok - a Pi pin refuses unqualified, missing, undeclared, signed-out, and raw launches
+ok - extension providers and a Pi without auth check fall back to an exact model-listing match
+ok - a Claude pin leaves codex and Pi launches unchanged
+ok - a raw Claude launch command receives the home's pin
+ok - a pinned home refuses a raw Claude command that overrides the account
+ok - an unpinned home keeps a raw Claude account override
+ok - a local secondmate reads the launching home's pin and its own home's file is never inherited over
+ok - without config/claude-accounts the launch, the single pin, and the record are unchanged, and --account refuses
+ok - a declared account named with --account is checked, launched, and recorded like a pin
+ok - a list refuses a missing, undeclared, signed-out, wrong-runner, raw-override, doubled, or malformed choice
+warning: re-init: ignored --initial-branch=main
+warning: re-init: ignored --initial-branch=main
+ok - a list never chooses a secondmate's account: it needs its own pin and refuses --account
+ok - config/agy-accounts: --account applies to agy models, trust pre-registration, launch HOME, and metadata
+ok - config/agy-accounts refuses missing, undeclared, signed-out, and raw-HOME-override launches
+ok - without config/codex-accounts a Codex launch and its record are unchanged
+ok - a declared Codex account named with --account is checked, launched on its CODEX_HOME, and recorded
+ok - a Codex list refuses a missing, undeclared, newline, signed-out, raw-override, or malformed choice
+warning: re-init: ignored --initial-branch=main
+ok - a Codex list never chooses a secondmate's account and refuses --account for one
+# all fm-worker-account tests passed
+FM_TEST_END 2026-11-27T21:42:58Z tests/fm-worker-account.test.sh exit=0 duration_ms=143282 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:42:58Z tests/fm-public-followup.test.sh family=standalone expected_gate_skip=none
+ok - the suite's seeding never reaches a backlog named by ambient TASKS_AXI_FILE/BACKEND
+ok - outcome text is collapsed to one line, bounded by codepoint, and never corrupts characters
+ok - restart end-to-end: typed result reconciles from disk and delivers one reply to the original thread
+ok - failed work on a pr-merged promise delivers its honest outcome exactly once
+ok - duplicate terminal results, restart replay, and repeated delivery are all no-ops
+ok - wrong source, wrong work id, stale generation, malformed, unsupported deliverable, and forged identity are all refused
+ok - a relay transport failure is held as retryable with no false completion, and the retry posts once
+ok - a dry-run records no public delivery and leaves the commitment retryable
+ok - a late success receipt closes the exact attempt with no second post, and a mismatched attempt is refused
+ok - typed terminal cleanup clears the legacy link without posting
+ok - a delivery interrupted between post and receipt refuses to repost
+ok - a child home reports typed results but can never become the outward-post owner
+ok - typed delivery refuses to post when its cleanup registration is missing
+ok - marked secondmate teardown resolves its parent and fails closed when unavailable
+ok - local seeding publishes durable parent state before its identity marker
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - a lost launch-time parent binding is recovered from the durable local record
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - a durable local parent record does not bypass a genuinely missing parent-side registration
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - unknown durable parent fields remain forward-compatible
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - conflicting live and durable parent bindings fail closed
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - unsafe durable parent records fail closed before cleanup
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - a NUL-bearing durable parent record fails closed before cleanup
+ok - relay-disabled unmarked teardown runs no public-followup work
+ok - a marked child proceeds without tasks-axi when its parent relay is disabled
+ok - secondmate parent resolution matches the durable registry id literally
+ok - traversal-shaped registrations are rejected before path construction or posting
+ok - pending keeps registrations when tasks-axi returns malformed JSON
+ok - the retained private request context keeps the original thread deliverable after inbox cleanup
+ok - cleanup refuses while a public reply is owed and proceeds once it has landed
+ok - a relay-disabled home runs no tasks-axi call, prints nothing, and gains no artifact
+ok - a relay-enabled home with no commitments makes no backlog call and stays silent
+ok - a relay-exhausted follow-up binding is escalated rather than retried into the thread
+ok - the relay poll stays inert without a token, silent with no commitments, and surfaces a new result once
+ok - startup surfaces unresolved public commitments only in a relay home that owes one
+ok - typed public-followup records carry only public-safe summaries and deliverables
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - dropped-baton regression: delivery retains the loop and pending prints open-loop
+Note: switching to '87d3396500962cb134a7462b5cb297d626fa9792'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - CONTROL: the identical teardown REFUSES the moment a commitment is registered
+ok - rechain posts the shipped follow-on into the same thread
+ok - rechain resumes the same obligation after an interrupted bind
+ok - concurrent rechains cannot fork one delivered source
+ok - failed rechain retirement keeps the source claimed by one resumable destination
+ok - first register succeeds with an empty lock list under /bin/bash
+ok - registration replay preserves delivered and retired loop states
+ok - redelivery does not report a retired loop as open
+ok - retire closes delivered loops after secondmate home removal
+ok - retire fails closed for an unbound existing secondmate
+ok - retire fails closed when a secondmate ID is reassigned
+ok - rechain refuses an unrelated existing destination
+ok - pending skips a registration retired during settlement
+/Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M8FD91AFGC5SEZR07DXXJW8J/bin/fm-public-followup.sh: line 826: printf: write error: Broken pipe
+ok - retire --reason closes the loop and drops the open-loop line
+ok - retention creates no false teardown refusal and pending no longer prunes
+ok - expiry escalation is pinned by FMX_NOW_OVERRIDE
+ok - brief fails explicitly when typed deliverable keys are unavailable
+ok - pre-change registrations are open loops and un-rechainable, never a crash
+ok - teardown reports an unreconciled legacy Relay link
+ok - secondmate promotion matches teardown parent resolution
+ok - a public loop bound to a remote secondmate home delivers and retires
+ok - delivered remote registrations skip offline collection routes
+ok - --force still covers only the unresolved obligation, not the link clear
+ok - retire fails closed when a remote route is reassigned
+ok - retire fails closed when remote state is unreadable
+ok - retire fails closed when remote state is non-writable
+ok - retire accepts link absence in non-writable remote state
+ok - the guarded remote clear refuses a lock it cannot acquire instead of hanging
+ok - an unconfirmed remote clear is unknown completion, never a silent close
+ok - a typed terminal result emitted in a remote work home reaches the owning home
+ok - a promise that requires no deliverable is briefable and reportable
+ok - an unreachable remote work home fails loudly instead of reporting an empty inbox
+ok - an unreadable remote outbox fails collection without losing its result
+ok - invalid registration fails collection without dropping the staged result
+ok - unsafe registration entries fail collection without dropping staged results
+ok - route loss fails brief and consume without dropping the staged result
+ok - empty reachable remote collection remains a healthy no-op
+ok - remote brief rejects traversal and empty route path components
+ok - a local work home's emit path is unchanged
+ok - a duplicate report from a remote work home stays a no-op
+ok - staging requires the matching secondmate firstmate home
+ok - brief pre-fills the report path and states the format of every value it cannot know
+ok - the emitter refuses a deliverable tasks-axi would reject, naming key, value, and format
+ok - the emitter refuses a repeated deliverable key by name in both destinations
+ok - the emitter refuses an event missing a required deliverable in both destinations
+ok - the emitter's work-event rules agree with the real tasks-axi consumer on 74 cases
+ok - a rejected event records a specific reason and wakes the owning home once
+ok - a rejection collected from a remote secondmate wakes the owning home
+ok - only a failed result may answer a promise without the deliverable it promised
+ok - a failure promise keeps needing its own error_code
+ok - a rejection whose wake cannot be recorded is retried rather than lost
+ok - a rejection wake survives a poll that could not write its line
+ok - a rejection wake survives a poll that could not read its line
+ok - a wake that cannot be dropped repeats the same refusal
+ok - a refusal whose event was retained repeats its wake instead of a new one
+FM_TEST_END 2026-11-27T21:49:25Z tests/fm-public-followup.test.sh exit=0 duration_ms=387308 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:49:25Z tests/fm-jev-monitoring.test.sh family=unclassified expected_gate_skip=none
+ok - absent setting keeps existing behavior and makes no Jev calls
+ok - setting values off/watch/act and invalid value behaves as off with one notice
+ok - key stays off argv/env/logs, TYPESAFE_BASE/PATH honored, only job and status_line sent
+ok - protected kinds (blockers, decisions, failures, done, PR/merge, check) are never sent
+ok - redaction and dispatch-never-send keep links, keys, logins, and blocked terms local
+ok - every fallback row (slow, down, 500, 401, 403, 402, 429, odd JSON/choice/conf) fails open
+ok - 3-failure circuit breaker pauses 30 minutes then retries and resets
+ok - watch mode logs bounded JSONL and fm-jev-report.sh summarizes counts and disagreements
+ok - 95% confidence boundary: >=0.95 routine suppresses, <0.95 and needs-firstmate wake
+ok - record-before-suppress surfaces in next drain after crash and never suppresses on write failure
+ok - act mode never sends or suppresses protected kinds or stuck-worker alarms
+ok - missed-blocker auto-off checks span offset and durably switches jev-monitoring to off
+ok - multi-file signal evaluates all before recording and records nothing on wake
+FM_TEST_END 2026-11-27T21:49:32Z tests/fm-jev-monitoring.test.sh exit=0 duration_ms=6237 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:49:32Z tests/fm-dispatch-resolve.test.sh family=standalone expected_gate_skip=none
+ok - invalid preferred_provider: null
+ok - invalid preferred_provider: false
+ok - invalid preferred_provider: 42
+ok - invalid preferred_provider: []
+ok - invalid preferred_provider: {}
+ok - invalid preferred_provider: ""
+ok - invalid preferred_provider: "Codex"
+ok - invalid preferred_provider: "codex\\n"
+ok - invalid preferred_provider: " codex"
+ok - preferred provider: astra-82-claude-26
+ok - preferred provider: work-account
+ok - preferred provider: exhausted
+ok - preferred provider: unknown
+ok - preferred provider: unknown-one-known-one
+ok - preferred provider: claude-only
+ok - preferred provider: config-override
+ok - preferred provider: prose-why
+ok - preferred provider: absent
+ok - preferred provider: approval
+ok - preferred provider: tie
+ok - preferred provider: floor
+ok - absent key is off: one stderr line, exit 0, no network call
+ok - TYPESAFE_API_KEY= in .env activates the tool; environment and config overrides work
+ok - clear: one rule Choice request, key on the fd header only, spendPriority argmax over every candidate
+ok - endpoint overrides work while the implicit model stays fixed
+ok - TYPESAFE_PATH: default unchanged, custom path used, invalid values refused, never-send sees the full URL
+ok - TypeSafe base supports environment and .env overrides and rejects unsafe URLs before sending
+ok - OpenRouter clear uses the same output contract and keeps its key out of argv and child environments
+ok - OpenRouter ambiguous, malformed, HTTP, and missing-model paths are handled
+ok - mapping: a declared macos-keychain service and optional account become the lookup, and the key rides the fd header
+ok - TYPESAFE_PATH works with the macos-keychain credential source
+ok - precedence: environment, then .env, then the declared source, which is read only when needed
+ok - provider isolation: each provider reads only its own declared service, and a declaration never selects a provider
+ok - effective-home isolation: only the effective config directory's declaration is consulted
+ok - failure distinctions: off, a configuration error, and an unavailable source each read differently and send nothing
+ok - secret containment: the declared key is on no argv, in no output, environment, or file, and only on the fd header
+ok - capability probe: supported or unsupported, with no declaration read and no credential tool run
+ok - with no provider set, other providers' settings leave the original off line unchanged
+ok - systemone posts the unchanged request to its base URL with an optional fd-3 key
+ok - systemone configuration errors, never-send base URL, partial response, and transport failure are handled
+ok - openai maps the Choice request to the Decisions API and its answer back, key on fd 3 only
+ok - the never-send check runs on the final openai request body
+ok - openai malformed, partial, refused, ambiguous, HTTP, and transport paths return to normal intake
+ok - never-send list withholds the request on a match or a bad list, and never prints the value
+ok - rules snapshots and shell quoting preserve the profile protocol
+ok - quota_scope binds an agy candidate to its declared tier row
+ok - no-rule fallback, Agy, Gemini, and documented configurations resolve
+ok - ambiguous: confidence below the fixed floor hands the decision back
+ok - task record: every exit-0 outcome records its decision for data/<id>/brief.md, and exit 2 records none
+ok - task record: the configured data root, including FM_DATA_OVERRIDE, decides where the record goes
+ok - per-rule confidence floors fall to the most probable runner-up that clears its own floor
+ok - only the brief's task sections and scout tag reach the model, with a whole-brief fallback
+ok - escalate: a rule declared approval: captain never yields a profile
+ok - rule floor: known shortfall falls through while unavailable evidence escalates
+ok - declared provider and profile floor evidence are applied in code
+ok - nonnumeric spendPriority evidence is never ranked
+ok - partial and missing quota evidence remain eligible but unranked
+ok - provider-wide and exact quota rows combine into one limiting candidate
+ok - default: no rule matched resolves among the default profiles
+ok - tie: equal spendPriority never breaks by array order
+ok - no rankable candidate: the tool escalates instead of guessing
+ok - native Codex binds to codex-home before default, independently of Pi accounts and row order
+ok - Pi native adapters bind to codex-home with existing fallbacks and schema 5 compatibility
+ok - schema 6: each candidate binds to its account row; schema 5 is unchanged
+ok - quota evidence comes from one quota-axi --json read, and its failure is an error outcome
+ok - API, transport, and response failures are error outcomes with exit 0
+ok - configuration errors exit 2 before any network call
+ok - shared-quota opt-out: no quota snapshot, deterministic declared-order pick, opt-out stated on every candidate
+ok - shared-quota bypasses an unmet rule-level floor: the rule's own profile wins with no quota call
+ok - shared-quota bypasses an unmet profile-level floor: the first declared profile wins with no quota call
+ok - shared-quota keeps preferred_provider narrowing: the preferred family wins in declared order with no quota call
+ok - shared_quota false keeps the unchanged quota-ranked behavior
+# all fm-dispatch-resolve tests passed
+FM_TEST_END 2026-11-27T21:50:04Z tests/fm-dispatch-resolve.test.sh exit=0 duration_ms=32681 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:50:04Z tests/fm-watch-agy-autocompact.test.sh family=unclassified expected_gate_skip=none
+model health: free-model-axi returned no readable model snapshot; 'gemini-3.8-flash-high' launches unvalidated (run 'free-model-axi sync' to restore it)
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-off/launch-brief.md records no ship branch; defaulting to legacy branch fm/agy-off
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-off/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode direct-PR - confirm its definition of done matches
+notice: agy-off ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+spawned agy-off harness=agy kind=ship mode=direct-PR yolo=off window=firstmate:fm-agy-off worktree=/private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/wt
+model health: free-model-axi returned no readable model snapshot; 'gemini-3.8-flash-high' launches unvalidated (run 'free-model-axi sync' to restore it)
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-off-allow/launch-brief.md records no ship branch; defaulting to legacy branch fm/agy-off-allow
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-off-allow/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode direct-PR - confirm its definition of done matches
+notice: agy-off-allow ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/wt is already claimed by another task record:
+warning:   task agy-off records it in worktree (record in /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/state)
+warning: after this spawn, two task records name one working copy; cleanup will refuse for either until one record is reconciled (bin/fm-crew-state.sh); this check edited no record
+spawned agy-off-allow harness=agy kind=ship mode=direct-PR yolo=off window=firstmate:fm-agy-off-allow worktree=/private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/wt
+model health: free-model-axi returned no readable model snapshot; 'gemini-3.8-flash-high' launches unvalidated (run 'free-model-axi sync' to restore it)
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-on/launch-brief.md records no ship branch; defaulting to legacy branch fm/agy-on
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/data/agy-on/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode direct-PR - confirm its definition of done matches
+notice: agy-on ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+warning: /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/wt is already claimed by another task record:
+warning:   task agy-off-allow records it in worktree (record in /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/state)
+warning:   task agy-off records it in worktree (record in /private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/home/state)
+warning: after this spawn, two task records name one working copy; cleanup will refuse for either until one record is reconciled (bin/fm-crew-state.sh); this check edited no record
+spawned agy-on harness=agy kind=ship mode=direct-PR yolo=off window=firstmate:fm-agy-on worktree=/private/var/folders/hd/7lbv4q857kv56nl8fdbnpbkr0000gn/T/fm-watch-agy-autocompact.Q5O6Tp/spawn-case/wt
+ok - fm-spawn agy sets COMPACT_ADVISER_EVENT_FILE and clears inherited COMPACT_ADVISER_DISABLE only when opted in
+ok - watcher ignores agy autocompact events when config/agy-autocompact is absent
+ok - watcher maps per-task event with cwd cross-check and excludes secondmate, primary, and non-agy
+ok - watcher gates on idle, alive, and exact empty composer, deferring and retrying on next tick
+ok - watcher rate-limits compaction to at most once per task per 10 minutes
+ok - fm-teardown cleans up compact-adviser event file and watcher markers
+FM_TEST_END 2026-11-27T21:50:21Z tests/fm-watch-agy-autocompact.test.sh exit=0 duration_ms=16793 gate_skip=false
+FM_TEST_SUMMARY total=6 failed=0 skipped_gate=0 duration_ms=587522
+FM_TEST_SUMMARY_FAMILY family=backend-dispatch count=1 duration_ms=143282 failed=0
+FM_TEST_SUMMARY_FAMILY family=standalone count=3 duration_ms=421042 failed=0
+FM_TEST_SUMMARY_FAMILY family=unclassified count=2 duration_ms=23030 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-public-followup.test.sh duration_ms=387308
+FM_TEST_SLOWEST rank=2 script=tests/fm-worker-account.test.sh duration_ms=143282
+FM_TEST_SLOWEST rank=3 script=tests/fm-dispatch-resolve.test.sh duration_ms=32681
+FM_TEST_SLOWEST rank=4 script=tests/fm-watch-agy-autocompact.test.sh duration_ms=16793
+FM_TEST_SLOWEST rank=5 script=tests/fm-jev-monitoring.test.sh duration_ms=6237
+FM_TEST_SLOWEST rank=6 script=tests/fm-agy-account-quota.test.sh duration_ms=1053
+fm-test-run: wrote timing artifact: /Users/kayisrahman/.no-mistakes/evidence/01M8FD91AFGC5SEZR07DXXJW8J/fork-features-timings.json

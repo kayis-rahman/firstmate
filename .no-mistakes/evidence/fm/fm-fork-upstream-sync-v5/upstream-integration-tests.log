@@ -1,0 +1,216 @@
+FM_TEST_BEGIN 2026-11-27T21:50:37Z tests/fm-tool-update-check.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - published herdr, tasks-axi and gnhf report older fixtures and stay silent when equal or ahead
+ok - unreachable and unparseable published sources fail for their own tool and the sweep continues
+ok - published probes obey their bound and incomplete sweeps record their findings
+ok - complete and partial late sweeps record findings and retain cadence
+ok - a skipped published probe reports its budget failure once and skipped probes record their findings
+ok - arm and sweep refuse the whole registry for malformed entries
+ok - published sources compose with PATH skew, announcements and git, with changed and returning update dedupe
+ok - published versions compare numeric components without overflow and require a successful installed answer
+ok - PATH skew is reported by asking every copy on PATH for its own version
+ok - no report when PATH already resolves the newest installed copy
+ok - two copies of the same version are not skew
+ok - one copy reached through two PATH entries is probed once as one install
+ok - a copy that reports no version is a check failure, not a pass
+ok - a version probe that exits non-zero still reports its version
+ok - a watched command missing from PATH is reported
+ok - a tool's own update announcement is read from its output
+ok - an announcement naming an already-installed version is not also reported as an available update
+ok - an announcement naming a version newer than every installed copy is still reported as available
+ok - an announcement carried by another command is read from that command
+ok - an announce_pattern that cannot be used is reported instead of read as silence
+ok - a broken pattern is reported for its own tool and the rest of the sweep still reports
+ok - an announcement source the budget could not reach is reported, not read as current
+ok - an announcement probe that does not answer is reported, not read as current
+ok - a tool that announces nothing stays silent
+ok - a version_url newer than every installed copy is reported as an available update
+ok - a version_url no newer than an installed copy reports only PATH skew when needed
+ok - a version_url that matches the PATH version is silent
+ok - a version_url that does not answer with a version is a check failure
+ok - a missing curl is a check failure
+ok - version_url is validated as one https URL beside a command
+ok - an entry may not set both published and version_url
+ok - commits behind the origin branch are reported without touching the repository
+ok - an omitted branch is detected from the remote's default branch
+ok - the default branch is asked of the remote when the clone has no local record
+ok - a repository that is current or ahead of its origin branch is silent
+ok - an unusable git source is reported as a check failure
+ok - a remote that cannot be read is reported as unreadable, not as a missing branch
+ok - a branch a readable remote does not have is still reported as missing
+ok - git probes stop and name their tool once the sweep budget is gone
+ok - a git probe that does not answer is reported as a failure, never as an update
+ok - a stalled repository probe is reported as no answer, not as not a repository
+ok - no watched tool registry means no output at all
+ok - a malformed registry is reported instead of quietly skipped
+ok - the same pending update is reported once, and a change is reported again
+ok - an over-long report is cut with the shared truncation marker
+ok - a finding that lands past the cut is still reported as news
+ok - probes run once per interval, not on every poll
+ok - a budget that cannot fit the watcher bound is cut and reported, and the sweep keeps working
+ok - an out of range bound or unknown action refuses instead of guessing
+ok - arm registers a trusted check and disarm removes every trace
+ok - a symlink at the shim path is refused instead of followed
+ok - a failed registration never leaves a shim without a matching trust binding
+ok - a re-arm that loses the trust binding leaves no shim behind
+ok - a relative home is resolved before it is persisted into the shim
+ok - the armed check reaches the watcher as an ordinary check wake
+FM_TEST_END 2026-11-27T21:51:21Z tests/fm-tool-update-check.test.sh exit=0 duration_ms=43943 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:51:21Z tests/fm-harness-precedence.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - a markerless harness keeps its identity under an inherited foreign marker
+ok - a harness that publishes a marker inside its own process tree is unchanged
+ok - with ancestry silent, the marker layer and its cursor-first ordering still decide
+ok - a retained cursor marker does not rename a nested claude worker
+ok - PiG primary detection is ancestry-bound, and its worker harness resolves for crews but not secondmates
+ok - an agreeing marker keeps Pi's finer identity that ancestry cannot prove
+ok - an interpreter script-path match answers alone but never outranks a marker
+ok - a native harness binary under an interpreter shim decides at comm strength
+ok - a harness that is pid 1 of its own namespace is examined, not skipped
+ok - a markerless harness is found as deep as Codex runs its session start, and no deeper
+ok - the descent probe reaches comm strength where the top-of-session probe sees only args
+ok - the descent probe reports no verdict from a sibling branch detection cannot reach
+ok - a foreign args-only verdict at the deepest vantage leaves the comm-strength identity intact
+ok - equal-depth descent ties prefer the comm-strength leaf regardless of spawn order
+ok - a supervision branch resolves own, crew, and secondmate to the primary's pinned harness
+ok - a supervision branch refuses to resolve a harness from a pin that names none
+ok - session start renders the Codex protocol for a Codex primary holding a retained CLAUDECODE
+FM_TEST_END 2026-11-27T21:51:32Z tests/fm-harness-precedence.test.sh exit=0 duration_ms=11055 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:51:32Z tests/fm-pr-follow.test.sh family=pr-forge expected_gate_skip=none
+ok - taskless merge reaches the outcome store once without a processing request
+Stopped following https://github.com/example/project/pull/1
+ok - closed without merging is an outcome
+Stopped following https://github.com/example/project/pull/1
+ok - checks and review transitions preserve forge words and suppress unchanged reads
+ok - only a newly failing check name or a changed review value adds a line
+ok - bad reads preserve evidence and disabled or unsupported homes do not enroll
+ok - a heartbeat from another owner or Claude session does not enroll
+Stopped following https://github.com/example/project/pull/1
+ok - task-owned failure still wakes supervision for action
+Stopped following https://github.com/example/project/pull/1
+ok - GitLab follows use the shared observer and outcome store
+Stopped following https://gitlab.example/group/project/-/merge_requests/2
+ok - interruption after append cannot make a later observation reuse a different event key
+ok - a pass out of time stops quietly after one follow and the next pass resumes
+ok - enrollment requires explicit request, canonical URL, and a safe durable record
+FM_TEST_END 2026-11-27T21:51:40Z tests/fm-pr-follow.test.sh exit=0 duration_ms=7999 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:51:40Z tests/fm-herdr-lab.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - fm-herdr-lab: names fail closed and require the lab prefix
+ok - fm-herdr-lab: prepare followed by provision preserves the ownership tripwire
+ok - fm-herdr-lab: names whose client socket path exceeds sun_path are refused
+ok - fm-herdr-lab: a server that fails at startup reports its error without the full wait
+ok - fm-herdr-lab: a noisy server leaves a bounded log
+ok - fm-herdr-lab: provision does not hold a captured output pipe open
+ok - fm-herdr-lab: provisioning, scoped calls, guarded teardown, and fleet tripwire are deterministic
+ok - fm-herdr-lab: run keeps the lab session a Herdr option before any -- delimiter
+ok - fm-herdr-lab: missing tripwire refuses teardown before any Herdr call
+ok - fm-herdr-lab: changed default fleet state is a hard failure
+ok - fm-herdr-lab: the default fleet session stays the recorded tripwire
+ok - fm-herdr-lab: a custom fleet session is recorded and compared like the default session
+ok - fm-herdr-lab: the fleet session can never be a lab or malformed session
+ok - fm-herdr-lab: Herdr calls never inherit the live pane's socket or pane identity
+ok - fm-herdr-lab: an owned stopped lab can re-provision safely
+ok - fm-herdr-lab: failed deletion retains ownership until absence is confirmed
+ok - fm-herdr-lab: timed-out provisioning cancels the launch before teardown
+ok - fm-herdr-lab: the viewer attaches only to a session this lab owns
+ok - fm-herdr-lab: timed-out viewer startup cancels its exact launcher
+ok - fm-herdr-lab: startup timeout allows launcher child escalation
+ok - fm-herdr-lab: viewer start requires an identity-matched owned process
+tests/fm-herdr-lab.test.sh: line 524: 40209 Terminated: 15          "$REAL_SLEEP" 20
+ok - fm-herdr-lab: viewer stop signals only recorded processes and confirms the detach
+ok - fm-herdr-lab: viewer ownership requires the recorded parent
+ok - fm-herdr-lab: interrupted viewer start cancels its launcher
+tests/fm-herdr-lab.test.sh: line 524: 48516 Terminated: 15          "$REAL_SLEEP" 20
+ok - fm-herdr-lab: teardown refuses to destroy a session an attached viewer still holds
+ok - fm-herdr-lab: unreadable detach results fail closed on running sessions
+ok - fm-herdr-lab: the viewer launcher refuses unsafe sessions and pidfiles
+FM_TEST_END 2026-11-27T21:53:29Z tests/fm-herdr-lab.test.sh exit=0 duration_ms=109202 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:53:29Z tests/fm-git-push-guard.test.sh family=unclassified expected_gate_skip=none
+ok - push guard: origin, origin's URL, and a remote aliasing origin's URL are all refused
+ok - push guard: the backup remote takes only backup/<id>, never the task branch or prefix
+ok - push guard: with an empty task prefix the bare task branch is still refused anywhere
+ok - push guard: the repository's own pre-push hook runs after the guard passes and still blocks
+ok - push guard: an unreadable guard file refuses every push
+# all fm-git-push-guard tests passed
+FM_TEST_END 2026-11-27T21:53:32Z tests/fm-git-push-guard.test.sh exit=0 duration_ms=3159 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:53:32Z tests/fm-ci-workflow.test.sh family=unclassified expected_gate_skip=none
+ok - CI matrices cover every executable serial lane and canonical lint root exactly once
+ok - CI keeps the 15-minute packing layout, 30-minute caps, lint cache, and warning-only budget check
+ok - a newer push to one PR supersedes that PR's in-flight CI
+ok - distinct PRs get distinct concurrency groups
+ok - close main pushes keep only the newest run, apart from every PR group
+ok - only the full-ci label joins and supersedes the PR's group; other labels cancel nothing
+ok - an unlabelled outside PR runs only the quick checks and a failing Full suite naming full-ci
+ok - the full-ci label and later pushes run every job, and the verdict follows the lanes
+ok - main pushes, own branches and write-access authors still run every job and pass the verdict
+ok - an unrelated label runs no job on a waiting, labelled or owner PR
+ok - a late-finishing unrelated label run leaves a full-ci pass visible
+ok - an unrelated label after a failed or waiting suite leaves every earlier check as it was
+ok - the fork skip variables change nothing unless set, and each skips only its own run or job
+ok - the timing aggregate still runs after a failed lane unless the push run is skipped
+ok - every ci.yml job carries a finite timeout
+ok - every ci.yml job belongs to one of the three timeout tiers
+ok - fast tier jobs share one 5 minute tripwire
+ok - normal tier jobs share one 30 minute budget
+ok - each heavy lane keeps a 20 minute step tripwire under a 75 minute job backstop
+FM_TEST_END 2026-11-27T21:53:41Z tests/fm-ci-workflow.test.sh exit=0 duration_ms=8793 gate_skip=false
+FM_TEST_BEGIN 2026-11-27T21:53:41Z tests/fm-test-run.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - exact suite coverage: --all lists every tests/*.test.sh once
+ok - family selection returns a proper subset of the suite
+ok - single-script selection lists exactly that path
+ok - changed-file selection stays conservative (never silent full suite)
+ok - a task marker refuses execution in the primary checkout and leaves worktrees and inspection alone
+ok - runner and its documentation surfaces select their curated family, not just their contract owners
+ok - shell line-ending policy selects runner coverage
+ok - changed inheritance sender, receiver and counter select the focused generation contract
+fm-test-run: no tests selected for changes vs HEAD (map is conservative; use --all for the complete suite)
+ok - changed selection covers dependents, fails closed for live unmapped source, and accepts retired unconsumed source
+ok - a bin reference selects the referencing scripts, and consumers still select their curated families
+ok - changed defaults to bounded automatic scheduling with serial override
+ok - Windows emulation exempts only synthetic POSIX modes
+ok - a plain script list defaults to bounded automatic concurrency without an automatic timeout
+ok - family proofs run concurrently only within separate family phases
+ok - empty changed selection emits deterministic text and JSON summaries
+ok - timing markers and JSON artifact are valid
+ok - aggregate exit reflects any script failure
+ok - gate-skip accounting is honest and non-failing
+ok - a gate skip records why it skipped
+ok - a script that actually ran records no skip reason
+ok - live guards are recorded as a capability class, not a bare env opt-in
+ok - fail-on-gate-skip converts herdr-not-found into a hard failure
+ok - exclude-family drops the named primary family after selection
+ok - fm-test-run: family tern selects the tern suite and smoke test, and the lane coverage guard accepts them
+ok - proven-isolated scheduling uses committed CI duration weights
+ok - family, all, changed, and script selections ignore parallel hints
+ok - portable shard union, disjointness, and coverage guard hold
+ok - portable parallel lanes are fully hinted and packed within 5% of each other
+ok - portable serial shards are a deterministic disjoint cover of the serial lane
+ok - coverage guard bounds the unmeasured share and serial packing within fifteen minutes
+ok - serial packing accepts the exact budget, keeps an indivisible overflow, and refuses a multi-script overflow
+ok - portable serial shard lanes refuse mismatched, out-of-range, and countless names
+ok - --jobs refuses non-proven / stateful selections
+ok - --jobs 2 is accepted on a portable parallel lane
+ok - --jobs admits and schedules a family with a recorded concurrent proof
+ok - an unclassified new test stays serial while the proven residual family runs concurrently
+ok - a changed shared test fixture selects its readers while an unread tests/ path still refuses
+ok - a changed T3 fake or adapter selects the suites that read it beyond backend-dispatch
+ok - a concurrent run starts the longest-hint script first
+ok - --per-script-timeout-secs turns a hung script into a bounded failure
+ok - the automatic --changed bound gives the slow watcher suite at least 1500s
+ok - --max-wall-ms fails an over-budget run and refuses a malformed budget
+ok - jobs scheduler runs proven scripts; failure propagates; non-proven refused
+ok - Herdr CI family-run step times out at 20 min under a 75 min job backstop
+ok - aggregate-json merges lane timing artifacts
+ok - budget warn annotates 20-minute overruns and never fails the job
+FM_TEST_END 2026-11-27T22:01:03Z tests/fm-test-run.test.sh exit=0 duration_ms=442341 gate_skip=false
+FM_TEST_SUMMARY total=7 failed=0 skipped_gate=0 duration_ms=626707
+FM_TEST_SUMMARY_FAMILY family=pr-forge count=1 duration_ms=7999 failed=0
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=3 duration_ms=562598 failed=0
+FM_TEST_SUMMARY_FAMILY family=unclassified count=2 duration_ms=11952 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=43943 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-test-run.test.sh duration_ms=442341
+FM_TEST_SLOWEST rank=2 script=tests/fm-herdr-lab.test.sh duration_ms=109202
+FM_TEST_SLOWEST rank=3 script=tests/fm-tool-update-check.test.sh duration_ms=43943
+FM_TEST_SLOWEST rank=4 script=tests/fm-harness-precedence.test.sh duration_ms=11055
+FM_TEST_SLOWEST rank=5 script=tests/fm-ci-workflow.test.sh duration_ms=8793
+FM_TEST_SLOWEST rank=6 script=tests/fm-pr-follow.test.sh duration_ms=7999
+FM_TEST_SLOWEST rank=7 script=tests/fm-git-push-guard.test.sh duration_ms=3159
+fm-test-run: wrote timing artifact: /Users/kayisrahman/.no-mistakes/evidence/01M8FD91AFGC5SEZR07DXXJW8J/upstream-integration-timings.json

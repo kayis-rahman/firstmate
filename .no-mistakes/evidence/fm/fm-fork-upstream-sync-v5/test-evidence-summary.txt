@@ -1,0 +1,55 @@
+Firstmate upstream-sync v5 live validation evidence
+Worktree: /Users/kayisrahman/.no-mistakes/worktrees/e322667d68a7/01M8FD91AFGC5SEZR07DXXJW8J
+Branch head: 87d3396500962cb134a7462b5cb297d626fa9792
+
+== Antigravity two-account support ==
+ok - each declared agy account prints its own quota row, read under its own HOME
+ok - config/agy-accounts: --account applies to agy models, trust pre-registration, launch HOME, and metadata
+ok - config/agy-accounts refuses missing, undeclared, signed-out, and raw-HOME-override launches
+
+== Discord relay ==
+ok  	github.com/firstmate/firstmate/internal/discordrelay	3.729s
+ok  	github.com/firstmate/firstmate/cmd/fm-discord-relay	0.280s
+ok - restart end-to-end: typed result reconciles from disk and delivers one reply to the original thread
+
+== Jev monitoring and relay fixes ==
+ok - absent setting keeps existing behavior and makes no Jev calls
+ok - key stays off argv/env/logs, TYPESAFE_BASE/PATH honored, only job and status_line sent
+ok - 3-failure circuit breaker pauses 30 minutes then retries and resets
+ok - multi-file signal evaluates all before recording and records nothing on wake
+
+== TYPESAFE_PATH ==
+ok - TYPESAFE_PATH: default unchanged, custom path used, invalid values refused, never-send sees the full URL
+ok - TYPESAFE_PATH works with the macos-keychain credential source
+
+== Bounded probes ==
+ok - published probes obey their bound and incomplete sweeps record their findings
+ok - git probes stop and name their tool once the sweep budget is gone
+
+== agy autocompact handler ==
+ok - fm-spawn agy sets COMPACT_ADVISER_EVENT_FILE and clears inherited COMPACT_ADVISER_DISABLE only when opted in
+ok - watcher maps per-task event with cwd cross-check and excludes secondmate, primary, and non-agy
+ok - watcher gates on idle, alive, and exact empty composer, deferring and retrying on next tick
+ok - watcher rate-limits compaction to at most once per task per 10 minutes
+ok - fm-teardown cleans up compact-adviser event file and watcher markers
+
+== Upstream behavior integration ==
+ok - a retained cursor marker does not rename a nested claude worker
+ok - session start renders the Codex protocol for a Codex primary holding a retained CLAUDECODE
+ok - fm-herdr-lab: prepare followed by provision preserves the ownership tripwire
+ok - fm-herdr-lab: provisioning, scoped calls, guarded teardown, and fleet tripwire are deterministic
+ok - fm-herdr-lab: the fleet session can never be a lab or malformed session
+ok - CI matrices cover every executable serial lane and canonical lint root exactly once
+ok - CI keeps the 15-minute packing layout, 30-minute caps, lint cache, and warning-only budget check
+ok - portable serial shards are a deterministic disjoint cover of the serial lane
+
+== Publishing boundary ==
+ok - push guard: origin, origin's URL, and a remote aliasing origin's URL are all refused
+ok - push guard: the backup remote takes only backup/<id>, never the task branch or prefix
+ok - push guard: with an empty task prefix the bare task branch is still refused anywhere
+ok - push guard: the repository's own pre-push hook runs after the guard passes and still blocks
+ok - push guard: an unreadable guard file refuses every push
+
+== Runner summaries ==
+FM_TEST_SUMMARY total=6 failed=0 skipped_gate=0 duration_ms=587522
+FM_TEST_SUMMARY total=7 failed=0 skipped_gate=0 duration_ms=626707
