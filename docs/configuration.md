@@ -2224,7 +2224,9 @@ OpenRouter, `systemone`, and OpenAI each require their explicit `FM_DISPATCH_PRO
 `systemone` also requires `FM_DISPATCH_BASE_URL`, an `http://` or `https://` base such as a local llama.cpp server or a hosted System One-compatible service, and posts to `<base>/v1/systemone`; a missing or scheme-less base URL is an actionable configuration error.
 With no provider setting and a valid base, TypeSafe uses `jev-latest` when `TYPESAFE_API_KEY` is available, ignores `FM_DISPATCH_MODEL`, and is off when no key is available and no `typesafe` credential source is declared.
 Explicit `FM_DISPATCH_PROVIDER=typesafe` also uses `jev-latest` when no model is set.
-`TYPESAFE_PATH` optionally replaces `/v1/systemone` for the TypeSafe request only, for a host that serves the same System One request at another path such as `/api/v1/decide`. It comes from the environment or `.env` with the same precedence, must start with `/`, and must contain no whitespace, control characters, backslash, `?`, `#`, or `.`/`..` segments; an invalid value exits 2 before credential lookup and sends nothing. Absent means `/v1/systemone`, the request and response shapes are unchanged, and the never-send check sees the final URL.
+`TYPESAFE_PATH` optionally replaces `/v1/systemone` for the TypeSafe request only, for a host that serves the same System One request at another path such as `/api/v1/decide`.
+It comes from the environment or `.env` with the same precedence, must start with `/`, and must contain no whitespace, control characters, backslash, `?`, `#`, or `.`/`..` segments; an invalid value exits 2 before credential lookup and sends nothing.
+Absent means `/v1/systemone`, the request and response shapes are unchanged, and the never-send check sees the final URL.
 `TYPESAFE_BASE` optionally selects a different base for the TypeSafe request, from the environment or `.env` with the same non-empty-environment precedence.
 If neither source supplies a non-empty value, the base defaults to `https://api.typesafe.ai`.
 It must be an `http://` or `https://` URL with a host and no userinfo, query, fragment, whitespace, or backslash.

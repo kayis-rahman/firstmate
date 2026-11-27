@@ -36,11 +36,13 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 
 | script | lines | executed or sourced | phase | Go status |
 | --- | --- | --- | --- | --- |
+| bin/fm-account-quota-lib.sh | 78 | sourced | library | shell |
 | bin/fm-afk-contract.sh | 710 | executed | core-lifecycle | shell |
 | bin/fm-afk-launch.sh | 1020 | executed | core-lifecycle | shell |
 | bin/fm-afk-return.sh | 936 | executed | core-lifecycle | shell |
 | bin/fm-afk-start.sh | 181 | executed | core-lifecycle | shell |
 | bin/fm-agent-process-lib.sh | 134 | sourced | library | shell |
+| bin/fm-agy-account-quota.sh | 67 | executed | helper | shell |
 | bin/fm-agy-trust.sh | 241 | executed | helper | shell |
 | bin/fm-approval-failover.sh | 95 | executed | helper | shell |
 | bin/fm-arm-pretool-check.sh | 216 | executed | helper | shell |
@@ -134,6 +136,8 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-install-shellcheck.sh | 84 | executed | helper | shell |
 | bin/fm-install-treehouse.sh | 95 | executed | helper | shell |
 | bin/fm-jev-mem-guard.sh | 7 | executed | helper | shell |
+| bin/fm-jev-monitor-lib.sh | 565 | sourced | library | shell |
+| bin/fm-jev-report.sh | 67 | executed | helper | shell |
 | bin/fm-kimi-trust-lib.sh | 89 | sourced | library | shell |
 | bin/fm-kimi-turnend-hook.sh | 276 | executed | later-ops | shell |
 | bin/fm-lab-home.sh | 110 | executed | helper | shell |
@@ -274,6 +278,7 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-turnend-guard-cursor.sh | 441 | executed | later-ops | shell |
 | bin/fm-turnend-guard-grok.sh | 90 | executed | later-ops | shell |
 | bin/fm-turnend-guard.sh | 584 | executed | later-ops | shell |
+| bin/fm-typesafe-lib.sh | 156 | sourced | library | shell |
 | bin/fm-update-go-check.sh | 114 | executed | helper | shell |
 | bin/fm-update.sh | 380 | executed | helper | shell |
 | bin/fm-usage-warner.sh | 519 | executed | helper | shell |
