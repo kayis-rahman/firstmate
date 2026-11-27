@@ -29,7 +29,7 @@ export FM_ROOT_OVERRIDE="$ROOT"
 WAKE_LOG="$TMP/wakes"
 SLEEP_LOG="$TMP/sleeps"
 wake() { printf '%s\n' "$1" >> "$WAKE_LOG"; return 0; }
-sleep() { printf 'SLEEP\n' >> "$SLEEP_LOG"; }
+sleep() { printf 'SLEEP %s\n' "${1:-}" >> "$SLEEP_LOG"; }
 
 reset_state() {
   rm -f "$STATE_DIR"/*.meta "$STATE_DIR"/*.status "$STATE_DIR"/.wake-queue \
@@ -184,5 +184,70 @@ event_wait_or_sleep   # disabled: sleeps without calling wait_transition
 WTN=$(wc -l < "$TMP/wtcalls" | tr -d '[:space:]')
 [ "$WTN" = 2 ] || fail "after EVENT_CAP_FAIL_MAX connect failures the event path must be disabled for the process (expected 2 wait_transition calls, got $WTN)"
 pass "event_wait_or_sleep: consecutive event-path failures disable the fast-path and revert to pure polling (fail-closed)"
+
+# --- event_wait_or_sleep: mixed herdr+rex home waits on both; rex edge wakes ---
+
+reset_state
+fm_write_meta "$STATE_DIR/aa-herdr.meta" "window=default:wHV:p24" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/bb-rex-s1.meta" "window=01a21afd-0001:blk-1111" "backend=rex" "kind=ship"
+fm_write_meta "$STATE_DIR/cc-rex-s2.meta" "window=01a21ae4-0002:blk-2222" "backend=rex" "kind=ship"
+fm_write_meta "$STATE_DIR/dd-sm.meta" "window=01a21afa-0003:blk-3333" "backend=rex" "kind=secondmate"
+: > "$TMP/wtcalls"
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_backend_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_backend_wait_transition() {
+  local b=$1 s=$2
+  printf '%s:%s\n' "$b" "$s" >> "$TMP/wtcalls"
+  if [ "$b" = rex ] && [ "$s" = "01a21ae4-0002" ]; then
+    command sleep 0.2
+    fm_transition_record "blk-2222" "" "" blocked claude-code "permission: Allow Bash: echo hi"
+    return 0
+  fi
+  command sleep 2
+  return 1
+}
+event_wait_or_sleep
+grep -q '^herdr:default$' "$TMP/wtcalls" || fail "mixed home must wait on herdr:default: $(cat "$TMP/wtcalls")"
+grep -q '^rex:01a21afd-0001$' "$TMP/wtcalls" || fail "mixed home must wait on rex session 1: $(cat "$TMP/wtcalls")"
+grep -q '^rex:01a21ae4-0002$' "$TMP/wtcalls" || fail "mixed home must wait on rex session 2: $(cat "$TMP/wtcalls")"
+if grep -q '01a21afa-0003' "$TMP/wtcalls"; then
+  fail "secondmate rex endpoint must be excluded from event wait: $(cat "$TMP/wtcalls")"
+fi
+grep -q 'stale	01a21ae4-0002:blk-2222' "$STATE_DIR/.wake-queue" \
+  || fail "rex blocked edge in mixed home must enqueue a stale wake: $(cat "$STATE_DIR/.wake-queue")"
+[ -s "$WAKE_LOG" ] || fail "rex blocked edge in mixed home must wake the supervisor"
+pass "event_wait_or_sleep: mixed herdr+rex home waits on herdr and multiple rex sessions, excluding secondmate, and wakes on rex edge"
+
+# --- event_wait_or_sleep: failing herdr cannot disable push for rex -----------
+
+reset_state
+fm_write_meta "$STATE_DIR/aa-herdr.meta" "window=default:wHV:p24" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/zz-rex.meta" "window=01a21afd-0001:blk-1111" "backend=rex" "kind=ship"
+export EVENT_CAP_FAIL_MAX=2
+: > "$TMP/wtcalls"
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_backend_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_backend_wait_transition() {
+  local b=$1 s=$2
+  printf '%s:%s\n' "$b" "$s" >> "$TMP/wtcalls"
+  if [ "$b" = herdr ]; then
+    return 2
+  fi
+  command sleep 0.1
+  return 1
+}
+event_wait_or_sleep   # herdr fails=1, rex clean
+event_wait_or_sleep   # herdr fails=2 -> herdr disabled, rex clean
+event_wait_or_sleep   # herdr skipped, rex still active
+HERDR_CALLS=$(grep -c '^herdr:default$' "$TMP/wtcalls" || true)
+REX_CALLS=$(grep -c '^rex:01a21afd-0001$' "$TMP/wtcalls" || true)
+[ "$HERDR_CALLS" = 2 ] || fail "herdr should be disabled after EVENT_CAP_FAIL_MAX=2 failures, got $HERDR_CALLS calls"
+[ "$REX_CALLS" = 3 ] || fail "rex must remain active across all 3 cycles even after herdr fails, got $REX_CALLS calls"
+if grep -q "^SLEEP ${POLL:-15}\$" "$SLEEP_LOG" 2>/dev/null; then
+  fail "must not fall back to blind sleep while rex event wait is still running: $(cat "$SLEEP_LOG")"
+fi
+pass "event_wait_or_sleep: dead/failing herdr disables only herdr and keeps rex push active"
 
 echo "# fm-supervision-events.test.sh: all assertions passed"

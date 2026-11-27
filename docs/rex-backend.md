@@ -90,7 +90,7 @@ That native state is positive busy evidence only, exactly like Herdr's, so the h
 
 ## Push events
 
-While the watcher waits between polls, a Rex home runs one bounded `rex do` reader ([`bin/backends/rex-eventwait.lua`](../bin/backends/rex-eventwait.lua)) on the session holding its task tabs, listening only to those tasks' blocks.
+While the watcher waits between polls, a Rex home runs one bounded `rex do` reader ([`bin/backends/rex-eventwait.lua`](../bin/backends/rex-eventwait.lua)) per Rex session holding task tabs, listening only to those tasks' blocks.
 The reader subscribes first and the current program status of each block is reconciled after, so a block that went `blocked` between waits is reported once and an edge during the reconcile is not lost.
 A trusted `blocked` program status takes the immediate escalation path instead of waiting for the stale-pane timer; [push verification](verification/runtime-backends.md#push-events) records measured latency.
 It counts only when the process that reported it passes the same foreground-chain rule as native busy state, and its wake reason carries Rex's blocked kind (`permission`, `question`, or `auth`) and the program's message, cut at 160 characters.
@@ -101,8 +101,8 @@ When a watched block's program exits or the block closes, the wait ends at once 
 That never wakes the supervisor by itself, because a routine cleanup closes blocks too.
 
 The push path only shortens latency, and polling stays the fallback.
-Supervision polls when the CLI or server is below API revision 5 or unreachable (the reader never starts a server), when the reader cannot start or ends before its deadline, and after the watcher's consecutive-reader-failure threshold is reached (three by default).
-Task tabs in a second Rex session stay on polling, because one reader covers one session.
+Supervision polls when the CLI or server is below API revision 5 or unreachable (the reader never starts a server), when the reader cannot start or ends before its deadline, and after the watcher's consecutive-reader-failure threshold is reached (three by default) for that session.
+Each push-capable backend session tracks its own reader failures independently, so a failing session on one backend does not disable push for healthy Rex sessions.
 
 ## Cleanup and the absence proof
 

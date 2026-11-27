@@ -505,6 +505,10 @@ EVENT_CAP_FAIL_MAX=${FM_EVENT_CAP_FAIL_MAX:-3}
 _event_cap_key=""
 _event_cap_ok=0
 _event_cap_fails=0
+# Per-(backend:session) capability and failure-count cache (lines of
+# "<key>\t<ok>\t<fails>") so one broken backend/session cannot disable push for
+# another backend or session. Clearing _event_cap_key resets this cache too.
+_event_cap_cache=""
 
 # afk_present: 0 while the away-mode flag exists. When set, the daemon wraps this
 # watcher and owns triage, so the watcher must behave one-shot (enqueue + exit on
@@ -3674,6 +3678,122 @@ heartbeat_scan_finds_actionable() {
   return "$found"
 }
 
+_event_cap_reset_if_cleared() {
+  if [ -z "$_event_cap_key" ] && [ -n "$_event_cap_cache" ]; then
+    _event_cap_cache=""
+  fi
+}
+
+_event_cap_lookup() {
+  local key=$1 line k ok fails
+  _event_cap_reset_if_cleared
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    k=${line%%$'\t'*}
+    [ "$k" = "$key" ] || continue
+    line=${line#*$'\t'}
+    ok=${line%%$'\t'*}
+    fails=${line#*$'\t'}
+    _event_cap_key=$key
+    _event_cap_ok=$ok
+    _event_cap_fails=$fails
+    return 0
+  done <<< "$_event_cap_cache"
+  return 1
+}
+
+_event_cap_store() {
+  local key=$1 ok=$2 fails=$3 line k out="" found=0
+  _event_cap_reset_if_cleared
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    k=${line%%$'\t'*}
+    if [ "$k" = "$key" ]; then
+      out="${out}${key}"$'\t'"${ok}"$'\t'"${fails}"$'\n'
+      found=1
+    else
+      out="${out}${line}"$'\n'
+    fi
+  done <<< "$_event_cap_cache"
+  [ "$found" -eq 1 ] || out="${out}${key}"$'\t'"${ok}"$'\t'"${fails}"$'\n'
+  _event_cap_cache=$out
+  _event_cap_key=$key
+  _event_cap_ok=$ok
+  _event_cap_fails=$fails
+}
+
+_event_cap_record_result() {
+  local key=$1 rc=$2
+  _event_cap_lookup "$key" || { _event_cap_ok=1; _event_cap_fails=0; }
+  case "$rc" in
+    2)
+      _event_cap_fails=$((_event_cap_fails + 1))
+      [ "$_event_cap_fails" -ge "$EVENT_CAP_FAIL_MAX" ] && _event_cap_ok=0
+      _event_cap_store "$key" "$_event_cap_ok" "$_event_cap_fails"
+      ;;
+    *)
+      _event_cap_store "$key" 1 0
+      ;;
+  esac
+}
+
+event_wait_multi() {  # <tmp_dir> <group_idx...>
+  local tmp=$1 idx meta b s line sub_rc remaining final_rc=2 p
+  local pids=() wins=()
+  shift
+  mkfifo "$tmp/notify" || return 2
+  exec 8<>"$tmp/notify"
+  for idx in "$@"; do
+    meta=$(cat "$tmp/g$idx.meta" 2>/dev/null || true)
+    b=${meta%%$'\t'*}
+    s=${meta#*$'\t'}
+    wins=()
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      wins+=("$line")
+    done < "$tmp/g$idx.wins"
+    mkdir -p "$tmp/g$idx"
+    (
+      # shellcheck disable=SC2046 # jobs -p outputs whitespace-separated PIDs.
+      trap 'kill $(jobs -p) 2>/dev/null || true; exit 0' TERM
+      sub_rc=0
+      TMPDIR="$tmp/g$idx" FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 \
+        fm_backend_wait_transition "$b" "$s" "$POLL" "$STATE" "${wins[@]}" \
+        > "$tmp/g$idx.out" 2>/dev/null || sub_rc=$?
+      printf '%s\n' "$sub_rc" > "$tmp/g$idx.rc"
+      printf '%s\t%s\n' "$idx" "$sub_rc" >&8 2>/dev/null || true
+    ) &
+    pids+=("$!")
+  done
+
+  remaining=$#
+  while [ "$remaining" -gt 0 ]; do
+    IFS=$'\t' read -r idx sub_rc <&8 || break
+    remaining=$((remaining - 1))
+    case "$sub_rc" in
+      0)
+        printf '%s\n' "$idx" > "$tmp/winner"
+        final_rc=0
+        break
+        ;;
+      2)
+        ;;
+      *)
+        final_rc=1
+        break
+        ;;
+    esac
+  done
+  exec 8<&-
+  for p in "${pids[@]}"; do
+    kill -TERM "$p" 2>/dev/null || true
+  done
+  for p in "${pids[@]}"; do
+    wait "$p" 2>/dev/null || true
+  done
+  return "$final_rc"
+}
+
 # event_wait_or_sleep: the terminal wait of each supervision cycle. For a home
 # with push-capable windows (herdr, rex), it replaces the blind `sleep POLL` with a
 # bounded wait on the backend's native transition stream, so a crew going
@@ -3683,11 +3803,12 @@ heartbeat_scan_finds_actionable() {
 # byte-for-byte today's behavior. The poll loop above still runs every cycle, so
 # this only ever SHORTENS latency; it can never drop an escalation (the poll
 # loop is the permanent fail-closed backstop). This preserves the single live
-# supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
+# supervision cycle: each reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w b session first_backend="" first_session="" rec rc
-  local windows=() t3_windows=()
+  local w b session key idx i found rec rc g_rc winner_idx
+  local group_keys=() group_backends=() group_sessions=() group_windows=()
+  local t3_windows=() capable_indices=() g_wins=() line
   while IFS= read -r w; do
     b=$(window_backend "$w")
     fm_backend_has_push "$b" || continue
@@ -3697,44 +3818,62 @@ event_wait_or_sleep() {
     # them.
     [ "$(window_kind "$w")" = secondmate ] && continue
     # T3 Code's bounded wait runs only when no other push backend is recorded,
-    # so adding a T3 task to a herdr home never takes herdr's fast path away.
+    # so adding a T3 task to a herdr/rex home never takes push's fast path away.
     if [ "$b" = t3code ]; then
       t3_windows+=("$w")
       continue
     fi
-    session=${w%%:*}
-    if [ -z "$first_backend" ]; then first_backend=$b; first_session=$session; fi
-    # One socket connection covers one backend+session; a home normally has a
-    # single herdr or rex session. A window in a different backend/session stays on the
-    # poll path this cycle.
-    if [ "$b" != "$first_backend" ] || [ "$session" != "$first_session" ]; then
-      continue
+    session=$(fm_backend_event_session "$b" "$w")
+    key="$b:$session"
+    found=""
+    for i in "${!group_keys[@]}"; do
+      if [ "${group_keys[$i]}" = "$key" ]; then
+        found=$i
+        break
+      fi
+    done
+    if [ -z "$found" ]; then
+      found=${#group_keys[@]}
+      group_keys+=("$key")
+      group_backends+=("$b")
+      group_sessions+=("$session")
+      group_windows+=("$w")
+    else
+      group_windows[found]="${group_windows[found]}"$'\n'"$w"
     fi
-    windows+=("$w")
   done < <(recorded_windows)
-  if [ "${#windows[@]}" -eq 0 ] && [ "${#t3_windows[@]}" -gt 0 ]; then
-    first_backend=t3code
-    first_session=$(fm_backend_event_session t3code "${t3_windows[0]}")
-    windows=("${t3_windows[@]}")
+  if [ "${#group_keys[@]}" -eq 0 ] && [ "${#t3_windows[@]}" -gt 0 ]; then
+    session=$(fm_backend_event_session t3code "${t3_windows[0]}")
+    group_keys+=("t3code:$session")
+    group_backends+=(t3code)
+    group_sessions+=("$session")
+    group_windows+=("$(printf '%s\n' "${t3_windows[@]}")")
   fi
 
-  if [ "${#windows[@]}" -eq 0 ]; then
+  if [ "${#group_keys[@]}" -eq 0 ]; then
     sleep "$POLL"
     return
   fi
 
-  # Memoized capability probe (fm_backend_events_capable runs a heavy schema
-  # read); re-probed only when the backend/session key changes.
-  if [ "$_event_cap_key" != "$first_backend:$first_session" ]; then
-    _event_cap_key="$first_backend:$first_session"
-    if fm_backend_events_capable "$first_backend" "$first_session"; then
-      _event_cap_ok=1
-    else
-      _event_cap_ok=0
+  # Memoized per-(backend:session) capability probe (fm_backend_events_capable
+  # can run a heavy schema read); re-probed only when a key is not cached yet.
+  _event_cap_reset_if_cleared
+  for i in "${!group_keys[@]}"; do
+    key=${group_keys[$i]}
+    b=${group_backends[$i]}
+    s=${group_sessions[$i]}
+    if ! _event_cap_lookup "$key"; then
+      if fm_backend_events_capable "$b" "$s"; then
+        _event_cap_store "$key" 1 0
+      else
+        _event_cap_store "$key" 0 0
+      fi
     fi
-    _event_cap_fails=0
-  fi
-  if [ "$_event_cap_ok" != 1 ]; then
+    if [ "$_event_cap_ok" = 1 ]; then
+      capable_indices+=("$i")
+    fi
+  done
+  if [ "${#capable_indices[@]}" -eq 0 ]; then
     sleep "$POLL"
     return
   fi
@@ -3743,30 +3882,57 @@ event_wait_or_sleep() {
   # signal for all of it (watcher_waited).
   fm_wait_tmp_cleanup
   WATCHER_WAIT_TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-watch-wait.XXXXXX") || WATCHER_WAIT_TMP=
-  TMPDIR=${WATCHER_WAIT_TMP:-${TMPDIR:-/tmp}} FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 watcher_waited \
-    fm_backend_wait_transition "$first_backend" "$first_session" "$POLL" "$STATE" "${windows[@]}"
+  if [ "${#capable_indices[@]}" -eq 1 ]; then
+    idx=${capable_indices[0]}
+    key=${group_keys[$idx]}
+    b=${group_backends[$idx]}
+    s=${group_sessions[$idx]}
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      g_wins+=("$line")
+    done <<< "${group_windows[$idx]}"
+    TMPDIR=${WATCHER_WAIT_TMP:-${TMPDIR:-/tmp}} FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 watcher_waited \
+      fm_backend_wait_transition "$b" "$s" "$POLL" "$STATE" "${g_wins[@]}"
+    rc=$?
+    rec=$WATCHER_CAPTURE
+    fm_wait_tmp_cleanup
+    _event_cap_record_result "$key" "$rc"
+    case "$rc" in
+      0) handle_push_transition "$b" "$s" "$rec" ;;
+      2) sleep "$POLL" ;;
+      *) ;;
+    esac
+    return
+  fi
+
+  if [ -z "$WATCHER_WAIT_TMP" ]; then
+    sleep "$POLL"
+    return
+  fi
+  for idx in "${capable_indices[@]}"; do
+    printf '%s\t%s\n' "${group_backends[$idx]}" "${group_sessions[$idx]}" > "$WATCHER_WAIT_TMP/g$idx.meta"
+    printf '%s\n' "${group_windows[$idx]}" > "$WATCHER_WAIT_TMP/g$idx.wins"
+  done
+  FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 watcher_waited \
+    event_wait_multi "$WATCHER_WAIT_TMP" "${capable_indices[@]}"
   rc=$?
-  rec=$WATCHER_CAPTURE
+  for idx in "${capable_indices[@]}"; do
+    if [ -f "$WATCHER_WAIT_TMP/g$idx.rc" ]; then
+      g_rc=$(cat "$WATCHER_WAIT_TMP/g$idx.rc" 2>/dev/null || echo 2)
+      _event_cap_record_result "${group_keys[$idx]}" "$g_rc"
+    fi
+  done
+  if [ "$rc" -eq 0 ]; then
+    winner_idx=$(cat "$WATCHER_WAIT_TMP/winner" 2>/dev/null || true)
+    rec=$(cat "$WATCHER_WAIT_TMP/g$winner_idx.out" 2>/dev/null || true)
+    fm_wait_tmp_cleanup
+    if [ -n "$winner_idx" ] && [ -n "$rec" ]; then
+      handle_push_transition "${group_backends[$winner_idx]}" "${group_sessions[$winner_idx]}" "$rec"
+    fi
+    return
+  fi
   fm_wait_tmp_cleanup
-  case "$rc" in
-    0)
-      _event_cap_fails=0
-      handle_push_transition "$first_backend" "$first_session" "$rec"
-      ;;
-    2)
-      # Event path unusable this cycle (connect/subscribe failure). Sleep the
-      # budget and count toward the runtime-disable threshold; past it, drop to
-      # pure polling for the rest of this watcher process.
-      _event_cap_fails=$((_event_cap_fails + 1))
-      [ "$_event_cap_fails" -ge "$EVENT_CAP_FAIL_MAX" ] && _event_cap_ok=0
-      sleep "$POLL"
-      ;;
-    *)
-      # 1: a clean full-budget wait with no actionable edge - the reader already
-      # blocked ~POLL, so just continue; the next cycle re-scans.
-      _event_cap_fails=0
-      ;;
-  esac
+  [ "$rc" -eq 2 ] && sleep "$POLL"
 }
 
 # --- Main entry: the runtime below runs only when this file is executed as a
