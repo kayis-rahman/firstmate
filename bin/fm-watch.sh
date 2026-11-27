@@ -1066,11 +1066,13 @@ agy_autocompact_norm_path() {  # <path>
 }
 
 agy_autocompact_has_matching_event() {  # <event-file> <offset> <norm-worktree>
-  local event_file=$1 offset=$2 norm_wt=$3 line ev_harness ev_cwd
+  local event_file=$1 offset=$2 norm_wt=$3 line ev_harness ev_verdict ev_cwd
   while IFS= read -r line || [ -n "$line" ]; do
     [ -n "$line" ] || continue
     ev_harness=$(printf '%s' "$line" | jq -r 'if type == "object" then (.harness // "") else "" end' 2>/dev/null || true)
     [ "$ev_harness" = agy ] || continue
+    ev_verdict=$(printf '%s' "$line" | jq -r 'if type == "object" then (.verdict // "") else "" end' 2>/dev/null || true)
+    [ "$ev_verdict" = compact ] || continue
     ev_cwd=$(printf '%s' "$line" | jq -r 'if type == "object" then (.cwd // "") else "" end' 2>/dev/null || true)
     [ -n "$ev_cwd" ] || continue
     if [ "$(agy_autocompact_norm_path "$ev_cwd")" = "$norm_wt" ]; then
@@ -1129,9 +1131,7 @@ agy_autocompact_tick() {  # [now-epoch]
     [ -n "$backend" ] || backend=$(window_backend "$w")
     label=$(window_label "$w")
     agent_state=$(fm_backend_agent_state "$backend" "$w" 2>/dev/null || true)
-    case "$agent_state" in
-      dead|missing) continue ;;
-    esac
+    [ "$agent_state" = alive ] || continue
     watcher_capture "$backend" "$w" 40 "$label" || continue
     tail40=$WATCHER_CAPTURE
     verdict=$(fm_busy_classify_meta "$meta" "$task" "$STATE" "$tail40")

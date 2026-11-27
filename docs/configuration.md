@@ -497,7 +497,7 @@ Create the home-local `config/agy-autocompact` file to opt in to watcher-driven 
 The feature is off by default when the file is absent, and it never compacts a secondmate or the primary.
 
 When `config/agy-autocompact` is present, `bin/fm-spawn.sh` sets `COMPACT_ADVISER_EVENT_FILE` to `state/<id>.compact-adviser.jsonl` instead of `COMPACT_ADVISER_DISABLE=1` for `agy` ship and scout launches.
-On each poll, `bin/fm-watch.sh` reads new JSON lines from `state/<id>.compact-adviser.jsonl`, verifies `harness=agy` and that `cwd` matches the task's recorded worktree, checks that the worker is not busy or dead and `fm_backend_composer_state` is `empty`, and delivers `/compact` through `fm_backend_send_text_submit`.
+On each poll, `bin/fm-watch.sh` reads new JSON lines from `state/<id>.compact-adviser.jsonl`, verifies `harness=agy`, `verdict=compact`, and that `cwd` matches the task's recorded worktree, checks that the worker is alive, not busy, and has an `empty` composer (`fm_backend_composer_state`), and delivers `/compact` through `fm_backend_send_text_submit`.
 If the worker is busy or its composer is not empty, the watcher defers and retries on the next tick.
 Successful compactions are rate-limited to at most once per task every 10 minutes.
 `tests/fm-watch-agy-autocompact.test.sh` covers mapping, idle and composer gating, deferral, and rate limiting.

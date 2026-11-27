@@ -7971,9 +7971,9 @@ fi
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
 AGY_AUTOCOMPACT_EVENT_FILE=
-if [ "$HARNESS" = agy ] && [ "$KIND" != secondmate ] && [ -e "$CONFIG/agy-autocompact" ]; then
+if [ "$HARNESS" = agy ] && { [ "$KIND" = ship ] || [ "$KIND" = scout ]; } && [ -e "$CONFIG/agy-autocompact" ]; then
   AGY_AUTOCOMPACT_EVENT_FILE="$STATE_REAL/$ID.compact-adviser.jsonl"
-  LAUNCH="export COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE"); $LAUNCH"
+  LAUNCH="unset COMPACT_ADVISER_DISABLE; export COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE"); $LAUNCH"
 else
   LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
 fi
@@ -8070,6 +8070,7 @@ spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 # commands in that shell inherit it too. The launch command independently
 # establishes the value for the agent process itself.
 if [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+  spawn_send_text_line "$T" "unset COMPACT_ADVISER_DISABLE"
   spawn_send_text_line "$T" "export COMPACT_ADVISER_EVENT_FILE=$(shell_quote "$AGY_AUTOCOMPACT_EVENT_FILE")"
 else
   spawn_send_text_line "$T" "export COMPACT_ADVISER_DISABLE=1"
@@ -8122,8 +8123,11 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
     TERM_PROGRAM REX_SESSION REX_BLOCK REX_SERVER REX_BIN_DIR \
     TERN_IDENTITY TERN_PANE TERN_PANE_SOCKET TERN_WINDOW_KEY TERN_WINDOW_SOCKET \
     HC_SESSION HC_TERMINAL_ID HC_TERMINAL_SOCKET HC_SCOPE \
-    FM_TASK_ID COMPACT_ADVISER_DISABLE COMPACT_ADVISER_EVENT_FILE LAVISH_AXI_HOST \
+    FM_TASK_ID COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
     $LAUNCH_ENV_FORWARD_NAMES; do
+    if [ "$env_name" = COMPACT_ADVISER_DISABLE ] && [ -n "$AGY_AUTOCOMPACT_EVENT_FILE" ]; then
+      continue
+    fi
     if [ "$ORCA_LAUNCH_ENV_ENABLED" = 1 ]; then
       case $'\n'"$LAUNCH_ENV_NAMES"$'\n' in
         *$'\n'"$env_name"$'\n'*) continue ;;
