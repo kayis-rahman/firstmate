@@ -21,7 +21,7 @@ func Classify(darwin string, text string) string {
 		return ""
 	}
 	lower := strings.ToLower(text)
-	if !strings.Contains(lower, "no route to host") && !strings.Contains(text, "EHOSTUNREACH") && !strings.Contains(lower, "host is unreachable") {
+	if !strings.Contains(lower, "no route to host") && !strings.Contains(lower, "ehostunreach") && !strings.Contains(lower, "host is unreachable") {
 		return ""
 	}
 	re := regexp.MustCompile(`\b(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|169\.254\.[0-9]{1,3}\.[0-9]{1,3})\b(:[0-9]+)?`)
