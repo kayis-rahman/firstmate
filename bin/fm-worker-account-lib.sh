@@ -53,19 +53,18 @@
 # and the check refuses a provider the root has not stored, so a pinned Pi
 # launch unsets nothing.
 #
-# A home that spends several Claude subscriptions declares them instead in
-# config/claude-accounts: one entry per line, each `ordinary` or an absolute
-# path exactly as config/claude-account would hold it, with no blank lines,
-# duplicates, or control characters, and an optional final newline. The list is
-# opt-in in the same way: absent, nothing here changes. Present, it replaces the
-# home-wide pin, which must then be absent, and every Claude ship or scout
-# launch names one declared entry with --account; Firstmate chooses it at
-# intake (bin/fm-claude-account-quota.sh measures each entry) and never
-# defaults to the first entry, another entry, or the ambient account. The named
-# entry passes the same root, raw-command, and sign-in refusals as a pin and is
-# recorded as account=, which a ship or scout relaunch reuses unless an
-# explicit --account moves it. A local secondmate's agent never draws from the
-# list: it needs its own per-secondmate pin.
+# A home that spends several Claude or agy subscriptions declares them instead
+# in config/claude-accounts or config/agy-accounts: one entry per line, each
+# `ordinary` or an absolute path (CLAUDE_CONFIG_DIR for Claude, HOME for agy),
+# with no blank lines, duplicates, or control characters, and an optional final
+# newline. The list is opt-in in the same way: absent, nothing here changes.
+# Present, for Claude it replaces the home-wide pin (which must then be absent),
+# and every Claude or agy ship or scout launch names one declared entry with
+# --account; Firstmate never defaults to the first entry, another entry, or the
+# ambient account. The named entry passes the same root, raw-command, and
+# sign-in refusals and is recorded as account=, which a ship or scout relaunch
+# reuses unless an explicit --account moves it. A local secondmate's agent
+# never draws from the list.
 
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-timeout-lib.sh"
@@ -187,14 +186,25 @@ fm_worker_account_resolve() {
   printf '%s\t%s\t%s\n' "$declared" "$root" "${token#*$'\t'}"
 }
 
+# fm_worker_account_list_file <harness>
+# Prints the account-list file name for a multi-account runner; returns 1 for any other.
+fm_worker_account_list_file() {
+  case "$1" in
+  claude) printf '%s\n' claude-accounts ;;
+  agy) printf '%s\n' agy-accounts ;;
+  *) return 1 ;;
+  esac
+}
+
 # fm_worker_account_list <harness> <config-dir>
-# Prints the entries config/claude-accounts declares, one per line, for a
-# Claude launch. Prints nothing and returns 0 for another runner or when the
-# list is absent. On a malformed or unreadable list prints one error naming the
-# file and returns 1.
+# Prints the entries config/claude-accounts or config/agy-accounts declares,
+# one per line, for a supported launch. Prints nothing and returns 0 for another
+# runner or when the list is absent. On a malformed or unreadable list prints
+# one error naming the file and returns 1.
 fm_worker_account_list() {
-  local harness=$1 cfg="$2/claude-accounts" out rc
-  [ "$harness" = claude ] || return 0
+  local harness=$1 list_file cfg out rc
+  list_file=$(fm_worker_account_list_file "$harness") || return 0
+  cfg="$2/$list_file"
   out=$(perl -MErrno=ENOENT -e '
     my ($f) = @ARGV;
     unless (lstat $f) {
@@ -218,15 +228,15 @@ fm_worker_account_list() {
   3) return 0 ;;
   4) return 1 ;;
   5)
-    echo "error: config/claude-accounts must be a readable regular file: $cfg" >&2
+    echo "error: config/$list_file must be a readable regular file: $cfg" >&2
     return 1
     ;;
   7)
-    echo "error: config/claude-accounts declares the same account twice: $cfg" >&2
+    echo "error: config/$list_file declares the same account twice: $cfg" >&2
     return 1
     ;;
   *)
-    echo "error: config/claude-accounts must hold one account per line, each 'ordinary' or an absolute path, with no blank lines or control characters: $cfg" >&2
+    echo "error: config/$list_file must hold one account per line, each 'ordinary' or an absolute path, with no blank lines or control characters: $cfg" >&2
     return 1
     ;;
   esac
@@ -235,19 +245,20 @@ fm_worker_account_list() {
 # fm_worker_account_relaunch_request <harness> <config-dir> <prior-harness> <recorded-account> <explicit-account> [<secondmate-id>]
 # Prints the declared account a relaunch asks fm_worker_account_select for:
 # the explicit one when given, otherwise the task's recorded account when the
-# home declares config/claude-accounts and a Claude ship or scout stays on
-# Claude. Prints nothing otherwise, so a relaunch without a list re-reads the
-# pin exactly as before. Returns 1 when the explicit account holds a control
+# home declares an account list for <harness> and the ship or scout stays on
+# that harness. Prints nothing otherwise, so a relaunch without a list re-reads
+# the pin exactly as before. Returns 1 when the explicit account holds a control
 # character or the list cannot be read.
 fm_worker_account_relaunch_request() {
-  local harness=$1 config=$2 prior=$3 recorded=$4 explicit=$5 mate=${6:-} listed
-  fm_worker_account_request_valid "$explicit" || return 1
+  local harness=$1 config=$2 prior=$3 recorded=$4 explicit=$5 mate=${6:-} listed list_file
+  list_file=$(fm_worker_account_list_file "$harness" 2>/dev/null || printf '%s\n' claude-accounts)
+  fm_worker_account_request_valid "$explicit" "$list_file" || return 1
   if [ -n "$explicit" ] || [ -n "$mate" ]; then
     printf '%s\n' "$explicit"
     return 0
   fi
   listed=$(fm_worker_account_list "$harness" "$config") || return 1
-  [ -n "$listed" ] && [ "$prior" = claude ] || return 0
+  [ -n "$listed" ] && [ "$prior" = "$harness" ] || return 0
   printf '%s\n' "$recorded"
 }
 
@@ -313,6 +324,27 @@ fm_worker_account_check() {
     echo "error: $setting pins Pi workers to $declared, which is not signed in for provider '$provider' ($verdict); sign in with PI_CODING_AGENT_DIR=$root $harness, then /login, or change the pin" >&2
     return 1
     ;;
+  agy)
+    local agy_home=$root
+    [ -n "$agy_home" ] || agy_home=${HOME:-}
+    clean=(env -i "HOME=$agy_home" "PATH=${PATH:-}")
+    for name in TMPDIR USER LOGNAME; do
+      [ -z "${!name:-}" ] || clean+=("$name=${!name}")
+    done
+    if out=$(fm_run_timed "$FM_WORKER_ACCOUNT_CHECK_SECONDS" "${clean[@]}" \
+      "$executable" models 2>&1 </dev/null); then
+      return 0
+    fi
+    if printf '%s' "$out" | grep -qi 'sign in'; then
+      if [ -n "$root" ]; then
+        echo "error: $setting pins agy workers to $root, which is not signed in (agy models); sign in with HOME=$root agy, or change the list" >&2
+      else
+        echo "error: $setting pins agy workers to the ordinary account, which is not signed in (agy models); sign in with agy, or change the list" >&2
+      fi
+      return 1
+    fi
+    return 0
+    ;;
   esac
   return 0
 }
@@ -322,9 +354,10 @@ fm_worker_account_check() {
 # never hold one, and a newline would otherwise split the value before the
 # whole-entry membership check or the account= record sees it.
 fm_worker_account_request_valid() {
+  local list_file=${2:-claude-accounts}
   case "$1" in
   *[[:cntrl:]]*)
-    echo "error: --account must name one config/claude-accounts entry exactly, with no control characters" >&2
+    echo "error: --account must name one config/$list_file entry exactly, with no control characters" >&2
     return 1
     ;;
   esac
@@ -332,45 +365,57 @@ fm_worker_account_request_valid() {
 
 # fm_worker_account_select <harness> <config-dir> <model> <executable> [<raw-command>] [<secondmate-id>] [<account>]
 # The whole launch-time decision. Prints nothing for an unpinned runner, so
-# the caller keeps today's launch unchanged. For a pinned one, or a Claude
-# ship or scout launching on a declared config/claude-accounts entry named by
+# the caller keeps today's launch unchanged. For a pinned one, or a Claude or
+# agy ship or scout launching on a declared account-list entry named by
 # <account>, prints "declared<TAB>root<TAB>provider", where provider is the
-# Pi launch model's own (empty for Claude), after the model guard and the
-# sign-in check pass. On refusal prints one error and returns 1.
+# Pi launch model's own (empty for Claude and agy), after the model guard and
+# the sign-in check pass. On refusal prints one error and returns 1.
 # bin/fm-spawn.sh runs it before any endpoint exists, and bin/fm-control.sh
 # before a relaunch stops the live agent.
 fm_worker_account_select() {
   local harness=$1 config=$2 model=$3 executable=$4 raw=${5:-} mate=${6:-} account=${7:-}
-  local selection declared root providers word provider='' selected_config setting listed count
-  fm_worker_account_request_valid "$account" || return 1
-  if [ -n "$account" ] && [ "$harness" != claude ]; then
-    echo "error: --account names one of config/claude-accounts and applies to Claude workers only, not $harness" >&2
+  local selection declared root providers word provider='' selected_config setting listed count list_file pin_file fallback runner_label
+  list_file=$(fm_worker_account_list_file "$harness" 2>/dev/null || true)
+  fm_worker_account_request_valid "$account" "${list_file:-claude-accounts}" || return 1
+  if [ -n "$account" ] && [ "$harness" != claude ] && [ "$harness" != agy ]; then
+    if [ -e "$config/agy-accounts" ]; then
+      echo "error: --account names one of config/claude-accounts or config/agy-accounts and applies to Claude or agy workers only, not $harness" >&2
+    else
+      echo "error: --account names one of config/claude-accounts and applies to Claude workers only, not $harness" >&2
+    fi
     return 1
   fi
   if [ -n "$account" ] && [ -n "$mate" ]; then
-    echo "error: --account applies to ships and scouts; secondmate $mate launches on its own config/secondmate-accounts/$mate/claude-account pin" >&2
+    echo "error: --account applies to ships and scouts; secondmate $mate cannot use --account" >&2
     return 1
   fi
   listed=$(fm_worker_account_list "$harness" "$config") || return 1
   if [ -z "$listed" ] && [ -n "$account" ]; then
-    echo "error: --account '$account' needs config/claude-accounts, which this home does not declare" >&2
+    echo "error: --account '$account' needs config/$list_file, which this home does not declare" >&2
     return 1
   fi
-  if [ -n "$listed" ] && { [ -e "$config/claude-account" ] || [ -L "$config/claude-account" ]; }; then
+  if [ "$harness" = claude ] && [ -n "$listed" ] && { [ -e "$config/claude-account" ] || [ -L "$config/claude-account" ]; }; then
     echo "error: config/claude-accounts and config/claude-account are both present; keep the account list or the single pin, not both" >&2
     return 1
   fi
   selected_config=$(fm_worker_account_config "$harness" "$config" "$mate") || return 1
-  setting="config/$(fm_worker_account_file "$harness")"
-  [ "$selected_config" = "$config" ] || setting="$selected_config/$(fm_worker_account_file "$harness")"
-  if [ -n "$listed" ] && [ -n "$mate" ] && [ "$selected_config" = "$config" ]; then
-    echo "error: config/claude-accounts chooses accounts for ships and scouts only; secondmate $mate needs its own pin in config/secondmate-accounts/$mate/claude-account" >&2
-    return 1
-  elif [ -n "$listed" ] && [ -z "$mate" ]; then
-    setting=config/claude-accounts
+  pin_file=$(fm_worker_account_file "$harness" 2>/dev/null || true)
+  setting="config/${pin_file:-$list_file}"
+  [ "$selected_config" = "$config" ] || setting="$selected_config/$pin_file"
+  if [ -n "$listed" ] && [ -n "$mate" ]; then
+    if [ "$harness" = claude ] && [ "$selected_config" = "$config" ]; then
+      echo "error: config/claude-accounts chooses accounts for ships and scouts only; secondmate $mate needs its own pin in config/secondmate-accounts/$mate/claude-account" >&2
+      return 1
+    fi
+    [ "$harness" = claude ] || return 0
+  fi
+  if [ -n "$listed" ] && [ -z "$mate" ]; then
+    setting="config/$list_file"
+    runner_label=$harness
+    [ "$harness" != claude ] || runner_label=Claude
     if [ -z "$account" ]; then
       count=$(printf '%s\n' "$listed" | wc -l | tr -d ' ')
-      echo "error: config/claude-accounts declares $count Claude accounts, so a Claude ship or scout launch must name one with --account; bin/fm-claude-account-quota.sh measures each, and Firstmate never picks a default" >&2
+      echo "error: $setting declares $count $runner_label accounts, so a $runner_label ship or scout launch must name one with --account; bin/fm-${harness}-account-quota.sh measures each, and Firstmate never picks a default" >&2
       return 1
     fi
     declared=
@@ -378,7 +423,7 @@ fm_worker_account_select() {
       [ "$word" != "$account" ] || { declared=$account; break; }
     done <<< "$listed"
     [ -n "$declared" ] || {
-      echo "error: account '$account' is not declared in config/claude-accounts; name a declared entry with --account" >&2
+      echo "error: account '$account' is not declared in $setting; name a declared entry with --account" >&2
       return 1
     }
     declared=$account
@@ -386,7 +431,9 @@ fm_worker_account_select() {
     [ "$declared" != ordinary ] || root=
     if [ -n "$root" ] && { [ ! -d "$root" ] || [ ! -r "$root" ] || [ ! -x "$root" ]; }; then
       # shellcheck disable=SC2088  # Literal text for the refusal.
-      echo "error: $setting must name readable, searchable existing directories (ordinary means ~/.claude with CLAUDE_CONFIG_DIR unset): $root" >&2
+      fallback='~/.claude with CLAUDE_CONFIG_DIR unset'
+      [ "$harness" != agy ] || fallback='default HOME'
+      echo "error: $setting must name readable, searchable existing directories (ordinary means $fallback): $root" >&2
       return 1
     fi
     providers=
@@ -412,6 +459,18 @@ fm_worker_account_select() {
           return 1
           ;;
         esac
+        ;;
+      *) break ;;
+      esac
+    done
+  elif [ "$harness" = agy ]; then
+    for word in $raw; do
+      case "$word" in
+      [A-Za-z_]*=*)
+        if [ "${word%%=*}" = HOME ]; then
+          echo "error: $setting selects agy worker accounts, but the raw launch command sets HOME, which would override the selected account; remove HOME from the raw command, or change or remove $setting" >&2
+          return 1
+        fi
         ;;
       *) break ;;
       esac

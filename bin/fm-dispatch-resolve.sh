@@ -9,7 +9,9 @@
 # Opt-in gate: FM_DISPATCH_PROVIDER and FM_DISPATCH_MODEL select the provider
 #   and model from the environment or $FM_HOME/.env (environment wins). With no
 #   provider set, TypeSafe uses jev-latest. TYPESAFE_BASE selection and validation
-#   follow docs/configuration.md "Typed dispatch resolution".
+#   follow docs/configuration.md "Typed dispatch resolution". The optional
+#   TYPESAFE_PATH (same precedence, validated the same way) replaces /v1/systemone
+#   for the typesafe provider only; absent keeps /v1/systemone.
 #   OpenRouter and OpenAI require both their provider selection and a model.
 #   The generic systemone provider requires a model and FM_DISPATCH_BASE_URL
 #   (http:// or https://) and posts to <base>/v1/systemone; its optional
@@ -113,13 +115,14 @@
 #   Exit 2 only for a usage or configuration error (unreadable brief, an
 #   existing unreadable rules file, malformed rules, an unreadable or invalid
 #   credential source declaration, missing jq, an unknown provider, a selected
-#   non-typesafe provider without a model, an invalid TYPESAFE_BASE, or systemone
+#   non-typesafe provider without a model, an invalid TYPESAFE_BASE or
+#   TYPESAFE_PATH, or systemone
 #   without a valid base URL), which is actionable, never selected around.
 #   The capability probe is the one other exit: 1 for an unsupported source.
 #
 # Environment:
 #   FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL, FM_DISPATCH_BASE_URL,
-#   FM_DISPATCH_API_KEY, TYPESAFE_API_KEY, TYPESAFE_BASE, OPENROUTER_API_KEY, and
+#   FM_DISPATCH_API_KEY, TYPESAFE_API_KEY, TYPESAFE_BASE, TYPESAFE_PATH, OPENROUTER_API_KEY, and
 #   OPENAI_API_KEY are read from the environment or $FM_HOME/.env.
 #
 # Authority: this tool never replaces firstmate's judgment, quota-array-dispatch,
@@ -157,10 +160,13 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-brief-heading-lib.sh"
 # shellcheck source=bin/fm-credential-source-lib.sh
 . "$SCRIPT_DIR/fm-credential-source-lib.sh"
+# shellcheck source=bin/fm-typesafe-lib.sh
+. "$SCRIPT_DIR/fm-typesafe-lib.sh"
 
 CONFIDENCE_FLOOR=0.6
 TS_MODEL=jev-latest
 TS_BASE=https://api.typesafe.ai
+TS_PATH=/v1/systemone
 TS_TIMEOUT=5
 OR_BASE=https://openrouter.ai/api
 OR_TIMEOUT=10
@@ -242,24 +248,15 @@ fi
 # configuration error, and a declared source this host cannot run or that
 # yields no key is an error outcome. Nothing is sent in either case.
 declared_key() {
-  local provider=$1 src problem value rc
-  [ -e "$CRED_PATH" ] || [ -L "$CRED_PATH" ] || return 1
-  [ -r "$CRED_PATH" ] || die "credential source declaration not readable: $CRED_PATH"
-  command -v jq >/dev/null 2>&1 || die "jq required"
-  problem=$(fm_credsrc_check "$CRED_PATH" typesafe openrouter) \
-    || die "malformed credential source declaration: $CRED_PATH - $problem"
-  fm_credsrc_declares "$CRED_PATH" "$provider" || return 1
-  src=$(fm_credsrc_field "$CRED_PATH" "$provider" source)
-  fm_credsrc_supported "$src" \
-    || emit_error "credential source $src declared for $provider is not supported on this host; nothing sent"
-  value=$(fm_credsrc_read "$CRED_PATH" "$provider"); rc=$?
-  if [ "$rc" -ne 0 ] || [ -z "$value" ]; then
-    if fm_timed_out "$rc"; then
-      emit_error "credential source $src declared for $provider did not answer in time; nothing sent"
-    fi
-    emit_error "credential source $src declared for $provider is unavailable; nothing sent"
-  fi
-  printf -v "$2" '%s' "$value"
+  local rc
+  fm_typesafe_read_declared_key "$CRED_PATH" "$1" "$2" typesafe openrouter
+  rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) return 1 ;;
+    2) die "$FM_TYPESAFE_CRED_ERR" ;;
+    *) emit_error "$FM_TYPESAFE_CRED_ERR" ;;
+  esac
 }
 
 # select_key <provider> <KEY_NAME> <private variable>: the selected provider's
@@ -278,34 +275,24 @@ select_key() {
 # Select and validate the same optional base for implicit and explicit TypeSafe.
 # Never echo a rejected value: a misconfigured URL may contain credentials.
 select_typesafe_base() {
-  local base=${TYPESAFE_BASE:-}
+  local base=${TYPESAFE_BASE:-} validated
   [ -n "$base" ] || base=$(fmx_env_get TYPESAFE_BASE "$FM_HOME/.env")
   [ -n "$base" ] || return 0
   command -v jq >/dev/null 2>&1 || die "jq required"
-  jq -en --arg base "$base" '
-    def ipv4:
-      split(".") | length == 4 and all(.[];
-        test("\\A(0|[1-9][0-9]{0,2})\\z") and (tonumber <= 255));
-    def ipv6:
-      # An IPv4 tail occupies two of the eight IPv6 groups.
-      (if contains(".") then
-        split(":") | if (.[-1] | ipv4) then .[-1] = "0:0" | join(":") else "!" end
-       else . end) |
-      split("::") as $sides |
-      if ($sides | length) == 1 then
-        test("\\A[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7}\\z")
-      elif ($sides | length) == 2 then
-        all($sides[]; test("\\A([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4})*)?\\z")) and
-        (split(":") | map(select(length > 0)) | length < 8)
-      else false end;
-    $base | capture("\\Ahttps?://(?<host>\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9._-]+)(:(?<port>[0-9]+))?(?<path>/[^?#[:space:]\\\\]*)?\\z"; "i") |
-    ((.path // "") | (contains("[") or contains("]")) | not) and
-    (if .host | startswith("[") then .host[1:-1] | ipv6
-     else true end) and
-    (.port == null or (.port | tonumber | . >= 1 and . <= 65535))
-  ' >/dev/null 2>&1 || die "TYPESAFE_BASE must be an http(s) URL with a host and no userinfo, query, fragment, whitespace, or brackets in its path"
-  while [ "${base%/}" != "$base" ]; do base=${base%/}; done
-  TS_BASE=$base
+  validated=$(fm_typesafe_validate_base "$base") \
+    || die "TYPESAFE_BASE must be an http(s) URL with a host and no userinfo, query, fragment, whitespace, or brackets in its path"
+  TS_BASE=$validated
+}
+
+# Select and validate the optional request path that replaces /v1/systemone.
+# Never echo a rejected value.
+select_typesafe_path() {
+  local path=${TYPESAFE_PATH:-} validated
+  [ -n "$path" ] || path=$(fmx_env_get TYPESAFE_PATH "$FM_HOME/.env")
+  [ -n "$path" ] || return 0
+  validated=$(fm_typesafe_validate_path "$path") \
+    || die "TYPESAFE_PATH must start with / and contain no whitespace, control characters, backslash, query, fragment, or dot segments"
+  TS_PATH=$validated
 }
 
 DISPATCH_PROVIDER=${FM_DISPATCH_PROVIDER:-}
@@ -317,11 +304,13 @@ case "$DISPATCH_PROVIDER" in
     DISPATCH_PROVIDER=typesafe
     DISPATCH_MODEL=$TS_MODEL
     select_typesafe_base
+    select_typesafe_path
     select_key typesafe TYPESAFE_API_KEY TYPESAFE_API_KEY_PRIVATE
     ;;
   typesafe)
     [ -n "$DISPATCH_MODEL" ] || DISPATCH_MODEL=$TS_MODEL
     select_typesafe_base
+    select_typesafe_path
     select_key typesafe TYPESAFE_API_KEY TYPESAFE_API_KEY_PRIVATE
     ;;
   openrouter)
@@ -351,7 +340,7 @@ case "$DISPATCH_PROVIDER" in
   *) die "unknown FM_DISPATCH_PROVIDER: $DISPATCH_PROVIDER (expected typesafe, openrouter, systemone, or openai)" ;;
 esac
 case "$DISPATCH_PROVIDER" in
-  typesafe) ENDPOINT=$TS_BASE/v1/systemone TIMEOUT=$TS_TIMEOUT KEY_PRIVATE=$TYPESAFE_API_KEY_PRIVATE ;;
+  typesafe) ENDPOINT=$TS_BASE$TS_PATH TIMEOUT=$TS_TIMEOUT KEY_PRIVATE=$TYPESAFE_API_KEY_PRIVATE ;;
   openrouter) ENDPOINT=$OR_BASE/alpha/decisions TIMEOUT=$OR_TIMEOUT KEY_PRIVATE=$OPENROUTER_API_KEY_PRIVATE ;;
   systemone) ENDPOINT=$DISPATCH_BASE_URL/v1/systemone TIMEOUT=$SO_TIMEOUT KEY_PRIVATE=$DISPATCH_API_KEY_PRIVATE ;;
   openai) ENDPOINT=$OA_BASE/v1/decisions TIMEOUT=$OA_TIMEOUT KEY_PRIVATE=$OPENAI_API_KEY_PRIVATE ;;
@@ -482,32 +471,8 @@ never_send_off() {
 # text reaches the network unchecked. grep's own stderr is discarded because
 # it can echo the pattern.
 never_send_check() {
-  local list value n=0 rc
-  [ -e "$NEVER_SEND_PATH" ] || [ -L "$NEVER_SEND_PATH" ] || return 0
-  { [ -f "$NEVER_SEND_PATH" ] && [ -r "$NEVER_SEND_PATH" ]; } \
-    || never_send_off "$NEVER_SEND_PATH is not a readable regular file"
-  # Collapse whitespace runs on both sides so a value the brief wraps across
-  # lines or spaces differently still matches
-  jq -r --arg endpoint "$ENDPOINT" '
-    $endpoint, (.. | strings | ., (try (fromjson | .. | strings) catch empty))
-    | gsub("\\s+"; " ")' <<<"$BODY" > "$SEND_TEXT" 2>/dev/null \
-    || never_send_off "could not extract the request text to check"
-  list=$(jq -Rr 'gsub("\\s+"; " ")' "$NEVER_SEND_PATH" 2>/dev/null) \
-    || never_send_off "could not read $NEVER_SEND_PATH"
-  while IFS= read -r value; do
-    n=$((n + 1))
-    value=${value# }
-    value=${value% }
-    case "$value" in
-      ''|'#'*) continue ;;
-    esac
-    grep -qiF -e "$value" "$SEND_TEXT" 2>/dev/null; rc=$?
-    case "$rc" in
-      0) never_send_off "brief text matches $NEVER_SEND_PATH line $n" ;;
-      1) ;;
-      *) never_send_off "could not check the request text against $NEVER_SEND_PATH line $n" ;;
-    esac
-  done <<<"$list"
+  fm_typesafe_never_send_check "$NEVER_SEND_PATH" "$ENDPOINT" "$BODY" \
+    || never_send_off "${FM_TYPESAFE_NEVER_SEND_REASON/text matches/brief text matches}"
 }
 
 # Send Jev only the task-specific sections bin/fm-brief.sh scaffolds, plus a

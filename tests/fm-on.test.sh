@@ -194,6 +194,12 @@ assert_contains "$OVERRIDE_ARGV" 'ServerAliveInterval=7' "FM_SSH_ALIVE_INTERVAL 
 assert_contains "$OVERRIDE_ARGV" 'ServerAliveCountMax=2' "FM_SSH_ALIVE_COUNT_MAX override was not honored on the ssh transport"
 pass "fm-on's dead-peer detection window is env-overridable"
 
+assert_contains "$OVERRIDE_ARGV" 'ConnectTimeout=10' "the ssh transport did not arm its default connect timeout"
+: > "$SSH_LOG"
+FM_SSH_CONNECT_TIMEOUT=3 fm_on ios fm-probe-two.sh >/dev/null
+assert_contains "$(tail -n 1 "$SSH_LOG")" 'ConnectTimeout=3' "FM_SSH_CONNECT_TIMEOUT override was not honored on the ssh transport"
+pass "fm-on bounds the ssh connection phase and the bound is env-overridable"
+
 SSH_CALLS_BEFORE_INVALID=$(cat "$SSH_COUNT")
 set +e
 INVALID_INTERVAL_OUT=$(FM_SSH_ALIVE_INTERVAL=0 fm_on ios fm-probe-two.sh 2>&1)

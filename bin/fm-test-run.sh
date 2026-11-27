@@ -321,7 +321,7 @@ family_for_basename() {
     fm-codex-stop-park.test.sh|\
     fm-watch-inbox-meta.test.sh|fm-watch-open-decisions.test.sh|\
     fm-watch-triage.test.sh|fm-watch-triage-pause.test.sh|\
-    fm-watch-triage-wedge-defer.test.sh|fm-task-inbox.test.sh|\
+    fm-watch-triage-wedge-defer.test.sh|fm-watch-probe-timeout.test.sh|fm-task-inbox.test.sh|\
     fm-watcher-lock.test.sh|fm-inactive-reconcile.test.sh|fm-watch-wedge-cap.test.sh|\
     fm-watch-wedge-cap-unconfigured-parity.test.sh)
       printf '%s\n' watcher-wake-lock
@@ -449,7 +449,7 @@ family_for_basename() {
     fm-branch-supervision.test.sh|fm-busy-adapter-wiring.test.sh|\
     fm-busy-state.test.sh|fm-capacity.test.sh|fm-capacity-auto.test.sh|fm-lane-vitals.test.sh|\
     fm-classify-corr-token.test.sh|\
-    fm-claude-account-quota.test.sh|\
+    fm-agy-account-quota.test.sh|fm-claude-account-quota.test.sh|\
     fm-claude-stop-autoarm.test.sh|fm-cursor-harness.test.sh|\
     fm-dispatch-resolve.test.sh|\
     fm-extension-binding.test.sh|fm-gitignore-config.test.sh|\
@@ -790,6 +790,7 @@ tests/fm-check-unregister.test.sh 653
 tests/fm-ci-workflow.test.sh 8421
 tests/fm-classify-corr-token.test.sh 24333
 tests/fm-classify-decision-key.test.sh 3948
+tests/fm-agy-account-quota.test.sh 427
 tests/fm-claude-account-quota.test.sh 427
 tests/fm-claude-stop-autoarm-live-e2e.test.sh 226
 tests/fm-claude-stop-autoarm.test.sh 89580
@@ -862,6 +863,7 @@ tests/fm-inactive-reconcile.test.sh 70873
 tests/fm-inbox.test.sh 9208
 tests/fm-install-herdr.test.sh 273
 tests/fm-jev-mem-guard.test.sh 228
+tests/fm-jev-monitoring.test.sh 1000
 tests/fm-kimi-harness.test.sh 89952
 tests/fm-kimi-trust-prompt-live-e2e.test.sh 172
 tests/fm-kiro-harness.test.sh 34145
@@ -1037,6 +1039,7 @@ tests/fm-watch-arm.test.sh 313983
 tests/fm-watch-checkpoint.test.sh 23716
 tests/fm-watch-inbox-meta.test.sh 533
 tests/fm-watch-open-decisions.test.sh 13507
+tests/fm-watch-probe-timeout.test.sh 8000
 tests/fm-watch-recovery-loop.test.sh 62151
 tests/fm-watch-triage-pause.test.sh 602995
 tests/fm-watch-triage-wedge-defer.test.sh 641428
@@ -1726,6 +1729,7 @@ families_for_changed_path() {
       printf '%s\n' "__script__:fm-quota-choose.test.sh"
       printf '%s\n' "__script__:fm-dispatch-resolve.test.sh"
       printf '%s\n' "__script__:fm-claude-account-quota.test.sh"
+      printf '%s\n' "__script__:fm-agy-account-quota.test.sh"
       ;;
     bin/fm-procevent-quota.sh)
       printf '%s\n' "__script__:fm-procevent-quota.test.sh"
@@ -1735,6 +1739,13 @@ families_for_changed_path() {
       ;;
     bin/fm-claude-account-quota.sh)
       printf '%s\n' "__script__:fm-claude-account-quota.test.sh"
+      ;;
+    bin/fm-agy-account-quota.sh)
+      printf '%s\n' "__script__:fm-agy-account-quota.test.sh"
+      ;;
+    bin/fm-account-quota-lib.sh)
+      printf '%s\n' "__script__:fm-claude-account-quota.test.sh"
+      printf '%s\n' "__script__:fm-agy-account-quota.test.sh"
       ;;
     bin/fm-dispatch-resolve.sh)
       printf '%s\n' "__script__:fm-dispatch-resolve.test.sh"

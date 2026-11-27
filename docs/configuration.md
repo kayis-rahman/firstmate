@@ -9,7 +9,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | --- | --- |
 | Firstmate's code, private files, or project location | [FM_HOME](#fm_home) and [operational home layout](#operational-home-layout-and-state) |
 | Task windows and worker tools | [Runtime backend](#runtime-backend-configbackend--fm_backend) and [harness support](#harness-support) |
-| Worker permissions, accounts, or environment | [Codex approval review](#codex-automatic-approval-review), [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [Codex permission mode](#codex-permission-mode-configcodex-permission-mode), [persistent managed-policy failover](#persistent-managed-policy-failover), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), [several Claude accounts](#several-claude-accounts-configclaude-accounts), [worker tool exclusions](#worker-tool-exclusions-configcrew-exclude-tools), [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist), and its [Orca environment source](#orca-environment-source-configlaunch-env-tmux-session) |
+| Worker permissions, accounts, or environment | [Codex approval review](#codex-automatic-approval-review), [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [Codex permission mode](#codex-permission-mode-configcodex-permission-mode), [persistent managed-policy failover](#persistent-managed-policy-failover), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), [several Claude accounts](#several-claude-accounts-configclaude-accounts), [several agy accounts](#several-agy-accounts-configagy-accounts), [worker tool exclusions](#worker-tool-exclusions-configcrew-exclude-tools), [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist), and its [Orca environment source](#orca-environment-source-configlaunch-env-tmux-session) |
 | Backlog, preferences, and memory | [Backlog backend](#backlog-backend-taskstoml--configbacklog-backend), [captain preferences](#captain-preferences-datacaptainmd--datacaptain-sharedmd), [external memory tiers](#external-memory-tiers-memory-layering-section), [record export](#record-export-configrecord-export-root), [startup memory budget](#startup-memory-budget-configstartup-memory-budget), and [stow guard](#stow-guard-configstow-guard) |
 | Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), [Codex native Stop park](#codex-native-stop-park-configcodex-stop-park), [warm-cache compaction](#warm-cache-compaction-configwarm-compact), [Antigravity autocompact](#antigravity-autocompact-configagy-autocompact), and [Calm preference](#calm-preference-configcalm) |
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
@@ -1813,6 +1813,35 @@ A local secondmate's own agent never draws from it: under a list it needs its ow
 Other runners ignore the list, and `--account` refuses for them.
 Like the single pin, the list is not inherited into secondmate homes.
 
+### Several agy accounts (config/agy-accounts)
+
+A home with more than one Antigravity (`agy`) account can let each `agy` ship and scout launch under a chosen `HOME` directory.
+Create `config/agy-accounts` with one account per line, each `ordinary` (the caller's default `HOME`) or the absolute path of an existing `HOME` root holding that account's `.gemini/antigravity-cli` state:
+
+```text
+ordinary
+/Users/me/.agy-acct2
+```
+
+A final newline is optional; a blank line, a relative path, a repeated entry, or a control character refuses.
+The list is opt-in: without it, every `agy` launch behaves exactly as before, and `--account` refuses.
+
+While the list is present, every `agy` ship or scout spawn must name one declared entry explicitly with `--account <entry>`.
+Firstmate never picks an entry by default, rotates accounts automatically, or falls back to another entry or the ambient `HOME`.
+[`bin/fm-agy-account-quota.sh`](../bin/fm-agy-account-quota.sh) can measure each declared entry's quota facts under its own `HOME` without rotating or choosing an account.
+
+The named entry is checked before anything launches: its directory must exist and be readable and searchable, a raw `agy` command must not set `HOME=`, and `agy models` under that `HOME` must not report a sign-in error.
+The selected `HOME` applies to every `agy` invocation for that worker (the `agy models` check, workspace trust pre-registration in `bin/fm-agy-trust.sh`, and the worker launch command), without changing the captain's global `HOME` for anything else.
+The spawn line and the task record carry the entry as `account=`.
+
+A relaunch or recovery of that task keeps its recorded account, re-checking that it is still declared and usable before the running worker stops.
+To move a task to another declared account, relaunch it explicitly with `bin/fm-control.sh <id> relaunch --account <entry> --note <text>`.
+A task with no recorded account, or one whose account is no longer declared, refuses a plain relaunch and needs that explicit `--account`.
+
+The list covers `agy` ships and scouts only.
+A secondmate agent never draws from it, and `--account` refuses for every secondmate.
+Like `config/claude-accounts`, the list is not inherited into secondmate homes.
+
 ### Per-secondmate account pins
 
 To choose an account for one local secondmate's own agent, create `config/secondmate-accounts/<id>/claude-account` or `config/secondmate-accounts/<id>/pi-account` in the primary home.
@@ -2195,13 +2224,16 @@ OpenRouter, `systemone`, and OpenAI each require their explicit `FM_DISPATCH_PRO
 `systemone` also requires `FM_DISPATCH_BASE_URL`, an `http://` or `https://` base such as a local llama.cpp server or a hosted System One-compatible service, and posts to `<base>/v1/systemone`; a missing or scheme-less base URL is an actionable configuration error.
 With no provider setting and a valid base, TypeSafe uses `jev-latest` when `TYPESAFE_API_KEY` is available, ignores `FM_DISPATCH_MODEL`, and is off when no key is available and no `typesafe` credential source is declared.
 Explicit `FM_DISPATCH_PROVIDER=typesafe` also uses `jev-latest` when no model is set.
+`TYPESAFE_PATH` optionally replaces `/v1/systemone` for the TypeSafe request only, for a host that serves the same System One request at another path such as `/api/v1/decide`.
+It comes from the environment or `.env` with the same precedence, must start with `/`, and must contain no whitespace, control characters, backslash, `?`, `#`, or `.`/`..` segments; an invalid value exits 2 before credential lookup and sends nothing.
+Absent means `/v1/systemone`, the request and response shapes are unchanged, and the never-send check sees the final URL.
 `TYPESAFE_BASE` optionally selects a different base for the TypeSafe request, from the environment or `.env` with the same non-empty-environment precedence.
 If neither source supplies a non-empty value, the base defaults to `https://api.typesafe.ai`.
 It must be an `http://` or `https://` URL with a host and no userinfo, query, fragment, whitespace, or backslash.
 An explicit port must be between 1 and 65535, and a bracketed host must be a valid IPv6 address.
 Its path must not contain literal `[` or `]` characters; IPv6 host brackets remain supported.
 An invalid value exits 2 before credential lookup and sends nothing, even when no key is available.
-Trailing slashes are removed before appending `/v1/systemone`, so `TYPESAFE_BASE=https://ai-gateway.vercel.sh/typesafe/` sends to `https://ai-gateway.vercel.sh/typesafe/v1/systemone`.
+Trailing slashes are removed before appending the path (`/v1/systemone` unless `TYPESAFE_PATH` is set), so `TYPESAFE_BASE=https://ai-gateway.vercel.sh/typesafe/` sends to `https://ai-gateway.vercel.sh/typesafe/v1/systemone`.
 To select a gateway-specific model ID, set `FM_DISPATCH_PROVIDER=typesafe` and `FM_DISPATCH_MODEL` to that ID.
 The selected provider needs a non-empty key from the environment, else `.env`, else, for `typesafe` and `openrouter` only, the credential source the home declares for that provider; `systemone` is the exception, where an absent `FM_DISPATCH_API_KEY` means the request carries no `Authorization` header.
 
@@ -2305,7 +2337,7 @@ No qualifying option, or two equally probable qualifying options, produces `ambi
 Every result above exits 0.
 
 - Response probabilities must contain exactly every offered choice, use numeric values from 0 through 1, and sum to approximately 1 within 0.01.
-- Only a usage or configuration error exits 2: an unreadable brief, an existing but unreadable or malformed canonical rules file, an unreadable or invalid credential source declaration, a missing `jq`, an unknown provider, a non-typesafe provider without a model, an invalid `TYPESAFE_BASE` for TypeSafe, or `systemone` without a valid base URL, each reported and never selected around.
+- Only a usage or configuration error exits 2: an unreadable brief, an existing but unreadable or malformed canonical rules file, an unreadable or invalid credential source declaration, a missing `jq`, an unknown provider, a non-typesafe provider without a model, an invalid `TYPESAFE_BASE` or `TYPESAFE_PATH` for TypeSafe, or `systemone` without a valid base URL, each reported and never selected around.
 - Missing `curl` is a normal structured `error` outcome with exit 0 so firstmate uses today's routing.
 
 **Firstmate retains the dispatch decision**
@@ -3659,6 +3691,7 @@ FM_DISPATCH_BASE_URL=   # http(s) base of a System One-compatible host; required
 FM_DISPATCH_API_KEY=    # optional systemone key; absent sends no Authorization header
 TYPESAFE_API_KEY=       # typesafe dispatch key, from the environment, .env, or the declared credential source ("Typed dispatch resolution")
 TYPESAFE_BASE=          # optional TypeSafe base; see "Typed dispatch resolution"
+TYPESAFE_PATH=          # optional TypeSafe request path replacing /v1/systemone; see "Typed dispatch resolution"
 OPENROUTER_API_KEY=     # OpenRouter dispatch key, from the environment, .env, or the declared credential source
 OPENAI_API_KEY=         # OpenAI dispatch key, from the environment or .env
 FMX_DISCORD_REPLY_MAX_CHARS=1900   # Discord reply per-message split budget; values below 50 clamp to 50, values above 2000 reset to 1900
@@ -3820,6 +3853,19 @@ Phase 1 runs the local MLX Serve typed-decision API (`/v1/systemone`) in shadow 
 - When enabled, `bin/fm-classify-lib.sh` still decides locally; `bin/fm-decision-api.sh` asks one fixed-choice question and compares the answer, appending one line per disagreement or low-confidence answer to `state/decision-shadow.log`.
 - `bin/fm-decision-api.sh` is fail-open: MLX Serve being down or slow (hard timeout 3 seconds) makes it print nothing and do nothing.
 - Exact request, response, timeout, and logging mechanics live in the header of `bin/fm-decision-api.sh`.
+
+## Jev monitoring (config/jev-monitoring)
+
+`config/jev-monitoring` is an optional local, gitignored file with one value: `off`, `watch`, or `act`.
+Absent means `off`, and any other value behaves as `off` with one notice.
+
+- When `off` (or absent), existing local MLX Serve shadow behavior (`config/decision-api-shadow`) and all wake routing stay unchanged.
+- In `watch` mode, non-protected monitoring notices are sent off the wake path (3-second timeout) to `bin/fm-decision-api.sh --mode jev` at the configured TypeSafe host (`TYPESAFE_BASE`, `TYPESAFE_PATH`, and `TYPESAFE_API_KEY` via environment, `.env`, or `config/dispatch-credential-sources.json`).
+- Protected kinds (blockers, decisions, failures, finished jobs, PR/merge notices, `check` wakes, and stuck-worker alarms) and lines containing links, keys, logins, or `config/dispatch-never-send` matches stay local and are never sent.
+- `watch` mode logs label, confidence, latency, and local verdict to a bounded `state/jev-watch.jsonl` file without changing any wake; `bin/fm-jev-report.sh` summarizes counts and disagreements.
+- In `act` mode, only non-protected wakes already eligible to surface at attended (`bin/fm-watch.sh`) or away (`bin/fm-supervise-daemon.sh`) routing are evaluated.
+- A `routine` verdict at confidence 0.95 or higher is durably recorded in `state/jev-suppressed.jsonl` before suppressing the wake and is shown in the next `bin/fm-wake-drain.sh` run; any fallback (slow, down, bad key, no credit, odd reply) wakes as today, and 3 consecutive API failures pause Jev calls for 30 minutes before retrying.
+- If the full check or stuck-worker alarm surfaces a captain-relevant event for a task covered by a suppressed row, `config/jev-monitoring` is durably switched to `off` and firstmate is woken.
 
 ## Disk hygiene thresholds
 

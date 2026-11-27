@@ -521,13 +521,13 @@
 #   Pins are never inherited; remote per-mate overrides refuse locally.
 #   T3 Code refuses a pin because its provider instance owns the account.
 #   bin/fm-worker-account-lib.sh owns parsing, the check, and the shed list.
-# Claude account list (config/claude-accounts, --account <entry>):
-#   Opt-in and Claude-only. When the list is present, a Claude ship or scout
-#   spawn must name one declared entry with --account, chosen at intake, and
-#   that entry is checked, launched, and recorded exactly like a pin; a
-#   relaunch reuses the recorded entry unless --account moves it. Without the
-#   list, --account refuses and nothing else changes. docs/configuration.md
-#   "Several Claude accounts" owns the contract.
+# Account lists (config/claude-accounts, config/agy-accounts, --account <entry>):
+#   Opt-in for Claude and agy. When the list is present, a ship or scout spawn
+#   on that runner must name one declared entry with --account, chosen at
+#   intake, and that entry is checked, launched (CLAUDE_CONFIG_DIR for Claude,
+#   HOME for agy), and recorded as account=; a relaunch reuses the recorded
+#   entry unless --account moves it. Without the list, --account refuses and
+#   nothing else changes. docs/configuration.md owns the contracts.
 # Per-secondmate omp profile (config/secondmate-accounts/<id>/omp-profile):
 #   Opt-in, and read only for a local secondmate's own omp agent;
 #   bin/fm-omp-profile-lib.sh owns the file and its refusals. A pinned launch
@@ -2801,11 +2801,13 @@ omp_model_validate() { # <omp-bin> <model> [<profile>]
 # sign-in prompt can never block the spawn before any pane exists. An
 # unreachable listing establishes nothing (harness-adapters
 # model-and-effort.md) and launches unvalidated with a notice.
-agy_model_validate() {  # <agy-bin> <model>
-  local bin=$1 model=$2 listing rc=0 bound=${FM_AGY_MODELS_TIMEOUT:-15}
+agy_model_validate() {  # <agy-bin> <model> [<account-home>]
+  local bin=$1 model=$2 account_home=${3:-} listing rc=0 bound=${FM_AGY_MODELS_TIMEOUT:-15}
+  local -a cmd=("$bin" models)
+  [ -z "$account_home" ] || cmd=(env "HOME=$account_home" "$bin" models)
   case "$bound" in ''|*[!0-9]*|0*) bound=15 ;; esac
   [ -n "$model" ] && [ "$model" != default ] || return 0
-  listing=$(fm_run_timed "$bound" "$bin" models 2>/dev/null < /dev/null) || rc=$?
+  listing=$(fm_run_timed "$bound" "${cmd[@]}" 2>/dev/null < /dev/null) || rc=$?
   if [ "$rc" -ne 0 ] || [ -z "$listing" ]; then
     if [ "$rc" -eq 124 ]; then
       echo "notice: 'agy models' did not answer within ${bound}s; launching with --model '$model' unvalidated" >&2
@@ -3604,9 +3606,6 @@ OMP_PROFILE_PIN=$(fm_omp_profile_select "$HARNESS" "$CONFIG" "$OMP_PROFILE_MATE"
 if [ "$HARNESS" = omp ]; then
   omp_model_validate "$OMP_BIN" "$MODEL" "$OMP_PROFILE_PIN" || exit 1
 fi
-if [ "$HARNESS" = agy ]; then
-  agy_model_validate "$AGY_BIN" "$MODEL" || exit 1
-fi
 # polytoken's model validation composes firstmate's model and effort axes into
 # the launch model reference (bin/fm-polytoken-lib.sh owns the reasoning): the
 # base model must be concrete and listed, and effort maps to the nearest
@@ -3635,19 +3634,27 @@ RAW_COMMAND=
 [ "$RAW_LAUNCH" = 0 ] || RAW_COMMAND=$ARG3
 WORKER_ACCOUNT_MATE=
 [ "$KIND" != secondmate ] || WORKER_ACCOUNT_MATE=$ID
-# A declared Claude account list (config/claude-accounts) needs the entry this
-# launch spends: --account on a fresh spawn, and on a relaunch that flag or
-# else the account the task already records.
+# A declared account list (config/claude-accounts, config/agy-accounts) needs
+# the entry this launch spends: --account on a fresh spawn, and on a relaunch
+# that flag or else the account the task already records.
 WORKER_ACCOUNT_REQUEST=$ACCOUNT_ARG
 if [ "$RELAUNCH" -eq 1 ]; then
   WORKER_ACCOUNT_REQUEST=$(fm_worker_account_relaunch_request "$HARNESS" "$CONFIG" "$RELAUNCH_PRIOR_HARNESS" \
     "$(fm_meta_get "$RELAUNCH_META" account)" "$ACCOUNT_ARG" "$WORKER_ACCOUNT_MATE") || exit 1
 fi
-WORKER_ACCOUNT=$(fm_worker_account_select "$HARNESS" "$CONFIG" "$MODEL" "${PI_BIN:-$HARNESS}" "$RAW_COMMAND" "$WORKER_ACCOUNT_MATE" "$WORKER_ACCOUNT_REQUEST") || exit 1
+WORKER_ACCOUNT_BIN=$HARNESS
+case "$HARNESS" in
+  pi | pi-signed) WORKER_ACCOUNT_BIN=${PI_BIN:-$HARNESS} ;;
+  agy) WORKER_ACCOUNT_BIN=${AGY_BIN:-$HARNESS} ;;
+esac
+WORKER_ACCOUNT=$(fm_worker_account_select "$HARNESS" "$CONFIG" "$MODEL" "$WORKER_ACCOUNT_BIN" "$RAW_COMMAND" "$WORKER_ACCOUNT_MATE" "$WORKER_ACCOUNT_REQUEST") || exit 1
 WORKER_ACCOUNT_DECLARED=${WORKER_ACCOUNT%%$'\t'*}
 WORKER_ACCOUNT_ROOT=${WORKER_ACCOUNT#*$'\t'}
 WORKER_ACCOUNT_PROVIDER=${WORKER_ACCOUNT_ROOT#*$'\t'}
 WORKER_ACCOUNT_ROOT=${WORKER_ACCOUNT_ROOT%%$'\t'*}
+if [ "$HARNESS" = agy ]; then
+  agy_model_validate "$AGY_BIN" "$MODEL" "$WORKER_ACCOUNT_ROOT" || exit 1
+fi
 # T3 starts the agent itself, at full access, with its provider instance's own
 # account and environment, so a launch setting only a Firstmate-built command
 # line can apply refuses here instead of being silently widened or dropped.
@@ -6377,7 +6384,8 @@ agy)
   else
     spawn_trust_args=("$WT" "$PROJ_ABS")
   fi
-  if "$FM_ROOT/bin/fm-agy-trust.sh" "${spawn_trust_args[@]}" >/dev/null; then
+  if { [ -z "$WORKER_ACCOUNT_ROOT" ] && "$FM_ROOT/bin/fm-agy-trust.sh" "${spawn_trust_args[@]}" >/dev/null; } ||
+     { [ -n "$WORKER_ACCOUNT_ROOT" ] && env "HOME=$WORKER_ACCOUNT_ROOT" "$FM_ROOT/bin/fm-agy-trust.sh" "${spawn_trust_args[@]}" >/dev/null; }; then
     AGY_TRUST_PREREGISTERED=1
   else
     echo "warning: could not pre-register agy workspace trust for $WT; the launch will answer the folder-trust dialog in window $T instead" >&2
@@ -7837,6 +7845,9 @@ if [ -n "$WORKER_ACCOUNT" ]; then
     ;;
   pi | pi-signed | pig)
     LAUNCH="PI_CODING_AGENT_DIR=$(shell_quote "$WORKER_ACCOUNT_ROOT") $LAUNCH"
+    ;;
+  agy)
+    [ -z "$WORKER_ACCOUNT_ROOT" ] || LAUNCH="HOME=$(shell_quote "$WORKER_ACCOUNT_ROOT") $LAUNCH"
     ;;
   esac
 elif [ "$HARNESS" = claude ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then

@@ -460,6 +460,10 @@ case "$SECONDMATE_WAKE_STALL_SECS" in ''|*[!0-9]*|0) SECONDMATE_WAKE_STALL_SECS=
 # relaunch wake cannot restart the probe into a tight loop.
 SECONDMATE_LIVENESS_SECS=${FM_SECONDMATE_LIVENESS_SECS:-}
 case "$SECONDMATE_LIVENESS_SECS" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_SECS=60 ;; esac
+# Wall-clock bound on each per-cycle process-event reconcile, so a hung source
+# cannot stall the poll or its liveness beacon.
+PROCEVENT_RECONCILE_SECS=${FM_PROCEVENT_RECONCILE_SECS:-}
+case "$PROCEVENT_RECONCILE_SECS" in ''|*[!0-9]*|0) PROCEVENT_RECONCILE_SECS=60 ;; esac
 # Per-relaunch wall-clock bound, so a wedged spawn cannot stall the poll.
 SECONDMATE_LIVENESS_TIMEOUT=${FM_SECONDMATE_LIVENESS_TIMEOUT:-}
 case "$SECONDMATE_LIVENESS_TIMEOUT" in ''|*[!0-9]*|0) SECONDMATE_LIVENESS_TIMEOUT=120 ;; esac
@@ -2484,6 +2488,11 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
         else
           fm_wake_append stale "$win" "$reason" || exit 1
         fi
+        if stale_is_terminal "$win" "$STATE"; then
+          if fm_jev_check_missed_blocker "$task" "stuck-alarm"; then
+            fm_wake_append check jev-monitoring-auto-off "check: jev-monitoring auto-off triggered (stuck alarm surfaced captain-relevant event on $task)" || exit 1
+          fi
+        fi
         # The ladder's own step, not an episode end: this pane is still wedged,
         # so the idle timer restarts for the next rung of the same escalation
         # count and the cap that fired stays exactly where it is.
@@ -3310,6 +3319,22 @@ surface_nonterminal_stale() {  # <window> <hash> [dialog-name]
     bounded=0
   fi
   if [ "$throttled" -ne 0 ]; then
+    if [ -z "$dialog" ] && [ "$(fm_jev_mode)" = "watch" ]; then
+      _jev_stale_line=$(last_status_line "$STATE/$task.status")
+      fm_jev_is_protected_wake stale "stale: $win" "$_jev_stale_line" \
+        || fm_jev_watch_dispatch "$task" "needs-firstmate" "$_jev_stale_line"
+    fi
+    if [ -z "$dialog" ] && [ "$(fm_jev_mode)" = "act" ]; then
+      _jev_stale_line=$(last_status_line "$STATE/$task.status")
+      if fm_jev_act_evaluate "$task" "stale" "stale: $win" "$_jev_stale_line" 0; then
+        printf '%s' "$h" > "$STATE/.stale-$key"
+        wedge_episode_end "$key" 0 1
+        clear_write_tracking "$key"
+        clear_pause_state "$key"
+        triage_log "jev-monitoring suppressed non-terminal stale: $win"
+        return 0
+      fi
+    fi
     reason=$(stale_reason_naming_dialog "stale: $win" "$dialog")
     fm_wake_append stale "$win" "$reason" || exit 1
     stale_wait_record "$key"
@@ -4513,7 +4538,8 @@ while :; do
   # only republishes results already captured durably and restarts a source
   # whose owner is gone. It is a no-op with nothing registered.
   if [ -d "$STATE/procevent" ]; then
-    FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
+    # Hard-bounded so a hung source probe cannot stall the cycle's beacon.
+    fm_run_timed "$PROCEVENT_RECONCILE_SECS" env FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
   fi
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
@@ -4841,6 +4867,35 @@ EOF
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
+      _jev_mode_now=$(fm_jev_mode)
+      if ! afk_present && [ "$signal_actionable" -ne 0 ] && [ "$_jev_mode_now" = "act" ]; then
+        if fm_jev_act_signal_batch "$pending" "$reason"; then
+          while IFS=$(printf '\t') read -r sf sig f; do
+            [ -n "$sf" ] || continue
+            case "$f" in *.status) ;; *) printf '%s' "$sig" > "$sf" ;; esac
+          done <<EOF
+$pending
+EOF
+          while IFS=$(printf '\t') read -r f surface_end surface_ident; do
+            [ -n "$f" ] || continue
+            fm_wake_status_seen_commit "$STATE" "$f" "$surface_end" "$surface_ident" || true
+          done <<EOF
+$FM_SIGNAL_SURFACE_ENDPOINTS
+EOF
+          triage_log "jev-monitoring suppressed $reason"
+          continue
+        fi
+      fi
+      if ! afk_present && [ "$signal_actionable" -ne 0 ] && [ "$_jev_mode_now" = "watch" ]; then
+        while IFS=$(printf '\t') read -r sf sig f; do
+          [ -n "$sf" ] || continue
+          _jev_task=$(basename "$f"); _jev_task=${_jev_task%.status}; _jev_task=${_jev_task%.turn-ended}
+          _jev_line=$(last_status_line "$STATE/$_jev_task.status")
+          fm_jev_is_protected_wake signal "$reason" "$_jev_line" || fm_jev_watch_dispatch "$_jev_task" "needs-firstmate" "$_jev_line"
+        done <<EOF
+$pending
+EOF
+      fi
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"
@@ -4899,6 +4954,16 @@ EOF
         wake "$reason"
       fi
       triage_log "absorbed benign $reason"
+      if [ "$(fm_jev_mode)" = "watch" ]; then
+        while IFS=$(printf '\t') read -r sf sig f; do
+          [ -n "$sf" ] || continue
+          _jev_task=$(basename "$f"); _jev_task=${_jev_task%.status}; _jev_task=${_jev_task%.turn-ended}
+          _jev_line=$(last_status_line "$STATE/$_jev_task.status")
+          fm_jev_is_protected_wake signal "$reason" "$_jev_line" || fm_jev_watch_dispatch "$_jev_task" "routine" "$_jev_line"
+        done <<EOF
+$pending
+EOF
+      fi
     fi
   fi
 
@@ -5271,6 +5336,15 @@ EOF
       # Enqueue first, then record every status log surfaced through its end so the
       # next heartbeat does not re-fire it (enqueue-before-suppress preserved);
       # this wake sends firstmate to the whole fleet, so every log is read.
+      while IFS=$(printf '\t') read -r _hb_f _hb_end _hb_ident; do
+        [ -n "$_hb_f" ] || continue
+        _hb_task=$(basename "$_hb_f"); _hb_task=${_hb_task%.status}
+        if fm_jev_check_missed_blocker "$_hb_task" "full-check" "$_hb_end"; then
+          fm_wake_append check jev-monitoring-auto-off "check: jev-monitoring auto-off triggered (full check surfaced missed blocker on $_hb_task)" || exit 1
+        fi
+      done <<EOF
+$FM_HEARTBEAT_SURFACE_ENDPOINTS
+EOF
       fm_wake_append heartbeat heartbeat heartbeat || exit 1
       touch "$STATE/.last-heartbeat"
       mark_all_captain_relevant_surfaced || true

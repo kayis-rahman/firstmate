@@ -65,6 +65,12 @@ FM_SM_LIVE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$FM_SM_LIVE_LIB_DIR/fm-timeout-lib.sh"
 
+# Hard wall-clock bound (seconds) on each remote endpoint probe call, so a hung
+# SSH peer cannot stall the watcher cycle that runs the probe; a probe that hits
+# it reads as an unreachable host. FM_SECONDMATE_LIVENESS_PROBE_SECS overrides.
+FM_SM_LIVE_PROBE_SECS=${FM_SECONDMATE_LIVENESS_PROBE_SECS:-}
+case "$FM_SM_LIVE_PROBE_SECS" in ''|*[!0-9]*|0) FM_SM_LIVE_PROBE_SECS=30 ;; esac
+
 # Per-task probe+kill+relaunch serialization. A busy lock means another
 # supervisor (the other sweep, or a racing tick) is mid-episode on this mate;
 # callers skip and let that episode finish rather than probe a moving target.
@@ -204,11 +210,13 @@ fm_secondmate_liveness_probe() {  # <meta> <id> <full|poll>
         return 0
       fi
     fi
-    if out=$("$FM_SM_LIVE_LIB_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
+    if out=$(fm_run_timed "$FM_SM_LIVE_PROBE_SECS" "$FM_SM_LIVE_LIB_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
       remote_rc=0
     else
       remote_rc=$?
     fi
+    # A probe that hit its wall-clock bound is a transport failure, never evidence of death.
+    [ "$remote_rc" -ne 124 ] || remote_rc=255
     if [ "$remote_rc" -eq 255 ]; then
       FM_SM_LIVE_REASON="remote host unavailable or endpoint state unknown; route preserved on $remote_host"
       return 0
@@ -222,11 +230,12 @@ fm_secondmate_liveness_probe() {  # <meta> <id> <full|poll>
     case "$agent_state" in
       alive)
         if [ "$mode" = full ]; then
-          if route_out=$("$FM_SM_LIVE_LIB_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
+          if route_out=$(fm_run_timed "$FM_SM_LIVE_PROBE_SECS" "$FM_SM_LIVE_LIB_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
             remote_rc=0
           else
             remote_rc=$?
           fi
+          [ "$remote_rc" -ne 124 ] || remote_rc=255
           if [ "$remote_rc" -eq 255 ]; then
             FM_SM_LIVE_REASON="remote host unavailable or endpoint route unknown; route preserved on $remote_host"
             return 0

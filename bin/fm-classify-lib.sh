@@ -3021,7 +3021,15 @@ stale_is_terminal() {  # <window> <state>
   [ -n "$last" ] && status_is_captain_relevant "$last"
 }
 
-# --- shadow typed-decision API (phase 1) ------------------------------------
+# --- shadow typed-decision API (phase 1) & Jev monitoring (watch) -----------
+if [ -f "$_FM_CLASSIFY_LIB_DIR/fm-jev-monitor-lib.sh" ]; then
+  case $- in *u*) _fm_classify_jev_nounset=on ;; *) _fm_classify_jev_nounset=off ;; esac
+  # shellcheck source=bin/fm-jev-monitor-lib.sh
+  . "$_FM_CLASSIFY_LIB_DIR/fm-jev-monitor-lib.sh"
+  [ "$_fm_classify_jev_nounset" = on ] || set +u
+  unset _fm_classify_jev_nounset
+fi
+
 # Off by default. When config/decision-api-shadow exists, status_is_captain_relevant
 # consults bin/fm-decision-api.sh (local MLX Serve only) and records one line in
 # state/decision-shadow.log for each disagreement or low-confidence answer.

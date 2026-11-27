@@ -547,6 +547,75 @@ TYPESAFE_BASE=https://environment.example TYPESAFE_API_KEY=$KEY run code out err
 assert_equals 'https://environment.example/v1/systemone' "$(grep -E '^https?://' "$LOG/argv")" "valid environment base overrides an invalid .env base"
 rm -f "$HOME_DIR/.env"
 
+# --- TypeSafe path: optional replacement for /v1/systemone -------------------
+reset_log
+TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+assert_equals 'https://api.typesafe.ai/v1/systemone' "$(grep -E '^https?://' "$LOG/argv")" "absent TYPESAFE_PATH keeps /v1/systemone"
+reset_log
+TYPESAFE_BASE=https://host.example/api TYPESAFE_PATH=/v1/decide TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+expect_code 0 "$code" "custom TypeSafe path resolves"
+assert_contains "$out" '  status: clear' "custom path keeps the typed response contract"
+assert_equals 'https://host.example/api/v1/decide' "$(grep -E '^https?://' "$LOG/argv")" "custom path replaces /v1/systemone after the base"
+assert_equals "Authorization: Bearer $KEY" "$(cat "$LOG/header")" "custom path keeps the fd header transport"
+assert_not_contains "$(cat "$LOG/argv")" "$KEY" "custom path keeps the key out of argv"
+assert_equals $'curl:clean\nquota-axi:clean' "$(cat "$LOG/child-env")" "custom path keeps the key out of child environments"
+assert_equals 'jev-latest' "$(jq -r .model < "$LOG/body")" "custom path leaves the request body unchanged"
+printf '%s\n' 'TYPESAFE_PATH=/dotenv/decide' > "$HOME_DIR/.env"
+reset_log
+TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+assert_equals 'https://api.typesafe.ai/dotenv/decide' "$(grep -E '^https?://' "$LOG/argv")" ".env supplies the TypeSafe path"
+reset_log
+FM_DISPATCH_PROVIDER=typesafe TYPESAFE_PATH=/env/decide TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+assert_equals 'https://api.typesafe.ai/env/decide' "$(grep -E '^https?://' "$LOG/argv")" "environment path wins over .env"
+rm -f "$HOME_DIR/.env"
+reset_log
+FM_DISPATCH_PROVIDER=openrouter FM_DISPATCH_MODEL=typesafe/jev-1.13 TYPESAFE_PATH=bad OPENROUTER_API_KEY=$KEY run code out err "$BRIEF"
+assert_contains "$(cat "$LOG/argv")" 'https://openrouter.ai/api/alpha/decisions' "TYPESAFE_PATH never affects another provider"
+for path in \
+  v1/decide \
+  'https://other.example/decide' \
+  '/v1/de cide' \
+  '/v1/decide?key=value' \
+  '/v1/decide?' \
+  '/v1/decide#frag' \
+  '/v1/decide#' \
+  '/v1/../decide' \
+  '/v1/./decide' \
+  /.. \
+  /. \
+  '/v1\decide' \
+  $'/v1/decide\n' \
+  $'/v1/\tdecide' \
+  $'/v1/\x01decide'; do
+  reset_log
+  TYPESAFE_PATH=$path TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+  expect_code 2 "$code" "invalid TypeSafe path is a configuration error"
+  assert_contains "$err" 'TYPESAFE_PATH' "invalid path names the setting"
+  assert_equals '' "$out" "invalid path never produces a fallback profile"
+  assert_absent "$LOG/argv" "invalid path never sends a request"
+  assert_absent "$LOG/quota-axi.calls" "invalid path never reads quota"
+done
+printf '%s\n' 'TYPESAFE_PATH=/v1/../x' > "$HOME_DIR/.env"
+reset_log
+TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+expect_code 2 "$code" "invalid .env path is a configuration error"
+assert_absent "$LOG/argv" "invalid .env path never sends a request"
+rm -f "$HOME_DIR/.env"
+reset_log
+TYPESAFE_PATH=bad run code out err "$BRIEF"
+expect_code 2 "$code" "invalid path is actionable even without a key"
+assert_absent "$LOG/argv" "invalid path without a key never sends a request"
+# never-send checks the final URL, including the path
+printf '%s\n' 'secret-route' > "$HOME_DIR/config/dispatch-never-send"
+reset_log
+TYPESAFE_PATH=/v1/secret-route/decide TYPESAFE_API_KEY=$KEY run code out err "$BRIEF"
+expect_code 0 "$code" "a never-send path match is off, not an error"
+assert_equals '' "$out" "a never-send path match withholds the request"
+assert_contains "$err" 'nothing sent)' "a never-send path match reports withholding"
+assert_absent "$LOG/argv" "a never-send path match makes no network call"
+rm -f "$HOME_DIR/config/dispatch-never-send"
+pass "TYPESAFE_PATH: default unchanged, custom path used, invalid values refused, never-send sees the full URL"
+
 # The configuration contract precedes both off and declared-key selection.
 # Invalid addresses must never reach Keychain, curl, or quota, for either
 # provider spelling and either configuration source. Literal errors are the
@@ -704,6 +773,13 @@ run code out err "$BRIEF" --project pager
 assert_contains "$out" '  status: clear' "a declaration without an account resolves"
 assert_equals 'find-generic-password -s typesafe-svc -w' "$(cat "$LOG/security.argv")" "an omitted account is omitted from the lookup"
 pass "mapping: a declared macos-keychain service and optional account become the lookup, and the key rides the fd header"
+reset_log
+TYPESAFE_PATH=/api/v1/decide run code out err "$BRIEF" --project pager
+expect_code 0 "$code" "a declared source works with a custom path"
+assert_equals 'https://api.typesafe.ai/api/v1/decide' "$(grep -E '^https?://' "$LOG/argv")" "a declared source key goes to the custom path"
+assert_equals "Authorization: Bearer $SECRET" "$(cat "$LOG/header")" "the declared key still rides the fd header with a custom path"
+assert_not_contains "$(cat "$LOG/argv")" "$SECRET" "the declared key stays out of argv with a custom path"
+pass "TYPESAFE_PATH works with the macos-keychain credential source"
 
 # precedence: environment, then .env, then the declared source
 reset_log

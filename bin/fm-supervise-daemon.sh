@@ -1491,6 +1491,11 @@ housekeeping() {  # <state>
         fi
         if escalate_add "$state" "$persisted"; then
           stale_marker_remove_key "$key" "$state"
+          if status_is_captain_relevant "$(last_status_line "$state/$task.status")"; then
+            if fm_jev_check_missed_blocker "$task" "stuck-alarm"; then
+              escalate_add "$state" "jev-monitoring auto-off triggered: stuck alarm surfaced captain-relevant event on $task" || true
+            fi
+          fi
         fi
         ;;
     esac
@@ -1653,6 +1658,9 @@ housekeeping() {  # <state>
         event=${rest#*$'\t'}
         if escalate_add "$state" "$(basename "$f"): $event (catch-all scan)"; then
           mark_status_seen "$state" "$task" "$endpoint" "$ident" || true
+          if fm_jev_check_missed_blocker "$task" "catch-all-scan" "$endpoint"; then
+            escalate_add "$state" "jev-monitoring auto-off triggered: missed captain-relevant event on $task" || true
+          fi
         fi
       elif ! mark_status_seen "$state" "$task" "$endpoint" "$ident"; then
         escalate_add "$state" "$(basename "$f"): status position commit failed (catch-all scan)"
@@ -1947,6 +1955,22 @@ handle_wake() {  # <reason> <state>
   fi
   case "$action" in
     escalate)
+      _jev_mode_now=$(fm_jev_mode)
+      _jev_task=${task:-$(window_to_task "${arg%% *}" "$state" 2>/dev/null || true)}
+      _jev_line=''
+      [ -n "$_jev_task" ] && _jev_line=$(last_status_line "$state/$_jev_task.status")
+      if [ "$_jev_mode_now" = "act" ] && fm_jev_act_evaluate "${_jev_task:-unknown}" "$kind" "$reason" "${_jev_line:-$distilled}" 0; then
+        log "self-handle (jev-monitoring): $reason -> $distilled"
+        [ "$kind" = "stale" ] && stale_marker_remove "$arg" "$state"
+        mark_escalated_seen "$state" "$capture" || classification_failed=1
+        rm -f "$capture"
+        [ "$classification_failed" -eq 0 ]
+        return
+      fi
+      if [ "$_jev_mode_now" = "watch" ]; then
+        fm_jev_is_protected_wake "$kind" "$reason" "$_jev_line" \
+          || fm_jev_watch_dispatch "${_jev_task:-unknown}" "needs-firstmate" "${_jev_line:-$distilled}"
+      fi
       log "escalate: $reason -> $distilled"
       if escalate_add "$state" "$distilled"; then
         # A terminal-stale escalate must not leave a persistence marker behind, or

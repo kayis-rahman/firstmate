@@ -57,7 +57,9 @@ Stop the relay before changing the bot’s channel permissions. Losing **Read Me
 Shadow test (needs the captain's word; nothing here is done by the build):
 
 1. Use a separate captain-only test channel and bot token. Before baselining a guild text channel, enable **Message Content Intent** for the bot in the Discord Developer Portal (and obtain approval if Discord requires it). Before baselining, grant the bot **View Channel**, **Read Message History**, **Send Messages**, and **Add Reactions** in the shadow channel. Export the shadow token as `FM_DISCORD_RELAY_TOKEN` and set `FM_HOME` to an existing throwaway inbox home, not the live home. Write a config with `enabled: true`, the shadow channel and a fresh shadow `state_dir`. Before running the inbox commands manually, unset the overrides listed in the [configuration reference](configuration.md#go-discord-relay) so they use the same home paths as the relay.
-2. Start `bin/go-pilot/discord-relay run` under supervision. After the initial baseline is saved, send an ordinary captain message that does not mention the bot. On a subsequent poll, confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`.
+2. Start `bin/go-pilot/discord-relay run` under supervision.
+   After the initial baseline is saved, send an ordinary captain message that does not mention the bot.
+   On a subsequent poll, confirm it gets 👀 and appears in `bin/fm-inbox.sh list` with the same `FM_HOME`, or in `bin/fm-inbox.sh receipts --all-handled` if already handled.
 3. Use `bin/fm-inbox.sh reply <note-id> "test answer"` and check that the answer appears in the thread. Use `bin/fm-inbox.sh drain --ack <note-id>` and check for ✅.
 4. With the relay still running, wait two quiet minutes, then emit a decision with an explicit occurrence ID from another shell using the same `FM_HOME`. Check for one push and a reminder after about a minute if unanswered.
 
@@ -70,7 +72,8 @@ Cutover requires the captain’s approval of the shadow results, live producer w
 
 Rollback:
 
-1. If a live producer was connected to the Go relay, point it back to its previous route before restarting the old watcher. With the config still enabled, `emit` can succeed even when the relay is stopped; that only queues the alert.
+1. Stop or redirect all live producers away from the Go relay, and wait for any in-flight emits to finish before taking inventory.
+   With the config still enabled, `emit` can succeed even when the relay is stopped; that only queues the alert.
 2. Before stopping the Go relay, check for unsent alerts in `events/` and in `state.json` (events with `posted: false`). Record pending alerts for reconciliation; the old watcher does not drain the Go alert queue.
 3. Disable automatic restarts, send `SIGTERM` to the Go relay, and confirm it has exited. An in-progress pass can keep running after the signal. Only then check the captain-only channel again and post any still-needed alert by hand if it was not delivered.
 4. Restart the old watcher: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.firstmate.discord-watcher.plist`.
