@@ -37,7 +37,7 @@ export function createCaptainAttentionSound(options: SoundOptions = {}) {
     return { cancel: () => nodeClearInterval(timer) };
   });
   return {
-    outcome(verdict: "captain" | "routine", silent: boolean, key: string): boolean {
+    outcome(verdict: "captain" | "routine" | "notice", silent: boolean, key: string): boolean {
       return verdict === "captain" && !silent ? this.notify("captain-outcome", key) : false;
     },
     notify(event: AttentionEvent, key: string): boolean {
