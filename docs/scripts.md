@@ -61,6 +61,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-procinfo.py`         | Read one pid's ppid, comm, and args through macOS kernel syscalls when the `ps` binary cannot execute |
 | `fm-claude-stop-autoarm.sh` | Claude Stop/StopFailure `asyncRewake` hook; see [watcher continuity](watcher-continuity.md#claude-stop-hook) |
 | `fm-claude-account-quota.sh` | Measure each Claude account a home declares in `config/claude-accounts`, in isolation, and print quota facts (configuration.md owns the account list) |
+| `fm-codex-account-quota.sh` | Measure each Codex account a home declares in `config/codex-accounts`, in isolation, and print quota facts (configuration.md owns the account list) |
 | `fm-turnend-guard.sh`    | Shared primary turn-end guard predicate so no turn ends blind (docs/turnend-guard.md) |
 | `fm-turnend-guard-grok.sh` | Grok Stop-hook adapter for the primary turn-end guard                              |
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
