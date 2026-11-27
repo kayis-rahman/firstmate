@@ -2,11 +2,16 @@ package forgedetect
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
 
 func Detect(dir string) (string, error) {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("%s is not a git work tree", dir)
+	}
 	out, err := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree").Output()
 	if err != nil || strings.TrimSpace(string(out)) != "true" {
 		return "", fmt.Errorf("%s is not a git work tree", dir)

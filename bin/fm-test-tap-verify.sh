@@ -33,6 +33,24 @@
 # summary is printed. Non-zero exit means the completeness check failed.
 set -eu
 
+_fm_go_pilot_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_fm_go_pilot_root="${FM_ROOT_OVERRIDE:-$(cd "$_fm_go_pilot_dir/.." && pwd)}"
+_fm_go_pilot_home="${FM_HOME:-$_fm_go_pilot_root}"
+_fm_go_pilot_cfg="${FM_CONFIG_OVERRIDE:-$_fm_go_pilot_home/config}/go-pilot"
+_fm_go_pilot_bin="$_fm_go_pilot_dir/go-pilot/test-tap-verify"
+if [ -f "$_fm_go_pilot_cfg" ] && [ -x "$_fm_go_pilot_bin" ]; then
+  while IFS= read -r _fm_go_pilot_line || [ -n "$_fm_go_pilot_line" ]; do
+    case "$_fm_go_pilot_line" in
+      ''|'#'*) continue ;;
+      'test-tap-verify')
+        export FM_TAP_VERIFY_BASH="${BASH:-bash}"
+        exec "$_fm_go_pilot_bin" "$@"
+        ;;
+    esac
+  done < "$_fm_go_pilot_cfg"
+fi
+unset _fm_go_pilot_dir _fm_go_pilot_root _fm_go_pilot_home _fm_go_pilot_cfg _fm_go_pilot_bin _fm_go_pilot_line
+
 usage() {
   cat <<'EOF'
 Usage: fm-test-tap-verify.sh TEST_SCRIPT

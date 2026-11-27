@@ -10,7 +10,7 @@ import (
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: fm-forge-detect <clone-dir>")
-		os.Exit(2)
+		os.Exit(1)
 	}
 	res, err := forgedetect.Detect(os.Args[1])
 	if err != nil {
