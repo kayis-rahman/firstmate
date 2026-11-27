@@ -91,7 +91,16 @@ This touches only the firstmate repo and its own worktrees, never anything under
    It is a gentle steer, not an interruption: the mate already got a safe tracked-files fast-forward, and the steer never forces, tears down, or discards its work.
    Never describe one of these as reloaded; its agent is still running the wiring it launched with.
 
-5. **Report to the captain in plain outcomes, in one line where you can.**
+5. **Check pulled shell changes against the Go port and rebuild Go tools.**
+   When the primary target printed `updated <old>..<new>`, run:
+   ```sh
+   FM_HOME=<this-firstmate-home> bin/fm-update-go-check.sh <old> <new>
+   ```
+   It lists every `bin/*.sh` added or changed in `<old>..<new>`, flags any changed script that has a Go port in [`docs/go-port.md`](../../../docs/go-port.md) as out of date, removes that tool from `config/go-pilot` so it falls back to shell until re-ported and re-verified, reports newly added standalone helper scripts as port candidates, and rebuilds Go tools via `bin/fm-go-pilot-build.sh`.
+   This check never ports code mid-update and never blocks the update.
+   Report any `out-of-date-go-port:` and `new-helper-candidate:` lines to the captain and file a backlog follow-up item (via `bin/fm-tasks-axi.sh`) to re-port or port them.
+
+6. **Report to the captain in plain outcomes, in one line where you can.**
    Summarize what landed under `AGENTS.md` section 9 without firstmate's internal vocabulary: which parts of the fleet are now on the latest, and which were left as-is and why.
    For example: "Captain, firstmate and both second mates are now on the latest."
    Say plainly when a mate got the message rather than a clean reload, and why - never let a partial reload read as a full one.
