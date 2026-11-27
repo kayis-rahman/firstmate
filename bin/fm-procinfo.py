@@ -175,8 +175,6 @@ def main():
     except locale.Error:
         return 1
     comm = _ps_visible(argv[0])
-    while argv and not argv[-1]:
-        argv.pop()
     args = _ps_visible(b" ".join(argv))
     sys.stdout.buffer.write(str(ppid).encode("ascii") + b"\t" + comm + b"\t" + args + b"\n")
     return 0

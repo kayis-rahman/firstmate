@@ -22,8 +22,6 @@ herdr_forget_inherited_pane
 
 TMP_ROOT=$(fm_test_tmproot fm-herdr-groups)
 TOKEN_A='AbCdEfGhIjKlMnOpQrStUv'
-# The adapter reports the physical socket path; /tmp is a symlink to /private/tmp on macOS.
-FM_GROUPS_SOCK=$(cd /tmp && pwd -P)/fm-groups-s1.sock
 
 # make_fake_herdr <dir>: a `herdr` stand-in that logs every call (one line,
 # unit-separated arguments) to $FAKE_HERDR_LOG and answers from files:
