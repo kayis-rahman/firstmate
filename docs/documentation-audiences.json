@@ -446,6 +446,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/go-port.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/fleet-ledger.md",
       "audience": "operator-current"
     },
