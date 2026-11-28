@@ -441,7 +441,8 @@ run_extension_section_lane() {
 
 # The coordinator stops any section lane, including the aggregate run's, that
 # outlives this bound, so no wait inside a section can usefully run longer.
-EXTENSION_SECTION_LANE_MAX_SECONDS=34
+# lifecycle-flow alone takes about 46s on macOS, so leave room for full-suite load.
+EXTENSION_SECTION_LANE_MAX_SECONDS=120
 
 run_extension_section_lanes() {
   local section result_file section_rc timeout_seconds deadline deadline_epoch index remaining launched total maximum_sections
@@ -1262,6 +1263,8 @@ host_error_case() {
   [ "$(wc -l < "$poll_count" | tr -d ' ')" -eq 1 ] || fail "healthy poll did not reach adapter"
   case "$shape" in
     package)
+      # macOS refuses to rename a directory its owner cannot write; the root is 0555.
+      chmod 0700 "$installed"
       mv "$installed" "$installed.saved"
       expected_code='package-missing'
       ;;
@@ -1315,7 +1318,7 @@ host_error_case() {
   done
   assert_contains "$(wake_payloads "$home")" "procevent ext-host-error $source 1" "$shape first failure was suppressed"
   case "$shape" in
-    package) mv "$installed.saved" "$installed" ;;
+    package) mv "$installed.saved" "$installed" && chmod 0555 "$installed" ;;
     conflict) cp "$case_root/other-binding.saved" "$home/config/extensions.d/org.example.other.json" ;;
     barrier) mv "$case_root/code/bin/fm-extension-launch-barrier.original.mjs" "$case_root/code/bin/fm-extension-launch-barrier.mjs" ;;
   esac
@@ -1356,6 +1359,7 @@ assert_absent "$H_IDENTICAL/state/procevent-inbox/identical-source.1.handled" "f
 assert_absent "$H_IDENTICAL/state/procevent-inbox/identical-source.2.handled" "second adapter result was acknowledged"
 pass "successful identical adapter results retain distinct sequences even with host-shaped output"
 identical_installed=$(binding_value "$H_IDENTICAL" org.example.identical package_root)
+chmod 0700 "$identical_installed"
 mv "$identical_installed" "$identical_installed.saved"
 for _ in 1 2; do
   FM_HOME="$H_IDENTICAL" "$PROCEVENT" start identical-source > "$TMP_ROOT/identical-failure.out" \
@@ -2298,6 +2302,11 @@ assert_contains "$orphan_reconcile" "uncertain=0" "recovered extension sources r
 # their verdicts in turn under this home's extension lifecycle lock, so a loaded
 # host stretches the pair past any fixed marker poll. Wait for the recorded
 # runner groups to exit instead, and stop any survivor before failing.
+orphan_runners=()
+for orphan_source in orphan-first orphan-second; do
+  orphan_runner=$(sed -n '2p' "$FM_PROCEVENT_CLAIM_ROOT/$orphan_source.claim" 2>/dev/null || true)
+  [ -z "$orphan_runner" ] || orphan_runners+=("$orphan_source:$orphan_runner")
+done
 orphan_wait_seconds=$EXTENSION_SECTION_LANE_MAX_SECONDS
 if [ -n "${FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH:-}" ]; then
   orphan_remaining=$((FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH - $(date +%s) - 3))
@@ -2305,18 +2314,10 @@ if [ -n "${FM_EXTENSION_BINDING_LANE_DEADLINE_EPOCH:-}" ]; then
   [ "$orphan_wait_seconds" -ge 1 ] || orphan_wait_seconds=1
 fi
 orphan_deadline=$((SECONDS + orphan_wait_seconds))
-# A runner records its group only after launch is confirmed, so the pair is
-# re-read each poll and terminal retirement (claim removed) is the completion
-# signal; a not-yet-recorded runner can never be mistaken for a finished one.
-orphan_runners=()
 while :; do
   orphan_live=()
-  for orphan_source in orphan-first orphan-second; do
-    orphan_claim="$FM_PROCEVENT_CLAIM_ROOT/$orphan_source.claim"
-    [ -e "$orphan_claim" ] || continue
-    orphan_runner=$(sed -n '2p' "$orphan_claim" 2>/dev/null || true)
-    [ -z "$orphan_runner" ] || orphan_runners+=("$orphan_source:$orphan_runner")
-    orphan_live+=("$orphan_source:$orphan_runner")
+  for orphan_runner in "${orphan_runners[@]+"${orphan_runners[@]}"}"; do
+    kill -0 -"${orphan_runner#*:}" 2>/dev/null && orphan_live+=("$orphan_runner")
   done
   [ "${#orphan_live[@]}" -gt 0 ] && [ "$SECONDS" -lt "$orphan_deadline" ] || break
   sleep 0.1
@@ -2324,7 +2325,7 @@ done
 if [ "${#orphan_live[@]}" -gt 0 ]; then
   # Killing the runner groups strands their detached invocation groups, which
   # the home sweep's invocation cleanup then reclaims as host-crash residue.
-  for orphan_runner in "${orphan_runners[@]+"${orphan_runners[@]}"}"; do
+  for orphan_runner in "${orphan_live[@]}"; do
     kill -KILL -"${orphan_runner#*:}" 2>/dev/null || true
   done
   FM_HOME="$H_ORPHAN_READY" "$PROCEVENT" sweep-home >/dev/null 2>&1 || true

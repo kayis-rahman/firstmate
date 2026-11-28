@@ -53,18 +53,28 @@
 # and the check refuses a provider the root has not stored, so a pinned Pi
 # launch unsets nothing.
 #
-# A home that spends several Claude or agy subscriptions declares them instead
-# in config/claude-accounts or config/agy-accounts: one entry per line, each
-# `ordinary` or an absolute path (CLAUDE_CONFIG_DIR for Claude, HOME for agy),
-# with no blank lines, duplicates, or control characters, and an optional final
-# newline. The list is opt-in in the same way: absent, nothing here changes.
-# Present, for Claude it replaces the home-wide pin (which must then be absent),
-# and every Claude or agy ship or scout launch names one declared entry with
-# --account; Firstmate never defaults to the first entry, another entry, or the
-# ambient account. The named entry passes the same root, raw-command, and
-# sign-in refusals and is recorded as account=, which a ship or scout relaunch
-# reuses unless an explicit --account moves it. A local secondmate's agent
-# never draws from the list.
+# A home that spends several subscriptions of one runner declares them instead
+# in a declared account list, each entry a root its vendor lets a process
+# select:
+#   claude          CLAUDE_CONFIG_DIR     config/claude-accounts
+#   codex           CODEX_HOME            config/codex-accounts
+#   agy             HOME                  config/agy-accounts
+# One entry per line, each `ordinary` or an absolute path exactly as a pin
+# would hold it, with no blank lines, duplicates, or control characters, and an
+# optional final newline. `ordinary` unsets the variable, so the runner uses its
+# default root (~/.claude, ~/.codex, or $HOME). The list is opt-in in the same way:
+# absent, nothing here changes. Present, every ship or scout launch of that
+# runner names one declared entry with --account; Firstmate chooses it at
+# intake (bin/fm-<runner>-account-quota.sh measures each entry) and never
+# defaults to the first entry, another entry, or the ambient account. The named
+# entry passes the same root, raw-command, and sign-in refusals as a pin and is
+# recorded as account=, which a ship or scout relaunch reuses unless an
+# explicit --account moves it. config/claude-accounts replaces the home-wide
+# Claude pin, which must then be absent, and a local Claude secondmate's agent
+# never draws from it: it needs its own per-secondmate pin. Codex and agy have no pin,
+# so a Codex or agy secondmate's agent launches exactly as it would without the list.
+# Codex's sign-in check is `codex login status`, which exits 0 only when the
+# selected CODEX_HOME holds a login and ignores environment credentials.
 
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-timeout-lib.sh"
@@ -76,6 +86,43 @@ FM_WORKER_ACCOUNT_CHECK_SECONDS=${FM_WORKER_ACCOUNT_CHECK_SECONDS:-30}
 # Claude Platform on AWS and Bedrock Mantle switches from
 # code.claude.com/docs/en/env-vars).
 FM_WORKER_ACCOUNT_CLAUDE_SHED="CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY CLAUDE_CODE_USE_ANTHROPIC_AWS CLAUDE_CODE_USE_MANTLE ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_PROFILE ANTHROPIC_FEDERATION_RULE_ID"
+# Credentials Codex can spend instead of the login stored in CODEX_HOME: an API
+# key (codex exec honors it) and an agent-identity access token. OPENAI_API_KEY
+# is not one; Codex reads it only through `codex login --with-api-key`.
+FM_WORKER_ACCOUNT_CODEX_SHED="CODEX_API_KEY CODEX_ACCESS_TOKEN"
+
+# fm_worker_account_root_var <harness>
+# Prints the variable a declared account list entry selects; returns 1 for a
+# runner without a list.
+fm_worker_account_root_var() {
+  case "$1" in
+  claude) printf '%s\n' CLAUDE_CONFIG_DIR ;;
+  codex) printf '%s\n' CODEX_HOME ;;
+  agy) printf '%s\n' HOME ;;
+  *) return 1 ;;
+  esac
+}
+
+# fm_worker_account_list_file <harness>
+# Prints the declared account list file name for a runner that has one;
+# returns 1 for any other.
+fm_worker_account_list_file() {
+  case "$1" in
+  claude) printf '%s\n' claude-accounts ;;
+  codex) printf '%s\n' codex-accounts ;;
+  agy) printf '%s\n' agy-accounts ;;
+  *) return 1 ;;
+  esac
+}
+
+# fm_worker_account_label <harness>
+fm_worker_account_label() {
+  case "$1" in
+  claude) printf '%s\n' Claude ;;
+  codex) printf '%s\n' Codex ;;
+  *) printf '%s\n' "$1" ;;
+  esac
+}
 
 # fm_worker_account_file <harness>
 # Prints the pin file name for a pinnable runner; returns 1 for any other.
@@ -186,25 +233,15 @@ fm_worker_account_resolve() {
   printf '%s\t%s\t%s\n' "$declared" "$root" "${token#*$'\t'}"
 }
 
-# fm_worker_account_list_file <harness>
-# Prints the account-list file name for a multi-account runner; returns 1 for any other.
-fm_worker_account_list_file() {
-  case "$1" in
-  claude) printf '%s\n' claude-accounts ;;
-  agy) printf '%s\n' agy-accounts ;;
-  *) return 1 ;;
-  esac
-}
-
 # fm_worker_account_list <harness> <config-dir>
-# Prints the entries config/claude-accounts or config/agy-accounts declares,
-# one per line, for a supported launch. Prints nothing and returns 0 for another
-# runner or when the list is absent. On a malformed or unreadable list prints
-# one error naming the file and returns 1.
+# Prints the entries the runner's declared account list holds, one per line.
+# Prints nothing and returns 0 for a runner without a list or when the list is
+# absent. On a malformed or unreadable list prints one error naming the file
+# and returns 1.
 fm_worker_account_list() {
-  local harness=$1 list_file cfg out rc
-  list_file=$(fm_worker_account_list_file "$harness") || return 0
-  cfg="$2/$list_file"
+  local harness=$1 file cfg out rc
+  file=$(fm_worker_account_list_file "$harness") || return 0
+  cfg="$2/$file" 
   out=$(perl -MErrno=ENOENT -e '
     my ($f) = @ARGV;
     unless (lstat $f) {
@@ -228,15 +265,15 @@ fm_worker_account_list() {
   3) return 0 ;;
   4) return 1 ;;
   5)
-    echo "error: config/$list_file must be a readable regular file: $cfg" >&2
+    echo "error: config/$file must be a readable regular file: $cfg" >&2
     return 1
     ;;
   7)
-    echo "error: config/$list_file declares the same account twice: $cfg" >&2
+    echo "error: config/$file declares the same account twice: $cfg" >&2
     return 1
     ;;
   *)
-    echo "error: config/$list_file must hold one account per line, each 'ordinary' or an absolute path, with no blank lines or control characters: $cfg" >&2
+    echo "error: config/$file must hold one account per line, each 'ordinary' or an absolute path, with no blank lines or control characters: $cfg" >&2
     return 1
     ;;
   esac
@@ -245,14 +282,13 @@ fm_worker_account_list() {
 # fm_worker_account_relaunch_request <harness> <config-dir> <prior-harness> <recorded-account> <explicit-account> [<secondmate-id>]
 # Prints the declared account a relaunch asks fm_worker_account_select for:
 # the explicit one when given, otherwise the task's recorded account when the
-# home declares an account list for <harness> and the ship or scout stays on
-# that harness. Prints nothing otherwise, so a relaunch without a list re-reads
-# the pin exactly as before. Returns 1 when the explicit account holds a control
+# home declares the runner's account list and a ship or scout stays on that
+# runner. Prints nothing otherwise, so a relaunch without a list re-reads the
+# pin exactly as before. Returns 1 when the explicit account holds a control
 # character or the list cannot be read.
 fm_worker_account_relaunch_request() {
-  local harness=$1 config=$2 prior=$3 recorded=$4 explicit=$5 mate=${6:-} listed list_file
-  list_file=$(fm_worker_account_list_file "$harness" 2>/dev/null || printf '%s\n' claude-accounts)
-  fm_worker_account_request_valid "$explicit" "$list_file" || return 1
+  local harness=$1 config=$2 prior=$3 recorded=$4 explicit=$5 mate=${6:-} listed
+  fm_worker_account_request_valid "$explicit" "$harness" || return 1
   if [ -n "$explicit" ] || [ -n "$mate" ]; then
     printf '%s\n' "$explicit"
     return 0
@@ -345,19 +381,33 @@ fm_worker_account_check() {
     fi
     return 0
     ;;
+  codex)
+    [ -z "$root" ] || clean+=("CODEX_HOME=$root")
+    if fm_run_timed "$FM_WORKER_ACCOUNT_CHECK_SECONDS" "${clean[@]}" \
+      "$executable" login status >/dev/null 2>&1 </dev/null; then
+      return 0
+    fi
+    if [ -n "$root" ]; then
+      echo "error: $setting pins Codex workers to $root, which is not signed in (codex login status); sign in with CODEX_HOME=$root codex login, or change $setting" >&2
+    else
+      echo "error: $setting pins Codex workers to the ordinary account, which is not signed in (codex login status); sign in with env -u CODEX_HOME codex login, or change $setting" >&2
+    fi
+    return 1
+    ;;
   esac
   return 0
 }
 
-# fm_worker_account_request_valid <account>
+# fm_worker_account_request_valid <account> [<harness>]
 # Refuses an --account value holding a control character. Declared entries
 # never hold one, and a newline would otherwise split the value before the
 # whole-entry membership check or the account= record sees it.
 fm_worker_account_request_valid() {
-  local list_file=${2:-claude-accounts}
+  local list
   case "$1" in
   *[[:cntrl:]]*)
-    echo "error: --account must name one config/$list_file entry exactly, with no control characters" >&2
+    list=$(fm_worker_account_list_file "${2:-}") || list='claude-accounts, config/codex-accounts, or config/agy-accounts'
+    echo "error: --account must name one config/$list entry exactly, with no control characters" >&2
     return 1
     ;;
   esac
@@ -365,57 +415,49 @@ fm_worker_account_request_valid() {
 
 # fm_worker_account_select <harness> <config-dir> <model> <executable> [<raw-command>] [<secondmate-id>] [<account>]
 # The whole launch-time decision. Prints nothing for an unpinned runner, so
-# the caller keeps today's launch unchanged. For a pinned one, or a Claude or
-# agy ship or scout launching on a declared account-list entry named by
-# <account>, prints "declared<TAB>root<TAB>provider", where provider is the
-# Pi launch model's own (empty for Claude and agy), after the model guard and
-# the sign-in check pass. On refusal prints one error and returns 1.
+# the caller keeps today's launch unchanged. For a pinned one, or a ship or
+# scout launching on a declared account list entry named by <account>, prints
+# "declared<TAB>root<TAB>provider", where provider is the Pi launch model's
+# own (empty for Claude, Codex, and agy), after the model guard and the sign-in
+# check pass. On refusal prints one error and returns 1.
 # bin/fm-spawn.sh runs it before any endpoint exists, and bin/fm-control.sh
 # before a relaunch stops the live agent.
 fm_worker_account_select() {
   local harness=$1 config=$2 model=$3 executable=$4 raw=${5:-} mate=${6:-} account=${7:-}
-  local selection declared root providers word provider='' selected_config setting listed count list_file pin_file fallback runner_label
-  list_file=$(fm_worker_account_list_file "$harness" 2>/dev/null || true)
-  fm_worker_account_request_valid "$account" "${list_file:-claude-accounts}" || return 1
-  if [ -n "$account" ] && [ "$harness" != claude ] && [ "$harness" != agy ]; then
-    if [ -e "$config/agy-accounts" ]; then
-      echo "error: --account names one of config/claude-accounts or config/agy-accounts and applies to Claude or agy workers only, not $harness" >&2
-    else
-      echo "error: --account names one of config/claude-accounts and applies to Claude workers only, not $harness" >&2
-    fi
+  local selection declared root providers word provider='' selected_config setting listed count
+  local list_file pin_file label root_var ordinary_root
+  fm_worker_account_request_valid "$account" "$harness" || return 1
+  list_file=$(fm_worker_account_list_file "$harness") || list_file=
+  pin_file=$(fm_worker_account_file "$harness") || pin_file=
+  label=$(fm_worker_account_label "$harness")
+  if [ -n "$account" ] && [ -z "$list_file" ]; then
+    echo "error: --account names one entry of config/claude-accounts, config/codex-accounts, or config/agy-accounts and applies to Claude, Codex, and agy workers only, not $harness" >&2
     return 1
   fi
   if [ -n "$account" ] && [ -n "$mate" ]; then
-    echo "error: --account applies to ships and scouts; secondmate $mate cannot use --account" >&2
+    if [ -n "$pin_file" ]; then
+      echo "error: --account applies to ships and scouts; secondmate $mate launches on its own config/secondmate-accounts/$mate/$pin_file pin" >&2
+    else
+      echo "error: --account applies to ships and scouts; secondmate $mate launches as it would without config/$list_file" >&2
+    fi
     return 1
   fi
+  # A secondmate without a pin file (Codex, agy) never reads the ship list.
+  [ -n "$mate" ] && [ -z "$pin_file" ] && return 0
   listed=$(fm_worker_account_list "$harness" "$config") || return 1
   if [ -z "$listed" ] && [ -n "$account" ]; then
     echo "error: --account '$account' needs config/$list_file, which this home does not declare" >&2
     return 1
   fi
-  if [ "$harness" = claude ] && [ -n "$listed" ] && { [ -e "$config/claude-account" ] || [ -L "$config/claude-account" ]; }; then
-    echo "error: config/claude-accounts and config/claude-account are both present; keep the account list or the single pin, not both" >&2
+  if [ -n "$listed" ] && [ -n "$pin_file" ] && { [ -e "$config/$pin_file" ] || [ -L "$config/$pin_file" ]; }; then
+    echo "error: config/$list_file and config/$pin_file are both present; keep the account list or the single pin, not both" >&2
     return 1
   fi
-  selected_config=$(fm_worker_account_config "$harness" "$config" "$mate") || return 1
-  pin_file=$(fm_worker_account_file "$harness" 2>/dev/null || true)
-  setting="config/${pin_file:-$list_file}"
-  [ "$selected_config" = "$config" ] || setting="$selected_config/$pin_file"
-  if [ -n "$listed" ] && [ -n "$mate" ]; then
-    if [ "$harness" = claude ] && [ "$selected_config" = "$config" ]; then
-      echo "error: config/claude-accounts chooses accounts for ships and scouts only; secondmate $mate needs its own pin in config/secondmate-accounts/$mate/claude-account" >&2
-      return 1
-    fi
-    [ "$harness" = claude ] || return 0
-  fi
   if [ -n "$listed" ] && [ -z "$mate" ]; then
-    setting="config/$list_file"
-    runner_label=$harness
-    [ "$harness" != claude ] || runner_label=Claude
+    setting=config/$list_file
     if [ -z "$account" ]; then
       count=$(printf '%s\n' "$listed" | wc -l | tr -d ' ')
-      echo "error: $setting declares $count $runner_label accounts, so a $runner_label ship or scout launch must name one with --account; bin/fm-${harness}-account-quota.sh measures each, and Firstmate never picks a default" >&2
+      echo "error: $setting declares $count $label accounts, so a $label ship or scout launch must name one with --account; bin/fm-$harness-account-quota.sh measures each, and Firstmate never picks a default" >&2
       return 1
     fi
     declared=
@@ -426,18 +468,32 @@ fm_worker_account_select() {
       echo "error: account '$account' is not declared in $setting; name a declared entry with --account" >&2
       return 1
     }
-    declared=$account
     root=$account
     [ "$declared" != ordinary ] || root=
     if [ -n "$root" ] && { [ ! -d "$root" ] || [ ! -r "$root" ] || [ ! -x "$root" ]; }; then
+      root_var=$(fm_worker_account_root_var "$harness")
       # shellcheck disable=SC2088  # Literal text for the refusal.
-      fallback='~/.claude with CLAUDE_CONFIG_DIR unset'
-      [ "$harness" != agy ] || fallback='default HOME'
-      echo "error: $setting must name readable, searchable existing directories (ordinary means $fallback): $root" >&2
+      ordinary_root='~/.claude'
+      # shellcheck disable=SC2088  # Literal text for the refusal.
+      [ "$harness" != codex ] || ordinary_root='~/.codex'
+      if [ "$harness" = agy ]; then
+        echo "error: $setting must name readable, searchable existing directories (ordinary means default HOME): $root" >&2
+      else
+        echo "error: $setting must name readable, searchable existing directories (ordinary means $ordinary_root with $root_var unset): $root" >&2
+      fi
       return 1
     fi
     providers=
+  elif [ -z "$pin_file" ]; then
+    return 0
   else
+    selected_config=$(fm_worker_account_config "$harness" "$config" "$mate") || return 1
+    setting="config/$pin_file"
+    [ "$selected_config" = "$config" ] || setting="$selected_config/$pin_file"
+    if [ -n "$listed" ] && [ "$selected_config" = "$config" ]; then
+      echo "error: config/$list_file chooses accounts for ships and scouts only; secondmate $mate needs its own pin in config/secondmate-accounts/$mate/$pin_file" >&2
+      return 1
+    fi
     selection=$(fm_worker_account_resolve "$harness" "$selected_config" "$setting") || return 1
     if [ -z "$selection" ]; then
       [ "$selected_config" = "$config" ] && return 0
@@ -449,13 +505,15 @@ fm_worker_account_select() {
     providers=${root#*$'\t'}
     root=${root%%$'\t'*}
   fi
-  if [ "$harness" = claude ]; then
+  case "$harness" in
+  claude | codex | agy)
+    root_var=$(fm_worker_account_root_var "$harness")
     for word in $raw; do
       case "$word" in
       [A-Za-z_]*=*)
-        case " CLAUDE_CONFIG_DIR $FM_WORKER_ACCOUNT_CLAUDE_SHED " in
+        case " $root_var $(fm_worker_account_shed_vars "$harness") " in
         *" ${word%%=*} "*)
-          echo "error: $setting pins Claude workers, but the raw launch command sets ${word%%=*}, which would override the pinned account; remove ${word%%=*} from the raw command, or change or remove $setting" >&2
+          echo "error: $setting pins $label workers, but the raw launch command sets ${word%%=*}, which would override the pinned account; remove ${word%%=*} from the raw command, or change or remove $setting" >&2
           return 1
           ;;
         esac
@@ -463,19 +521,8 @@ fm_worker_account_select() {
       *) break ;;
       esac
     done
-  elif [ "$harness" = agy ]; then
-    for word in $raw; do
-      case "$word" in
-      [A-Za-z_]*=*)
-        if [ "${word%%=*}" = HOME ]; then
-          echo "error: $setting selects agy worker accounts, but the raw launch command sets HOME, which would override the selected account; remove HOME from the raw command, or change or remove $setting" >&2
-          return 1
-        fi
-        ;;
-      *) break ;;
-      esac
-    done
-  else
+    ;;
+  *)
     if [ -n "$raw" ]; then
       echo "error: $setting pins Pi workers, and a raw Pi launch command runs verbatim, so it cannot carry the pinned --provider; launch with --harness $harness and --model <provider>/<id> instead" >&2
       return 1
@@ -491,18 +538,28 @@ fm_worker_account_select() {
       return 1
       ;;
     esac
-  fi
+    ;;
+  esac
   fm_worker_account_check "$harness" "$declared" "$root" "$executable" "$provider" "$setting" || return 1
   printf '%s\t%s\t%s\n' "$declared" "$root" "$provider"
 }
 
-# fm_worker_account_claude_shed
-# Prints the `env` launch prefix that unsets the environment credentials Claude
-# ranks above a pinned root's stored login. The caller appends the root
-# assignment, or -u CLAUDE_CONFIG_DIR for the ordinary account.
-fm_worker_account_claude_shed() {
+# fm_worker_account_shed_vars <harness>
+# Prints the environment credentials a launch on a selected Claude or Codex
+# root unsets, because the runner would spend them instead of that root's login.
+fm_worker_account_shed_vars() {
+  case "$1" in
+  claude) printf '%s\n' "$FM_WORKER_ACCOUNT_CLAUDE_SHED" ;;
+  codex) printf '%s\n' "$FM_WORKER_ACCOUNT_CODEX_SHED" ;;
+  esac
+}
+
+# fm_worker_account_shed <harness>
+# Prints the `env` launch prefix that unsets those credentials. The caller
+# appends the root assignment, or -u <root variable> for the ordinary account.
+fm_worker_account_shed() {
   local var prefix=env
-  for var in $FM_WORKER_ACCOUNT_CLAUDE_SHED; do
+  for var in $(fm_worker_account_shed_vars "$1"); do
     prefix="$prefix -u $var"
   done
   printf '%s\n' "$prefix"

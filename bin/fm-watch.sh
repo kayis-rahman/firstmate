@@ -2602,7 +2602,7 @@ paused_wait_superseded() {  # <window> <task>
       "0 $sig") return 1 ;;
     esac
   fi
-  printf '0 %s' "$sig" > "$marker"
+  printf '0 %s' "$sig" > "$marker" 
   line=$("$FM_CREW_STATE_BIN" "$task" 2>/dev/null) || line=''
   if run=$(crew_gate_awaits_human_decision "$task" "$line") \
     && ! status_has_open_needs_decision "$statusf" "$run"; then

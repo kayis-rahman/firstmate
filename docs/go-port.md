@@ -36,7 +36,7 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 
 | script | lines | executed or sourced | phase | Go status |
 | --- | --- | --- | --- | --- |
-| bin/fm-account-quota-lib.sh | 78 | sourced | library | shell |
+| bin/fm-account-quota-lib.sh | 118 | sourced | library | shell |
 | bin/fm-afk-contract.sh | 710 | executed | core-lifecycle | shell |
 | bin/fm-afk-launch.sh | 1020 | executed | core-lifecycle | shell |
 | bin/fm-afk-return.sh | 936 | executed | core-lifecycle | shell |
@@ -51,10 +51,10 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-backlog-handoff.sh | 1100 | executed | helper | shell |
 | bin/fm-backlog-receive.sh | 188 | executed | helper | shell |
 | bin/fm-backlog-transition-lib.sh | 1239 | sourced | library | shell |
-| bin/fm-bearings-board.sh | 459 | executed | helper | shell |
-| bin/fm-bearings-snapshot.sh | 747 | executed | later-ops | shell |
-| bin/fm-bootstrap.sh | 1905 | executed | later-ops | shell |
-| bin/fm-branch-outcome.sh | 851 | executed | helper | shell |
+| bin/fm-bearings-board.sh | 462 | executed | helper | shell |
+| bin/fm-bearings-snapshot.sh | 770 | executed | later-ops | shell |
+| bin/fm-bootstrap.sh | 1927 | executed | later-ops | shell |
+| bin/fm-branch-outcome.sh | 907 | executed | helper | shell |
 | bin/fm-branch-prompt.sh | 201 | executed | helper | shell |
 | bin/fm-branch-report.sh | 160 | executed | helper | shell |
 | bin/fm-brief-heading-lib.sh | 95 | sourced | library | shell |
@@ -62,22 +62,24 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-busy-event.sh | 422 | executed | helper | shell |
 | bin/fm-busy-lib.sh | 1344 | sourced | library | shell |
 | bin/fm-capacity.sh | 1392 | executed | helper | shell |
-| bin/fm-captain-hold.sh | 2435 | executed | later-ops | shell |
+| bin/fm-captain-hold.sh | 2493 | executed | later-ops | shell |
 | bin/fm-cd-pretool-check.sh | 208 | executed | helper | shell |
 | bin/fm-check-lib.sh | 74 | sourced | library | shell |
 | bin/fm-check-register.sh | 42 | executed | helper | shell |
 | bin/fm-check-unregister.sh | 52 | executed | helper | shell |
-| bin/fm-classify-lib.sh | 3063 | sourced | library | shell |
-| bin/fm-claude-account-quota.sh | 147 | executed | helper | shell |
+| bin/fm-ci-budget-warn.sh | 140 | executed | helper | shell |
+| bin/fm-classify-lib.sh | 3130 | sourced | library | shell |
+| bin/fm-claude-account-quota.sh | 52 | executed | helper | shell |
 | bin/fm-claude-stop-autoarm.sh | 811 | executed | later-ops | shell |
 | bin/fm-claude-trust.sh | 594 | executed | helper | shell |
-| bin/fm-codex-stop-park.sh | 307 | executed | later-ops | shell |
-| bin/fm-composer-lib.sh | 2629 | sourced | library | shell |
+| bin/fm-codex-account-quota.sh | 51 | executed | helper | shell |
+| bin/fm-codex-stop-park.sh | 321 | executed | later-ops | shell |
+| bin/fm-composer-lib.sh | 2644 | sourced | library | shell |
 | bin/fm-config-inherit-lib.sh | 1467 | sourced | library | shell |
 | bin/fm-config-push.sh | 264 | executed | helper | shell |
 | bin/fm-contributions.sh | 862 | executed | helper | shell |
 | bin/fm-control-lib.sh | 652 | sourced | library | shell |
-| bin/fm-control.sh | 1335 | executed | core-lifecycle | shell |
+| bin/fm-control.sh | 1337 | executed | core-lifecycle | shell |
 | bin/fm-cortex-plugin.sh | 66 | executed | later-ops | shell |
 | bin/fm-credential-source-lib.sh | 139 | sourced | library | shell |
 | bin/fm-crew-state.sh | 1645 | executed | later-ops | shell |
@@ -98,7 +100,7 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-external-review-lib.sh | 201 | sourced | library | shell |
 | bin/fm-ff-lib.sh | 594 | sourced | library | shell |
 | bin/fm-fleet-ledger.sh | 234 | executed | later-ops | shell |
-| bin/fm-fleet-snapshot.sh | 2116 | executed | later-ops | shell |
+| bin/fm-fleet-snapshot.sh | 2119 | executed | later-ops | shell |
 | bin/fm-fleet-sync.sh | 465 | executed | later-ops | shell |
 | bin/fm-fleet-ui.sh | 2424 | executed | later-ops | shell |
 | bin/fm-fleet-view.sh | 96 | executed | later-ops | shell |
@@ -110,12 +112,12 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-go-pilot-build.sh | 14 | executed | helper | shell |
 | bin/fm-go-pilot.sh | 51 | executed | helper | shell |
 | bin/fm-guard.sh | 306 | executed | helper | shell |
-| bin/fm-harness.sh | 719 | executed | helper | shell |
+| bin/fm-harness.sh | 727 | executed | helper | shell |
 | bin/fm-hc-ci-cleanup.sh | 178 | executed | helper | shell |
 | bin/fm-hc-lab.sh | 419 | executed | helper | shell |
 | bin/fm-herdr-ci-cleanup.sh | 115 | executed | helper | shell |
 | bin/fm-herdr-groups.sh | 540 | executed | helper | shell |
-| bin/fm-herdr-lab.sh | 681 | executed | helper | shell |
+| bin/fm-herdr-lab.sh | 689 | executed | helper | shell |
 | bin/fm-herdr-session-cleanup.sh | 337 | executed | later-ops | shell |
 | bin/fm-hermes-hook.sh | 26 | executed | helper | shell |
 | bin/fm-hermes-lib.sh | 207 | sourced | library | shell |
@@ -130,10 +132,10 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-image-gen.sh | 5 | executed | helper | direct-go (pre-existing) |
 | bin/fm-inactive-reconcile.sh | 871 | executed | helper | shell |
 | bin/fm-inbox.sh | 1190 | executed | later-ops | shell |
-| bin/fm-install-actionlint.sh | 84 | executed | helper | shell |
+| bin/fm-install-actionlint.sh | 96 | executed | helper | shell |
 | bin/fm-install-hc.sh | 90 | executed | helper | shell |
 | bin/fm-install-herdr.sh | 98 | executed | helper | shell |
-| bin/fm-install-shellcheck.sh | 84 | executed | helper | shell |
+| bin/fm-install-shellcheck.sh | 95 | executed | helper | shell |
 | bin/fm-install-treehouse.sh | 95 | executed | helper | shell |
 | bin/fm-jev-mem-guard.sh | 7 | executed | helper | shell |
 | bin/fm-jev-monitor-lib.sh | 565 | sourced | library | shell |
@@ -150,10 +152,10 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-lease.sh | 211 | executed | helper | shell |
 | bin/fm-line-cap-lib.sh | 51 | sourced | library | pilot-only (sourced lib, not routed) |
 | bin/fm-lint-workflows.sh | 155 | executed | helper | ported (full parity) |
-| bin/fm-lint.sh | 1409 | executed | helper | shell |
+| bin/fm-lint.sh | 1583 | executed | helper | shell |
 | bin/fm-live-lab.sh | 897 | executed | helper | shell |
 | bin/fm-lock-lib.sh | 104 | sourced | library | shell |
-| bin/fm-lock.sh | 361 | executed | helper | shell |
+| bin/fm-lock.sh | 363 | executed | helper | shell |
 | bin/fm-mail-check.sh | 396 | executed | later-ops | shell |
 | bin/fm-mail.sh | 651 | executed | later-ops | shell |
 | bin/fm-marker-lib.sh | 12 | sourced | library | shell |
@@ -174,11 +176,12 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-pending-reply-lib.sh | 1702 | sourced | library | shell |
 | bin/fm-pipeline-spend.sh | 298 | executed | helper | shell |
 | bin/fm-polytoken-lib.sh | 506 | sourced | library | shell |
-| bin/fm-pr-check.sh | 651 | executed | later-ops | shell |
-| bin/fm-pr-health.sh | 498 | executed | later-ops | shell |
+| bin/fm-pr-check.sh | 686 | executed | later-ops | shell |
+| bin/fm-pr-follow.sh | 266 | executed | helper | shell |
+| bin/fm-pr-health.sh | 626 | executed | later-ops | shell |
 | bin/fm-pr-lib.sh | 1871 | sourced | library | shell |
 | bin/fm-pr-merge.sh | 2046 | executed | later-ops | shell |
-| bin/fm-pr-poll.sh | 556 | executed | later-ops | shell |
+| bin/fm-pr-poll.sh | 573 | executed | later-ops | shell |
 | bin/fm-pr-reviewers.sh | 105 | executed | later-ops | shell |
 | bin/fm-pr-state.sh | 175 | executed | later-ops | shell |
 | bin/fm-primary-scope-lib.sh | 42 | sourced | library | shell |
@@ -233,14 +236,14 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-secondmate-restart-lib.sh | 105 | sourced | library | shell |
 | bin/fm-secondmate-restart.sh | 396 | executed | later-ops | shell |
 | bin/fm-send.sh | 1460 | executed | core-lifecycle | shell |
-| bin/fm-session-lock-lib.sh | 980 | sourced | library | shell |
-| bin/fm-session-start.sh | 1134 | executed | later-ops | shell |
+| bin/fm-session-lock-lib.sh | 1029 | sourced | library | shell |
+| bin/fm-session-start.sh | 1139 | executed | later-ops | shell |
 | bin/fm-sessionstart-agy.sh | 48 | executed | later-ops | shell |
 | bin/fm-sessionstart-cursor.sh | 40 | executed | later-ops | shell |
 | bin/fm-sessionstart-nudge.sh | 57 | executed | later-ops | shell |
 | bin/fm-sessionstart-run.sh | 155 | executed | later-ops | shell |
 | bin/fm-slot-claim-lib.sh | 170 | sourced | library | shell |
-| bin/fm-spawn.sh | 8457 | executed | core-lifecycle | shell |
+| bin/fm-spawn.sh | 8522 | executed | core-lifecycle | shell |
 | bin/fm-startup-growth-check.sh | 417 | executed | helper | shell |
 | bin/fm-startup-memory-budget-lib.sh | 224 | sourced | library | shell |
 | bin/fm-startup-memory-budget.sh | 94 | executed | helper | shell |
@@ -263,10 +266,10 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-task-inbox-state-lib.sh | 33 | sourced | library | shell |
 | bin/fm-tasks-axi-lib.sh | 262 | sourced | library | shell |
 | bin/fm-tasks-axi.sh | 154 | executed | helper | shell |
-| bin/fm-teardown.sh | 4300 | executed | core-lifecycle | shell |
+| bin/fm-teardown.sh | 4324 | executed | core-lifecycle | shell |
 | bin/fm-test-isolation-proof.sh | 599 | executed | helper | shell |
 | bin/fm-test-linux.sh | 121 | executed | helper | shell |
-| bin/fm-test-run.sh | 2985 | executed | helper | shell |
+| bin/fm-test-run.sh | 2692 | executed | helper | shell |
 | bin/fm-test-tap-verify.sh | 130 | executed | helper | ported (full parity) |
 | bin/fm-timeout-lib.sh | 411 | sourced | library | shell |
 | bin/fm-timing-lib.sh | 179 | sourced | library | shell |
@@ -285,13 +288,13 @@ Each picked helper passed its full `tests/` suite in both default shell mode and
 | bin/fm-vendor-auth-probe.sh | 189 | executed | helper | shell |
 | bin/fm-wake-drain.sh | 1103 | executed | core-lifecycle | shell |
 | bin/fm-wake-grant.sh | 111 | executed | core-lifecycle | shell |
-| bin/fm-wake-lib.sh | 3538 | sourced | library | shell |
+| bin/fm-wake-lib.sh | 3581 | sourced | library | shell |
 | bin/fm-warm-compact-lib.sh | 146 | sourced | library | shell |
 | bin/fm-watch-arm.sh | 941 | executed | core-lifecycle | shell |
 | bin/fm-watch-checkpoint.sh | 222 | executed | core-lifecycle | shell |
 | bin/fm-watch-key-lib.sh | 32 | sourced | library | shell |
-| bin/fm-watch.sh | 5026 | executed | core-lifecycle | shell |
-| bin/fm-worker-account-lib.sh | 450 | sourced | library | shell |
+| bin/fm-watch.sh | 5367 | executed | core-lifecycle | shell |
+| bin/fm-worker-account-lib.sh | 566 | sourced | library | shell |
 | bin/fm-x-dismiss.sh | 122 | executed | later-ops | shell |
 | bin/fm-x-followup.sh | 326 | executed | later-ops | shell |
 | bin/fm-x-lib.sh | 1121 | sourced | library | shell |

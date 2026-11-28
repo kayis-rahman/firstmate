@@ -43,6 +43,7 @@ if (!sound.notify("actionable-blocker", "blocked-2") || !sound.notify("watcher-f
 if (timers.length !== 2) throw new Error("non-outcome alert started a repeat timer");
 if (!sound.outcome("captain", false, "next") || played.length !== 6 || timers.length !== 3) throw new Error("captain outcome was not played and repeated");
 if (sound.outcome("routine", false, "routine") || sound.outcome("captain", true, "silent")) throw new Error("routine or silent outcome triggered sound");
+if (sound.outcome("notice", false, "notice") || played.length !== 6 || timers.length !== 3) throw new Error("notice outcome triggered captain sound");
 if (timers.length !== 3) throw new Error("routine or silent outcome started repetition");
 console.log("captain attention sound policy passed");
 JS

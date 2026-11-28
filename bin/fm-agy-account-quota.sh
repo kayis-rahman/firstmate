@@ -64,4 +64,4 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$MODEL" != default ] || MODEL=
 
-fm_account_quota_run agy agy "agy-account-quota:" "config/agy-accounts" HOME "$FM_AGY_ACCOUNT_QUOTA_SECONDS" "$MODEL" --provider agy --json
+fm_account_quota_report agy "$CONFIG" "$MODEL"

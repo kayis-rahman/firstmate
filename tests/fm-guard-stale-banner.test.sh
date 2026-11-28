@@ -466,6 +466,21 @@ test_autoarm_fresh_beacon_without_watcher_is_healthy() {
   pass "fm-guard stale banner: auto-arm fresh beacon without a live watcher is healthy"
 }
 
+test_autoarm_future_beacon_is_fresh_not_a_banner() {
+  local dir out beat
+  dir=$(make_guard_case autoarm-future)
+  beat="$(case_home "$dir")/state/.last-watcher-beat"
+  : > "$beat"
+  # A beacon stamped two seconds ahead of the guard's clock read gives a negative
+  # age; it is fresh, not "not a number".
+  python3 -c 'import os,sys,time; t=time.time()+2; os.utime(sys.argv[1], (t, t))' "$beat"
+  out=$(run_guard_case_autoarm "$dir")
+  assert_not_contains "$out" "WATCHER DOWN" "a future-stamped beacon printed the banner"
+  [ -z "$out" ] \
+    || fail "a beacon 2s ahead of the clock must stay silent, got: $out"
+  pass "fm-guard stale banner: a beacon slightly ahead of the clock is fresh"
+}
+
 test_autoarm_stale_beacon_alarms_with_correct_reason() {
   local dir out
   dir=$(make_guard_case autoarm-stale)
@@ -690,17 +705,7 @@ printf '%s\n' '      PID    PPID    PGID     WINPID   TTY         UID    STIME C
 printf '%s\n' '  4201508       0       0       7204  ?              0 22:24:48 C:\Users\u\AppData\Roaming\npm\pi.exe'
 SH
   chmod +x "$fakebin/uname" "$fakebin/ps"
-  if ! stat -c %Y "$fakebin" >/dev/null 2>&1; then
-    cat > "$fakebin/stat" <<'SH'
-#!/usr/bin/env bash
-if [ "${1:-}" = -c ] && [ "${2:-}" = %Y ]; then
-  shift 2
-  exec /usr/bin/stat -f %m "$@"
-fi
-exec /usr/bin/stat "$@"
-SH
-    chmod +x "$fakebin/stat"
-  fi
+  fm_fake_gnu_stat "$fakebin"
   printf '%s\n' "$fakebin"
 }
 
@@ -1052,6 +1057,7 @@ test_branch_actor_is_never_told_to_repair_the_watcher
 test_persistent_model_ignores_pi_extension_evidence
 test_extension_live_watcher_is_healthy_without_ownership_evidence
 test_autoarm_fresh_beacon_without_watcher_is_healthy
+test_autoarm_future_beacon_is_fresh_not_a_banner
 test_autoarm_stale_beacon_alarms_with_correct_reason
 test_autoarm_stale_episode_is_stable
 test_autoarm_long_handling_turn_stays_silent

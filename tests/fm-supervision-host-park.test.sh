@@ -627,11 +627,17 @@ printf '%s\n' '      PID    PPID    PGID     WINPID   TTY         UID    STIME C
 printf '%s\n' '  4201508       0       0       7204  ?              0 22:24:48 C:\Users\u\.local\bin\claude.exe'
 SH
   chmod +x "$home/fakebin/uname" "$home/fakebin/ps"
+  fm_fake_gnu_stat "$home/fakebin"
   printf 'win:7204\n' > "$home/state/.lock"
-  env -u CLAUDE_PID -u CLAUDE_CODE_SESSION_ID \
+  # The Windows bridge is consulted only when the local ancestry holds no
+  # harness, so detach the host from this run's own ancestry (a real harness may
+  # have launched the suite) and release it only once the detaching shell is gone.
+  mkfifo "$home/detached.go"
+  ( env -u CLAUDE_PID -u CLAUDE_CODE_SESSION_ID \
     FM_HOME="$home" FM_CREW_STATE_BIN="$home/fakebin/fm-crew-state.sh" PATH="$home/fakebin:$PATH" \
-    CLAUDE_PID=7204 CLAUDE_CODE_SESSION_ID=tagged-session FM_TEST_HARNESS=claude \
-    bash -c '"$0" park > "$FM_HOME/host.out" 2>&1; printf "%s\n" "$?" > "$FM_HOME/host.rc"' "$HOST" 2>> "$home/claude.err" &
+    CLAUDE_PID=7204 CLAUDE_CODE_SESSION_ID=tagged-session \
+    bash -c 'read -r _ < "$FM_HOME/detached.go"; "$0" park > "$FM_HOME/host.out" 2>&1; printf "%s\n" "$?" > "$FM_HOME/host.rc"' "$HOST" 2>> "$home/claude.err" & )
+  printf 'go\n' > "$home/detached.go"
   wait_until 150 watcher_live "$home" || fail "tagged: the host never started a watcher cycle: $(cat "$home/host.out")"
   append_status "$home" 'step one'
   wait_until 250 handled_at_least "$home" 1 || fail "tagged: the wake was not handled: $(cat "$home/host.out"; cat "$home/state/.supervision-host.log")"

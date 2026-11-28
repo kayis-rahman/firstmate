@@ -72,7 +72,7 @@ The host's header owns the output contract they read.
 | OpenCode | the TUI plugin, `.opencode/plugins/fm-primary-watch-arm.js`, which restarts its own successor after each close | a `watcher` prompt through `ctx.session.prompt` |
 | omp | the watch extension, `.omp/extensions/fm-primary-omp-watch.ts`, which restarts its own successor after each close | the extension's `watcher` follow-up |
 | Grok | the model's tracked background call, rendered as `bin/fm-supervision-host.sh park` at session start | the background task's completion notification |
-| Codex | the foreground checkpoint, `bin/fm-watch-checkpoint.sh`, or the native Stop park on a home that [opts in](configuration.md#codex-native-stop-park-configcodex-stop-park) | checkpoint output, or the native thread queue; see [the Codex protocol](supervision-protocols/codex.md) |
+| Codex | the foreground checkpoint, `bin/fm-watch-checkpoint.sh`, or the [native Stop park](configuration.md#codex-native-stop-park-configcodex-stop-park) | checkpoint output, or the native thread queue; see [the Codex protocol](supervision-protocols/codex.md) |
 | Antigravity (`agy`) | the Stop-hook park, `bin/fm-turnend-guard-agy.sh` | the park's `watcher` follow-up |
 
 Hook, plugin, extension, and checkpoint owners pass their harness as the primary pin.
@@ -248,7 +248,7 @@ The helper's header owns the records, retry interval, process cleanup, and trans
 The first delivery remains the Stop hook's exit-2 feedback.
 A later retry does not depend on that hook or on another Stop firing.
 The detached owner writes a durable operational-input record and submits its watcher doorbell through the backend's existing submit primitive: the tmux pane the session inherited as `TMUX_PANE`, else the herdr pane the environment itself names through `HERDR_ENV`, `HERDR_SESSION`, and `HERDR_PANE_ID`.
-On herdr that identity comes only from the injected environment, so a remote home's [code-root session](remote-secondmates.md#launch-or-recover) hands its scripts the same path and remote homes need no extra plumbing.
+On herdr that identity comes only from the injected environment, so a remote home's `fm-remote` session hands its scripts the same path and remote homes need no extra plumbing.
 It uses only the inherited pane, proves the pinned session owner lives in that pane's foreground process tree, and requires an idle agent with an empty composer.
 On herdr the pane's registered agent and any registered session binding must also identify `claude`, and idle must hold in both the native agent state and the rendered footer, because a live Claude turn can leave the native status reading idle.
 Busy, unreadable, foreign, and partially typed panes defer delivery without changing the queued check.

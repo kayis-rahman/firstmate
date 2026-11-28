@@ -4,7 +4,8 @@
 #
 # Usage: fm-control.sh <task-id> interrupt
 #        fm-control.sh <task-id> exit
-#        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>] [--effort <level>] [--account <entry>] [--fresh-session]
+#        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>]
+#                                         [--effort <level>] [--account <entry>] [--fresh-session]
 #                                         (--note <text> | --note-file <path>)
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
@@ -84,9 +85,10 @@
 #              worker account pin (bin/fm-worker-account-lib.sh) here, so a pin
 #              that no longer resolves or is signed out refuses before the old
 #              agent stops. Under a declared config/claude-accounts or
-#              config/agy-accounts list, a ship or scout keeps the account its
-#              record names, and only an explicit --account <entry> moves it to
-#              another declared one, checked here the same way.
+#              config/codex-accounts, or config/agy-accounts list, a Claude,
+#              Codex, or agy ship or scout keeps the account its record names,
+#              and only an explicit --account <entry> moves it to another
+#              declared one, checked here the same way.
 #              A replacement omp secondmate likewise passes its per-secondmate
 #              omp profile pin (bin/fm-omp-profile-lib.sh) before the old agent
 #              stops.
@@ -324,7 +326,7 @@ fi
 
 if [ "$VERB" != relaunch ]; then
   [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$ACCOUNT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] && [ "$FRESH_SESSION" = 0 ] \
-    || die "--harness, --model, --effort, --account, --note, and --fresh-session apply to 'relaunch' only"
+    || die "--harness, --model, --effort, --account, --note, and --fresh-session apply to 'relaunch' only" 
 fi
 [ "$ACCOUNT_SET" = 0 ] || [ -n "$NEW_ACCOUNT" ] || die "--account requires a non-empty value"
 [ "$HARNESS_SET" = 0 ] || [ -n "$NEW_HARNESS" ] || die "--harness requires a non-empty value"
@@ -1083,9 +1085,8 @@ resolve_relaunch_profile() {
   # The launch owner applies this home's worker account pin too, but only after
   # the old agent has been stopped, so a pin that no longer resolves or is
   # signed out must refuse here, while nothing has changed yet.
-  # Under a declared account list (config/claude-accounts, config/agy-accounts),
-  # the replacement stays on the account the task records unless --account
-  # explicitly moves it.
+  # Under a declared Claude, Codex, or agy account list, the replacement stays
+  # on the account the task records unless --account explicitly moves it.
   local account_model=$TARGET_MODEL account_mate=
   [ "$account_model" != default ] || account_model=
   [ "$KIND" != secondmate ] || account_mate=$ID
